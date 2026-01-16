@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Space {
+  id        Int           @id @default(autoincrement())
+  name      String
+  address   String?
+  active    Boolean       @default(true)
+  events    Event[]
+  tasks     ServiceTask[]
+}
+
+model Client {
+  id          Int      @id @default(autoincrement())
+  name        String
+  phone       String?
+  email       String?
+  notes       String?
+  events      Event[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Professional {
+  id          Int                 @id @default(autoincrement())
+  name        String
+  type        String              // DJ, Buffet, Photographer, etc.
+  phone       String?
+  notes       String?
+  events      EventProfessional[]
+}
+
+model Event {
+  id              Int                 @id @default(autoincrement())
+  title           String
+  start           DateTime
+  end             DateTime
+  status          String              // available, confirming, reserved
+  paymentStatus   String              // unpaid, partial, paid
+  contractStatus  String              // not_sent, sent, signed
+  totalValue      Decimal             @default(0)
+  deposit         Decimal             @default(0)
+  notes           String?
+
+  spaceId         Int
+  space           Space               @relation(fields: [spaceId], references: [id])
+
+  clientId        Int?
+  client          Client?             @relation(fields: [clientId], references: [id])
+
+  professionals   EventProfessional[]
+  serviceTasks    ServiceTask[]
+  transactions    Transaction[]
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+}
+
+model EventProfessional {
+  eventId         Int
+  event           Event        @relation(fields: [eventId], references: [id])
+  professionalId  Int
+  professional    Professional @relation(fields: [professionalId], references: [id])
+  role            String?      // Optional specific role for this event
+
+  @@id([eventId, professionalId])
+}
+
+model ServiceType {
+  id          Int           @id @default(autoincrement())
+  name        String        // Cleaning, Gardening, Pool
+  description String?
+  tasks       ServiceTask[]
+}
+
+model ServiceTask {
+  id              Int           @id @default(autoincrement())
+  start           DateTime
+  end             DateTime?
+  responsible     String?
+  status          String        // pending, in_progress, completed, cancelled
+  notes           String?
+
+  spaceId         Int
+  space           Space         @relation(fields: [spaceId], references: [id])
+
+  serviceTypeId   Int
+  serviceType     ServiceType   @relation(fields: [serviceTypeId], references: [id])
+
+  eventId         Int?
+  event           Event?        @relation(fields: [eventId], references: [id])
+
+  transactions    Transaction[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Transaction {
+  id              Int         @id @default(autoincrement())
+  type            String      // income, expense
+  category        String      // event_payment, service_cost, maintenance, supplies, etc.
+  description     String
+  amount          Decimal
+  date            DateTime
+  notes           String?
+
+  eventId         Int?
+  event           Event?      @relation(fields: [eventId], references: [id])
+
+  serviceTaskId   Int?
+  serviceTask     ServiceTask? @relation(fields: [serviceTaskId], references: [id])
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}

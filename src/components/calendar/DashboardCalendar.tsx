@@ -3,18 +3,18 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar as BigCalendar, dateFnsLocalizer, Views, View } from 'react-big-calendar'
-import format from 'date-fns/format'
-import parse from 'date-fns/parse'
-import startOfWeek from 'date-fns/startOfWeek'
-import getDay from 'date-fns/getDay'
-import ptBR from 'date-fns/locale/pt-BR'
+import { format, parse, startOfWeek, getDay } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { getEvents } from '@/app/actions/events'
 import { getServiceTasks } from '@/app/actions/services'
+import { getFinancialCalendarItems } from '@/app/actions/transactions'
 import { EventModal } from '@/components/forms/EventModal'
 import { ServiceTaskModal } from '@/components/forms/ServiceTaskModal'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
 
 const locales = {
   'pt-BR': ptBR,
@@ -33,7 +33,7 @@ interface CalendarEvent {
   title: string
   start: Date
   end: Date
-  type: 'event' | 'task'
+  type: 'event' | 'task' | 'financial'
   resource?: any
   allDay?: boolean
 }
@@ -43,6 +43,7 @@ export function DashboardCalendar() {
   const [view, setView] = useState<View>(Views.MONTH)
   const [date, setDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [isCreateTypeDialogOpen, setIsCreateTypeDialogOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
@@ -52,9 +53,10 @@ export function DashboardCalendar() {
   const fetchData = useCallback(async () => {
     setIsLoading(true)
 
-    const [eventsResult, tasksResult] = await Promise.all([
-        getEvents(),
-        getServiceTasks()
+    const [eventsResult, tasksResult, financialResult] = await Promise.all([
+      getEvents(),
+      getServiceTasks(),
+      getFinancialCalendarItems(),
     ])
 
     const calendarEvents: CalendarEvent[] = []
@@ -73,16 +75,33 @@ export function DashboardCalendar() {
     }
 
     if (tasksResult.success && tasksResult.data) {
-        tasksResult.data.forEach((t: any) => {
-            calendarEvents.push({
-                id: t.id,
-                title: `[${t.serviceType.name}] ${t.space.name}`,
-                start: new Date(t.start),
-                end: t.end ? new Date(t.end) : new Date(new Date(t.start).setHours(new Date(t.start).getHours() + 1)),
-                type: 'task',
-                resource: t
-            })
+      tasksResult.data.forEach((t: any) => {
+        calendarEvents.push({
+          id: t.id,
+          title: `[${t.serviceType.name}] ${t.space.name}`,
+          start: new Date(t.start),
+          end: t.end ? new Date(t.end) : new Date(new Date(t.start).setHours(new Date(t.start).getHours() + 1)),
+          type: 'task',
+          resource: t
         })
+      })
+    }
+
+    if (financialResult.success && financialResult.data) {
+      financialResult.data.forEach((item: any) => {
+        const startDate = new Date(item.date)
+        const endDate = new Date(startDate)
+        endDate.setHours(endDate.getHours() + 1)
+
+        calendarEvents.push({
+          id: item.id + 1_000_000,
+          title: `${item.type === 'income' ? 'Receber' : 'Pagar'}: ${item.title.replace(/^Receber: |^Pagar: /, '')}`,
+          start: startDate,
+          end: endDate,
+          type: 'financial',
+          resource: item,
+        })
+      })
     }
 
     setEvents(calendarEvents)
@@ -98,16 +117,17 @@ export function DashboardCalendar() {
     let backgroundColor = '#6366f1' // primary indigo
 
     if (event.type === 'event') {
-        const status = event.resource.status
-        if (status === 'confirming') backgroundColor = '#f59e0b' // warning amber
-        else if (status === 'reserved') backgroundColor = '#10b981' // success emerald
+      const status = event.resource.status
+      if (status === 'confirming') backgroundColor = '#f59e0b' // warning amber
+      else if (status === 'reserved') backgroundColor = '#10b981' // success emerald
+    } else if (event.type === 'task') {
+      const serviceName = event.resource.serviceType.name
+      if (serviceName === 'Limpeza') backgroundColor = '#3b82f6' // blue-500
+      else if (serviceName === 'Jardinagem') backgroundColor = '#22c55e' // green-500
+      else if (serviceName === 'Piscina') backgroundColor = '#06b6d4' // cyan-500
+      else backgroundColor = '#8b5cf6' // violet-500
     } else {
-        // Task colors with modern palette
-        const serviceName = event.resource.serviceType.name
-        if (serviceName === 'Limpeza') backgroundColor = '#3b82f6' // blue-500
-        else if (serviceName === 'Jardinagem') backgroundColor = '#22c55e' // green-500
-        else if (serviceName === 'Piscina') backgroundColor = '#06b6d4' // cyan-500
-        else backgroundColor = '#8b5cf6' // violet-500
+      backgroundColor = event.resource.type === 'income' ? '#0ea5e9' : '#ef4444'
     }
 
     return {
@@ -126,8 +146,9 @@ export function DashboardCalendar() {
   }
 
   const handleSelectSlot = (slotInfo: any) => {
-      setSelectedDate(slotInfo.start)
-      setIsModalOpen(true)
+      setSelectedDate(slotInfo.start ? new Date(slotInfo.start) : undefined)
+      setSelectedTask(undefined)
+      setIsCreateTypeDialogOpen(true)
   }
 
   const handleSelectEvent = (event: CalendarEvent) => {
@@ -139,15 +160,40 @@ export function DashboardCalendar() {
             setSelectedDate(undefined)
             setIsModalOpen(true)
           }
+      } else if (event.type === 'task') {
+        setSelectedTask(event.resource)
+        setIsTaskModalOpen(true)
       } else {
-          setSelectedTask(event.resource)
-          setIsTaskModalOpen(true)
+        router.push('/financial')
       }
+  }
+
+  const handleOpenEventModal = () => {
+    setIsCreateTypeDialogOpen(false)
+    setIsModalOpen(true)
+  }
+
+  const handleOpenTaskModal = () => {
+    setIsCreateTypeDialogOpen(false)
+    setSelectedTask(undefined)
+    setIsTaskModalOpen(true)
+  }
+
+  const handleCloseEventModal = () => {
+    setIsModalOpen(false)
+    setSelectedDate(undefined)
+  }
+
+  const handleCloseTaskModal = () => {
+    setIsTaskModalOpen(false)
+    setSelectedTask(undefined)
+    setSelectedDate(undefined)
   }
 
   // Count events by type for the legend
   const eventCount = events.filter(e => e.type === 'event').length
   const taskCount = events.filter(e => e.type === 'task').length
+  const financialCount = events.filter(e => e.type === 'financial').length
 
   return (
     <Card className="overflow-hidden">
@@ -158,6 +204,7 @@ export function DashboardCalendar() {
           <div className="flex items-center gap-2">
             <Badge variant="info">{eventCount} Reservas</Badge>
             <Badge variant="secondary">{taskCount} Tarefas</Badge>
+            <Badge variant="warning">{financialCount} Financeiro</Badge>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -180,6 +227,14 @@ export function DashboardCalendar() {
           <div className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full bg-cyan-500" />
             <span className="text-muted-foreground">Piscina</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full bg-sky-500" />
+            <span className="text-muted-foreground">Receber</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full bg-red-500" />
+            <span className="text-muted-foreground">Pagar</span>
           </div>
         </div>
       </div>
@@ -227,16 +282,49 @@ export function DashboardCalendar() {
         )}
       </div>
 
+      <Dialog open={isCreateTypeDialogOpen} onOpenChange={setIsCreateTypeDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>O que você deseja adicionar?</DialogTitle>
+            <DialogDescription>
+              Escolha o tipo de item para cadastrar no calendário.
+              {selectedDate ? ` Data selecionada: ${format(selectedDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button
+              type="button"
+              size="lg"
+              className="h-24 text-lg font-semibold"
+              onClick={handleOpenEventModal}
+            >
+              Evento
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="h-24 text-lg font-semibold"
+              onClick={handleOpenTaskModal}
+            >
+              Serviço
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <EventModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseEventModal}
         initialDate={selectedDate}
         onSuccess={fetchData}
       />
 
       <ServiceTaskModal
         isOpen={isTaskModalOpen}
-        onClose={() => setIsTaskModalOpen(false)}
+        onClose={handleCloseTaskModal}
+        initialDate={selectedDate}
         initialTask={selectedTask}
         onSuccess={fetchData}
       />

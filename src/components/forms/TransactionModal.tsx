@@ -19,6 +19,8 @@ const transactionSchema = z.object({
   description: z.string().min(1, 'Descrição é obrigatória'),
   amount: z.number().positive('Valor deve ser maior que zero'),
   date: z.string().min(1, 'Data é obrigatória'),
+  status: z.enum(['paid', 'pending']),
+  paidAt: z.string().optional(),
   eventId: z.string().optional(),
   notes: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -42,6 +44,7 @@ const incomeCategories = [
   { value: 'event_payment', label: 'Pagamento de Evento' },
   { value: 'deposit', label: 'Sinal/Depósito' },
   { value: 'rental', label: 'Aluguel' },
+  { value: 'rental_installment', label: 'Parcela de Aluguel' },
   { value: 'other_income', label: 'Outras Receitas' },
 ]
 
@@ -65,6 +68,8 @@ interface TransactionModalProps {
     description: string
     amount: number
     date: Date | string
+    status?: 'paid' | 'pending'
+    paidAt?: Date | string | null
     eventId?: number | null
     notes?: string | null
   }
@@ -89,6 +94,8 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
       description: '',
       amount: 0,
       date: new Date().toISOString().split('T')[0],
+      status: 'paid',
+      paidAt: new Date().toISOString().split('T')[0],
       eventId: '',
       notes: '',
     },
@@ -100,6 +107,12 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
       date: typeof initialTransaction.date === 'string'
         ? initialTransaction.date.split('T')[0]
         : new Date(initialTransaction.date).toISOString().split('T')[0],
+      status: initialTransaction.status || 'paid',
+      paidAt: initialTransaction.paidAt
+        ? (typeof initialTransaction.paidAt === 'string'
+            ? initialTransaction.paidAt.split('T')[0]
+            : new Date(initialTransaction.paidAt).toISOString().split('T')[0])
+        : '',
       eventId: initialTransaction.eventId ? String(initialTransaction.eventId) : '',
       notes: initialTransaction.notes || '',
     } : undefined
@@ -107,6 +120,7 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
 
   const watchType = watch('type')
   const watchCategory = watch('category')
+  const watchStatus = watch('status')
   const categories = watchType === 'income' ? incomeCategories : expenseCategories
   const showEventSelect = watchType === 'income' && watchCategory === 'event_payment'
 
@@ -132,6 +146,8 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
       const submitData = {
         ...data,
         date: new Date(data.date),
+        status: data.status,
+        paidAt: data.status === 'paid' && data.paidAt ? new Date(data.paidAt) : null,
         eventId: data.category === 'event_payment' && data.eventId
           ? parseInt(data.eventId, 10)
           : null,
@@ -275,7 +291,7 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date">Data *</Label>
+              <Label htmlFor="date">Data Prevista *</Label>
               <Input
                 id="date"
                 type="date"
@@ -286,6 +302,40 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
                 <p className="text-sm text-destructive">{errors.date.message}</p>
               )}
             </div>
+          </div>
+
+          {/* Payment Status */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="status">Situação</Label>
+              <select
+                id="status"
+                {...register('status')}
+                className="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="paid">Pago</option>
+                <option value="pending">Pendente</option>
+              </select>
+            </div>
+
+            {watchStatus === 'paid' ? (
+              <div className="space-y-2">
+                <Label htmlFor="paidAt">Data do Pagamento</Label>
+                <Input
+                  id="paidAt"
+                  type="date"
+                  icon={<Calendar className="h-4 w-4" />}
+                  {...register('paidAt')}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label className="opacity-0">placeholder</Label>
+                <div className="h-10 rounded-lg border border-dashed border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                  Valor entrará como previsão até ser marcado como pago.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Notes */}

@@ -1,9 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Plus,
   TrendingUp,
   TrendingDown,
   DollarSign,
@@ -19,7 +18,9 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Home
+  Home,
+  ClipboardCheck,
+  CalendarClock
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -33,15 +34,16 @@ import {
   TableRow,
 } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { getAllFinancialData, getFinancialSummary, deleteTransaction } from '@/app/actions/transactions'
+import { getAllFinancialData, getFinancialSummary, deleteTransaction, getFinancialForecastSummary } from '@/app/actions/transactions'
 import { TransactionModal } from '@/components/forms/TransactionModal'
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns'
+import { addDays, endOfDay, format, startOfDay, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 const categoryLabels: Record<string, string> = {
   event_payment: 'Pagamento de Evento',
   deposit: 'Sinal/Depósito',
   rental: 'Aluguel',
+  rental_installment: 'Parcela de Aluguel',
   other_income: 'Outras Receitas',
   service_cost: 'Custo de Serviço',
   maintenance: 'Manutenção',
@@ -58,7 +60,13 @@ const paymentStatusLabels: Record<string, { label: string; variant: 'success' | 
   unpaid: { label: 'Pendente', variant: 'destructive' },
 }
 
+const transactionStatusLabels: Record<string, { label: string; variant: 'success' | 'warning' }> = {
+  paid: { label: 'Pago', variant: 'success' },
+  pending: { label: 'Pendente', variant: 'warning' },
+}
+
 type DateFilter = 'month' | 'last3months' | 'year' | 'all'
+type ForecastFilter = '7days' | '15days' | '30days' | 'custom'
 
 type PaymentStatusEntry = {
   source: string
@@ -69,11 +77,18 @@ type PaymentStatusEntry = {
 export default function DashboardPage() {
   const [financialData, setFinancialData] = useState<any[]>([])
   const [summary, setSummary] = useState<any>(null)
+  const [forecast, setForecast] = useState({
+    totalForecastIncome: 0,
+    totalForecastExpense: 0,
+  })
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<any | undefined>(undefined)
   const [defaultType, setDefaultType] = useState<'income' | 'expense'>('income')
   const [isLoading, setIsLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState<DateFilter>('month')
+  const [forecastFilter, setForecastFilter] = useState<ForecastFilter>('30days')
+  const [customForecastStart, setCustomForecastStart] = useState('')
+  const [customForecastEnd, setCustomForecastEnd] = useState('')
 
   const getSummaryHref = (section: string) => `/dashboard/resumo/${section}?period=${dateFilter}`
 
@@ -92,7 +107,26 @@ export default function DashboardPage() {
     }
   }
 
-  const fetchData = async () => {
+  const getForecastRange = useCallback((filter: ForecastFilter) => {
+    const today = startOfDay(new Date())
+    switch (filter) {
+      case '7days':
+        return { start: today, end: endOfDay(addDays(today, 7)) }
+      case '15days':
+        return { start: today, end: endOfDay(addDays(today, 15)) }
+      case '30days':
+        return { start: today, end: endOfDay(addDays(today, 30)) }
+      case 'custom':
+        return {
+          start: customForecastStart ? startOfDay(new Date(customForecastStart)) : today,
+          end: customForecastEnd ? endOfDay(new Date(customForecastEnd)) : endOfDay(addDays(today, 30))
+        }
+      default:
+        return { start: today, end: endOfDay(addDays(today, 30)) }
+    }
+  }, [customForecastStart, customForecastEnd])
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true)
     const { start, end } = getDateRange(dateFilter)
 
@@ -108,11 +142,31 @@ export default function DashboardPage() {
       setSummary(summaryRes.data)
     }
     setIsLoading(false)
-  }
+  }, [dateFilter])
+
+  const fetchForecast = useCallback(async () => {
+    const { start, end } = getForecastRange(forecastFilter)
+    const res = await getFinancialForecastSummary(start, end)
+    if (res.success && res.data) {
+      setForecast({
+        totalForecastIncome: res.data.totalForecastIncome || 0,
+        totalForecastExpense: res.data.totalForecastExpense || 0,
+      })
+    }
+  }, [forecastFilter, getForecastRange])
 
   useEffect(() => {
     fetchData()
-  }, [dateFilter])
+  }, [fetchData])
+
+  useEffect(() => {
+    fetchForecast()
+  }, [fetchForecast])
+
+  const refreshAll = useCallback(() => {
+    fetchData()
+    fetchForecast()
+  }, [fetchData, fetchForecast])
 
   const handleCreateIncome = () => {
     setSelectedTransaction(undefined)
@@ -135,6 +189,8 @@ export default function DashboardPage() {
         description: entry.description,
         amount: entry.amount,
         date: entry.date,
+        status: entry.status || 'paid',
+        paidAt: entry.paidAt || null,
         notes: entry.notes,
         eventId: entry.eventId ?? entry.event?.id ?? null
       })
@@ -147,7 +203,7 @@ export default function DashboardPage() {
     if (entry.source === 'manual') {
       if (confirm('Tem certeza que deseja excluir esta transação?')) {
         await deleteTransaction(entry.sourceId)
-        fetchData()
+        refreshAll()
       }
     }
   }
@@ -162,7 +218,7 @@ export default function DashboardPage() {
   const getComputedPaymentStatus = (entry: PaymentStatusEntry) => {
     if (entry.source !== 'event') return null
     if (entry.paymentStatus === 'paid') return 'paid'
-    if (entry.paymentStatus === 'partial' || entry.depositAmount > 0) return 'partial'
+    if (entry.paymentStatus === 'partial' || (entry.depositAmount ?? 0) > 0) return 'partial'
     return 'unpaid'
   }
 
@@ -234,6 +290,47 @@ export default function DashboardPage() {
               </Button>
             ))}
           </div>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <CalendarClock className="h-5 w-5 text-muted-foreground" />
+          <span className="text-sm font-medium">Período de previsão:</span>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: '7days', label: 'Próximos 7 dias' },
+              { value: '15days', label: 'Próximos 15 dias' },
+              { value: '30days', label: 'Próximos 30 dias' },
+              { value: 'custom', label: 'Personalizado' },
+            ].map((option) => (
+              <Button
+                key={option.value}
+                variant={forecastFilter === option.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setForecastFilter(option.value as ForecastFilter)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+          {forecastFilter === 'custom' && (
+            <div className="ml-auto flex items-center gap-2">
+              <input
+                type="date"
+                value={customForecastStart}
+                onChange={(e) => setCustomForecastStart(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
+              />
+              <span className="text-sm text-muted-foreground">até</span>
+              <input
+                type="date"
+                value={customForecastEnd}
+                onChange={(e) => setCustomForecastEnd(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
+              />
+            </div>
+          )}
         </div>
       </Card>
 
@@ -401,6 +498,54 @@ export default function DashboardPage() {
             </div>
           </Card>
         </Link>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Link
+          href="/financial"
+          className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Abrir financeiro com serviços pendentes"
+        >
+          <Card className="p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10">
+                <ClipboardCheck className="h-6 w-6 text-warning" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Serviços Pendentes</p>
+                <p className="text-2xl font-bold text-warning">
+                  {formatCurrency(summary?.servicePendingTotal || 0)}
+                </p>
+              </div>
+            </div>
+          </Card>
+        </Link>
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10">
+              <TrendingUp className="h-6 w-6 text-success" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Total Previsto de Receita</p>
+              <p className="text-2xl font-bold text-success">
+                {formatCurrency(forecast.totalForecastIncome || 0)}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10">
+              <TrendingDown className="h-6 w-6 text-destructive" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Total Previsto de Despesa</p>
+              <p className="text-2xl font-bold text-destructive">
+                {formatCurrency(forecast.totalForecastExpense || 0)}
+              </p>
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* Charts Section */}
@@ -668,6 +813,10 @@ export default function DashboardPage() {
                         <Badge variant={paymentStatusLabels[computedStatus]?.variant || 'secondary'}>
                           {paymentStatusLabels[computedStatus]?.label || computedStatus}
                         </Badge>
+                      ) : entry.source === 'manual' ? (
+                        <Badge variant={transactionStatusLabels[entry.status || 'paid']?.variant || 'warning'}>
+                          {transactionStatusLabels[entry.status || 'paid']?.label || 'Pendente'}
+                        </Badge>
                       ) : (
                         <span className="text-muted-foreground text-sm">-</span>
                       )}
@@ -722,7 +871,7 @@ export default function DashboardPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialTransaction={selectedTransaction}
-        onSuccess={fetchData}
+        onSuccess={refreshAll}
         defaultType={defaultType}
       />
     </div>

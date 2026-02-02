@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Plus, CheckSquare, Calendar, Home, User, Clock, CheckCircle, XCircle, Loader2, Pencil } from 'lucide-react'
+import { Plus, CheckSquare, Calendar, Home, User, Clock, CheckCircle, Loader2, Pencil } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 

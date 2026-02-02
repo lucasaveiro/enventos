@@ -14,7 +14,7 @@ import { Home, MapPin } from 'lucide-react'
 const spaceSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   address: z.string().optional(),
-  active: z.boolean().default(true),
+  active: z.boolean(),
 })
 
 type SpaceFormValues = z.infer<typeof spaceSchema>

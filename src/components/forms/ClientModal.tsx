@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { createClient, updateClient } from '@/app/actions/clients'
-import { User, Phone, Mail, FileText } from 'lucide-react'
+import { User, Phone, Mail } from 'lucide-react'
 
 const clientSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),

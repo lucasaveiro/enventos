@@ -19,6 +19,7 @@ const categoryLabels: Record<string, string> = {
   event_payment: 'Pagamento de Evento',
   deposit: 'Sinal/Deposito',
   rental: 'Aluguel',
+  rental_installment: 'Parcela de Aluguel',
   other_income: 'Outras Receitas',
   service_cost: 'Custo de Servico',
   maintenance: 'Manutencao',
@@ -51,10 +52,10 @@ type FinancialEntry = {
   depositAmount?: number
   eventId?: number | null
   date: Date | string
-  paymentStatus?: 'paid' | 'partial' | 'unpaid' | null
+  paymentStatus?: string | null
   source: 'event' | 'manual'
-  event?: { id: number }
-  space?: { name: string }
+  event?: { id: number } | null
+  space?: { name: string } | null
 }
 
 type MonthlySummary = { income: number; expense: number; events: number }

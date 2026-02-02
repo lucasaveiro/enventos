@@ -26,11 +26,12 @@ type TaskFormValues = z.infer<typeof taskSchema>
 interface ServiceTaskModalProps {
   isOpen: boolean
   onClose: () => void
+  initialDate?: Date
   initialTask?: any
   onSuccess: () => void
 }
 
-export function ServiceTaskModal({ isOpen, onClose, initialTask, onSuccess }: ServiceTaskModalProps) {
+export function ServiceTaskModal({ isOpen, onClose, initialDate, initialTask, onSuccess }: ServiceTaskModalProps) {
   const [spaces, setSpaces] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
 
@@ -71,9 +72,12 @@ export function ServiceTaskModal({ isOpen, onClose, initialTask, onSuccess }: Se
       } else {
         reset()
         setValue('status', 'pending')
+        if (initialDate) {
+          setValue('start', new Date(initialDate).toISOString().slice(0, 16))
+        }
       }
     }
-  }, [isOpen, initialTask, setValue, reset])
+  }, [isOpen, initialDate, initialTask, setValue, reset])
 
   const onSubmit = async (data: TaskFormValues) => {
     try {

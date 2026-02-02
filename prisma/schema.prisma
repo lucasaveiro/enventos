@@ -111,7 +111,9 @@ model Transaction {
   category        String      // event_payment, service_cost, maintenance, supplies, etc.
   description     String
   amount          Decimal
-  date            DateTime
+  date            DateTime    // Due/expected date
+  status          String      @default("paid") // paid, pending
+  paidAt          DateTime?
   notes           String?
 
   eventId         Int?
@@ -122,4 +124,8 @@ model Transaction {
 
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+
+  @@index([date])
+  @@index([status])
+  @@index([type, status])
 }

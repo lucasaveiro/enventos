@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Users, Phone, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import {
   Table,
   TableBody,

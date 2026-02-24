@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet } from 'lucide-react'
+import { Calendar, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -13,6 +13,7 @@ const navigation = [
   { name: 'Clientes', href: '/clients', icon: Users, description: 'Cadastro de clientes' },
   { name: 'Profissionais', href: '/professionals', icon: Briefcase, description: 'Equipe de trabalho' },
   { name: 'Serviços', href: '/services', icon: CheckSquare, description: 'Tarefas operacionais' },
+  { name: 'Contratos', href: '/contracts', icon: FileText, description: 'Geração de contratos PDF' },
 ]
 
 export function Sidebar() {

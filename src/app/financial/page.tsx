@@ -175,17 +175,17 @@ export default function FinancialPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            <Wallet className="h-6 w-6 text-primary" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-primary/10">
+            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>
-            <p className="text-sm text-muted-foreground">Planilha completa de receitas, despesas e previsões</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Financeiro</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Planilha completa de receitas, despesas e previsões</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={handleCreateExpense}>
             <ArrowDownCircle className="h-4 w-4 text-destructive" />
             Nova Despesa

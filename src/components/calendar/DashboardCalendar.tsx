@@ -42,7 +42,10 @@ type EventModalCategory = 'event' | 'visit'
 
 export function DashboardCalendar() {
   const router = useRouter()
-  const [view, setView] = useState<View>(Views.MONTH)
+  // No mobile usa view Agenda por padrão (mais legível em telas pequenas)
+  const [view, setView] = useState<View>(
+    typeof window !== 'undefined' && window.innerWidth < 768 ? Views.AGENDA : Views.MONTH
+  )
   const [date, setDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [isCreateTypeDialogOpen, setIsCreateTypeDialogOpen] = useState(false)
@@ -284,7 +287,7 @@ export function DashboardCalendar() {
       </div>
 
       {/* Calendar Container */}
-      <div className="h-[700px] p-4">
+      <div className="h-[480px] sm:h-[580px] lg:h-[700px] p-2 sm:p-4">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <div className="flex flex-col items-center gap-3">

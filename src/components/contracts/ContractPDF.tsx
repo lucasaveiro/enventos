@@ -14,15 +14,15 @@ Font.register({
   family: 'Roboto',
   fonts: [
     {
-      src: 'https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Mu4mxK.woff2',
+      src: '/fonts/Roboto-Regular.woff',
       fontWeight: 400,
     },
     {
-      src: 'https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmEU9fBBc4.woff2',
+      src: '/fonts/Roboto-Bold.woff',
       fontWeight: 700,
     },
     {
-      src: 'https://fonts.gstatic.com/s/roboto/v32/KFOkCnqEu92Fr1Mu51xIIzI.woff2',
+      src: '/fonts/Roboto-Italic.woff',
       fontStyle: 'italic',
     },
   ],
@@ -274,6 +274,19 @@ interface Props {
   space: SpaceConfig
 }
 
+function toCurrency(value: string): string {
+  if (!value) return '-'
+  const parsed = Number(value.replace(',', '.'))
+  if (Number.isNaN(parsed)) return '-'
+  return parsed.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function getPackageLabel(packageType: string): string {
+  if (packageType === 'simples') return 'Pacote Simples'
+  if (packageType === 'completo') return 'Pacote Completo'
+  return '-'
+}
+
 export function ContractPDFDocument({ formData, clauses, space }: Props) {
   return (
     <Document title={`Contrato ${formData.contractNumber} - ${space.displayName}`} author={space.ownerName}>
@@ -371,6 +384,18 @@ export function ContractPDFDocument({ formData, clauses, space }: Props) {
             <Text style={styles.fieldLabel}>Nº de Convidados:</Text>
             <Text style={styles.fieldValue}>{formData.guestCount} pessoas</Text>
           </View>
+          <View style={styles.infoCell}>
+            <Text style={styles.fieldLabel}>Diárias:</Text>
+            <Text style={styles.fieldValue}>{formData.dailyCount || '-'}</Text>
+          </View>
+          <View style={styles.infoCell}>
+            <Text style={styles.fieldLabel}>Data de Saída:</Text>
+            <Text style={styles.fieldValue}>{formatDate(formData.eventCheckoutDate) || '-'}</Text>
+          </View>
+          <View style={styles.infoCell}>
+            <Text style={styles.fieldLabel}>Pacote:</Text>
+            <Text style={styles.fieldValue}>{getPackageLabel(formData.packageType)}</Text>
+          </View>
           <View style={styles.infoCellWide}>
             <Text style={styles.fieldLabel}>Tipo do Evento:</Text>
             <Text style={styles.fieldValue}>{formData.eventType}</Text>
@@ -388,29 +413,24 @@ export function ContractPDFDocument({ formData, clauses, space }: Props) {
           <View style={styles.finRow}>
             <Text style={styles.finCol1}>Entrada / Sinal</Text>
             <Text style={styles.finCol2}>{formatDate(formData.depositDueDate)}</Text>
-            <Text style={[styles.finCol3, { fontWeight: 700 }]}>
-              {formData.depositValue
-                ? Number(formData.depositValue.replace(',', '.')).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                : '-'}
-            </Text>
+            <Text style={[styles.finCol3, { fontWeight: 700 }]}>{toCurrency(formData.depositValue)}</Text>
           </View>
           <View style={styles.finRow}>
             <Text style={styles.finCol1}>Valor Restante</Text>
             <Text style={styles.finCol2}>{formatDate(formData.remainingDueDate)}</Text>
-            <Text style={[styles.finCol3, { fontWeight: 700 }]}>
-              {formData.remainingValue
-                ? Number(formData.remainingValue.replace(',', '.')).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                : '-'}
-            </Text>
+            <Text style={[styles.finCol3, { fontWeight: 700 }]}>{toCurrency(formData.remainingValue)}</Text>
           </View>
+          {formData.cautionValue ? (
+            <View style={styles.finRow}>
+              <Text style={styles.finCol1}>Cheque Caução</Text>
+              <Text style={styles.finCol2}>-</Text>
+              <Text style={[styles.finCol3, { fontWeight: 700 }]}>{toCurrency(formData.cautionValue)}</Text>
+            </View>
+          ) : null}
           <View style={styles.finRowLast}>
             <Text style={[styles.finCol1, { fontWeight: 700 }]}>TOTAL</Text>
             <Text style={styles.finCol2}>{formData.paymentMethod}</Text>
-            <Text style={[styles.finCol3, { fontWeight: 700, fontSize: 10 }]}>
-              {formData.totalValue
-                ? Number(formData.totalValue.replace(',', '.')).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                : '-'}
-            </Text>
+            <Text style={[styles.finCol3, { fontWeight: 700, fontSize: 10 }]}>{toCurrency(formData.totalValue)}</Text>
           </View>
         </View>
 

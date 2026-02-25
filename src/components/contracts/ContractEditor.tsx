@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -24,10 +24,9 @@ import { Textarea } from '@/components/ui/Textarea'
 import {
   ContractClause,
   ContractFormData,
-  DEFAULT_CLAUSES,
   SpaceConfig,
-  formatCurrency,
   generateContractNumber,
+  getDefaultClauseTemplates,
   getInitialClauses,
   substituteClause,
 } from '@/lib/contractTemplates'
@@ -43,7 +42,7 @@ const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
   ),
 })
 
-const schema = z.object({
+const baseSchema = z.object({
   contractNumber: z.string().min(1, 'Obrigatório'),
   contractDate: z.string().min(1, 'Obrigatório'),
   clientName: z.string().min(2, 'Mínimo 2 caracteres'),
@@ -59,16 +58,44 @@ const schema = z.object({
   eventEndTime: z.string().min(1, 'Obrigatório'),
   eventType: z.string().min(1, 'Obrigatório'),
   guestCount: z.string().min(1, 'Obrigatório'),
+  dailyCount: z.string().optional(),
+  packageType: z.string().optional(),
+  eventCheckoutDate: z.string().optional(),
   totalValue: z.string().min(1, 'Obrigatório'),
   depositValue: z.string().min(1, 'Obrigatório'),
   depositDueDate: z.string().min(1, 'Obrigatório'),
   remainingValue: z.string().optional(),
   remainingDueDate: z.string().min(1, 'Obrigatório'),
   paymentMethod: z.string().min(1, 'Obrigatório'),
+  cautionValue: z.string().optional(),
   observations: z.string().optional(),
 })
 
-type FormValues = z.infer<typeof schema>
+function createSchema(requiresExtendedEventData: boolean) {
+  if (!requiresExtendedEventData) return baseSchema
+
+  return baseSchema.superRefine((data, ctx) => {
+    if (!data.dailyCount?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dailyCount'], message: 'Obrigatório' })
+    }
+
+    if (!data.eventCheckoutDate?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventCheckoutDate'], message: 'Obrigatório' })
+    }
+
+    if (!data.packageType?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['packageType'], message: 'Obrigatório' })
+    } else if (!['simples', 'completo'].includes(data.packageType)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['packageType'], message: 'Pacote inválido' })
+    }
+
+    if (!data.cautionValue?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cautionValue'], message: 'Obrigatório' })
+    }
+  })
+}
+
+type FormValues = z.infer<typeof baseSchema>
 
 interface Props {
   space: SpaceConfig
@@ -95,6 +122,11 @@ const PAYMENT_METHODS = [
   'Boleto bancário',
 ]
 
+const PACKAGE_TYPES = [
+  { value: 'simples', label: 'Pacote Simples' },
+  { value: 'completo', label: 'Pacote Completo' },
+]
+
 function SectionCard({
   title,
   children,
@@ -103,9 +135,9 @@ function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50">
-        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{title}</h3>
+    <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)]">
+        <h3 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">{title}</h3>
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -129,10 +161,10 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <Label className="text-xs font-medium text-gray-600 mb-1 block">{label}</Label>
+      <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">{label}</Label>
       {children}
       {error && (
-        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+        <p className="text-xs text-[var(--destructive)] mt-1 flex items-center gap-1">
           <AlertCircle className="h-3 w-3" />
           {error}
         </p>
@@ -141,8 +173,13 @@ function Field({
   )
 }
 
+const selectClass = "flex h-9 w-full rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--input-text)] px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+
 export function ContractEditor({ space }: Props) {
-  const [clauses, setClauses] = useState<ContractClause[]>(getInitialClauses)
+  const requiresExtendedEventData = space.id === 'estancia-aveiro'
+  const schema = useMemo(() => createSchema(requiresExtendedEventData), [requiresExtendedEventData])
+
+  const [clauses, setClauses] = useState<ContractClause[]>(() => getInitialClauses(space.id))
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
   const [allExpanded, setAllExpanded] = useState(false)
@@ -156,7 +193,7 @@ export function ContractEditor({ space }: Props) {
     control,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    mode: 'onBlur',
+    mode: 'onChange',
     defaultValues: {
       contractNumber: generateContractNumber(space),
       contractDate: new Date().toISOString().split('T')[0],
@@ -173,12 +210,16 @@ export function ContractEditor({ space }: Props) {
       eventEndTime: '02:00',
       eventType: '',
       guestCount: '',
+      dailyCount: '',
+      packageType: '',
+      eventCheckoutDate: '',
       totalValue: '',
       depositValue: '',
       depositDueDate: '',
       remainingValue: '',
       remainingDueDate: '',
       paymentMethod: '',
+      cautionValue: '',
       observations: '',
     },
   })
@@ -201,7 +242,7 @@ export function ContractEditor({ space }: Props) {
     setClauses((prev) =>
       prev.map((clause) => {
         if (clause.edited) return clause
-        const template = DEFAULT_CLAUSES.find((c) => c.id === clause.id)?.content || clause.content
+        const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content || clause.content
         return { ...clause, content: substituteClause(template, formData, space) }
       })
     )
@@ -227,7 +268,7 @@ export function ContractEditor({ space }: Props) {
 
   const resetClause = (id: string) => {
     const formData = getValues() as ContractFormData
-    const template = DEFAULT_CLAUSES.find((c) => c.id === id)?.content || ''
+    const template = getDefaultClauseTemplates(space.id).find((c) => c.id === id)?.content || ''
     const restored = substituteClause(template, formData, space)
     setClauses((prev) =>
       prev.map((c) => (c.id === id ? { ...c, content: restored, edited: false } : c))
@@ -238,7 +279,7 @@ export function ContractEditor({ space }: Props) {
   const resetAllClauses = () => {
     const formData = getValues() as ContractFormData
     setClauses(
-      DEFAULT_CLAUSES.map((clause) => ({
+      getDefaultClauseTemplates(space.id).map((clause) => ({
         ...clause,
         edited: false,
         content: substituteClause(clause.content, formData, space),
@@ -260,6 +301,10 @@ export function ContractEditor({ space }: Props) {
       clientRG: v.clientRG ?? '',
       clientEmail: v.clientEmail ?? '',
       remainingValue: v.remainingValue ?? '',
+      dailyCount: v.dailyCount ?? '',
+      packageType: v.packageType ?? '',
+      eventCheckoutDate: v.eventCheckoutDate ?? '',
+      cautionValue: v.cautionValue ?? '',
       observations: v.observations ?? '',
     }
   }
@@ -281,8 +326,8 @@ export function ContractEditor({ space }: Props) {
           <FileText className="h-5 w-5" style={{ color: space.color }} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{space.displayName}</h1>
-          <p className="text-sm text-gray-500">Gerador de Contrato de Locação</p>
+          <h1 className="text-xl font-bold text-[var(--foreground)]">{space.displayName}</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">Gerador de Contrato de Locação</p>
         </div>
       </div>
 
@@ -349,15 +394,10 @@ export function ContractEditor({ space }: Props) {
         </FieldRow>
         <FieldRow>
           <Field label="Tipo do Evento *" error={errors.eventType?.message} className="sm:col-span-2">
-            <select
-              {...register('eventType')}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
+            <select {...register('eventType')} className={selectClass}>
               <option value="">Selecione...</option>
               {EVENT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
+                <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </Field>
@@ -365,6 +405,24 @@ export function ContractEditor({ space }: Props) {
             <Input type="number" {...register('guestCount')} placeholder="150" min="1" />
           </Field>
         </FieldRow>
+        {requiresExtendedEventData && (
+          <FieldRow>
+            <Field label="Quantidade de Diárias *" error={errors.dailyCount?.message}>
+              <Input type="number" {...register('dailyCount')} placeholder="1" min="1" />
+            </Field>
+            <Field label="Data de Saída *" error={errors.eventCheckoutDate?.message}>
+              <Input type="date" {...register('eventCheckoutDate')} />
+            </Field>
+            <Field label="Pacote *" error={errors.packageType?.message}>
+              <select {...register('packageType')} className={selectClass}>
+                <option value="">Selecione...</option>
+                {PACKAGE_TYPES.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+            </Field>
+          </FieldRow>
+        )}
       </SectionCard>
 
       {/* ── SECTION 4: Condições Financeiras ── */}
@@ -391,7 +449,12 @@ export function ContractEditor({ space }: Props) {
             />
           </Field>
           <Field label="Valor Restante (R$)" error={errors.remainingValue?.message}>
-            <Input {...register('remainingValue')} placeholder="auto-calculado" readOnly className="bg-gray-50 text-gray-600" />
+            <Input
+              {...register('remainingValue')}
+              placeholder="auto-calculado"
+              readOnly
+              className="bg-[var(--secondary)] text-[var(--muted-foreground)] cursor-default"
+            />
           </Field>
         </FieldRow>
         <FieldRow>
@@ -402,19 +465,28 @@ export function ContractEditor({ space }: Props) {
             <Input type="date" {...register('remainingDueDate')} />
           </Field>
           <Field label="Forma de Pagamento *" error={errors.paymentMethod?.message}>
-            <select
-              {...register('paymentMethod')}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
+            <select {...register('paymentMethod')} className={selectClass}>
               <option value="">Selecione...</option>
               {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+                <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </Field>
         </FieldRow>
+        {requiresExtendedEventData && (
+          <FieldRow>
+            <Field label="Valor do Caução (R$) *" error={errors.cautionValue?.message}>
+              <Input
+                {...register('cautionValue')}
+                placeholder="1000,00"
+                onBlur={(e) => {
+                  const v = parseFloat(e.target.value.replace(',', '.'))
+                  if (!isNaN(v)) setValue('cautionValue', v.toFixed(2).replace('.', ','))
+                }}
+              />
+            </Field>
+          </FieldRow>
+        )}
       </SectionCard>
 
       {/* ── SECTION 5: Observações ── */}
@@ -428,9 +500,9 @@ export function ContractEditor({ space }: Props) {
       </SectionCard>
 
       {/* ── SECTION 6: Cláusulas ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)] flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">
             Cláusulas do Contrato
           </h3>
           <div className="flex items-center gap-2">
@@ -459,7 +531,7 @@ export function ContractEditor({ space }: Props) {
               variant="ghost"
               size="sm"
               onClick={resetAllClauses}
-              className="gap-1.5 text-xs text-gray-500"
+              className="gap-1.5 text-xs text-[var(--muted-foreground)]"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Restaurar
@@ -468,15 +540,15 @@ export function ContractEditor({ space }: Props) {
         </div>
 
         {clausesApplied && (
-          <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-            <p className="text-xs text-emerald-700">
+          <div className="px-5 py-2.5 bg-[var(--success-light)] border-b border-[var(--border)] flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-[var(--success)] flex-shrink-0" />
+            <p className="text-xs text-[var(--success)]">
               Dados do formulário aplicados nas cláusulas. Clique em qualquer cláusula para revisar e editar.
             </p>
           </div>
         )}
 
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-[var(--border)]">
           {clauses.map((clause, index) => {
             const isOpen = allExpanded || expandedId === clause.id
 
@@ -486,40 +558,40 @@ export function ContractEditor({ space }: Props) {
                 <button
                   type="button"
                   onClick={() => !allExpanded && toggleClause(clause.id)}
-                  className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-gray-50 transition-colors group"
+                  className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-[var(--secondary)] transition-colors group"
                 >
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 transition-colors">
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-[var(--secondary)] group-hover:bg-[var(--border)] flex items-center justify-center text-xs font-bold text-[var(--muted-foreground)] transition-colors">
                     {index + 1}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">
                         Cláusula {clause.number}
                       </span>
                       {clause.edited && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-[var(--warning-light)] text-[var(--warning-foreground)]">
                           <Edit3 className="h-2.5 w-2.5" />
                           Editada
                         </span>
                       )}
                     </div>
-                    <p className="text-sm font-medium text-gray-800">{clause.title}</p>
+                    <p className="text-sm font-medium text-[var(--foreground)]">{clause.title}</p>
                   </div>
                   {!allExpanded && (
                     isOpen ? (
-                      <ChevronUp className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      <ChevronUp className="h-4 w-4 text-[var(--muted-foreground)] flex-shrink-0" />
                     ) : (
-                      <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)] flex-shrink-0" />
                     )
                   )}
                 </button>
 
                 {/* Clause content */}
                 {isOpen && (
-                  <div className="px-5 pb-5 bg-gray-50/50">
+                  <div className="px-5 pb-5 bg-[var(--secondary)]/30">
                     {allExpanded ? (
                       /* Read-only when all expanded */
-                      <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-white border border-gray-200 rounded-lg p-4">
+                      <div className="text-sm text-[var(--foreground)] whitespace-pre-wrap leading-relaxed bg-[var(--input-bg)] border border-[var(--border)] rounded-lg p-4">
                         {clause.content}
                       </div>
                     ) : (
@@ -557,7 +629,7 @@ export function ContractEditor({ space }: Props) {
                             variant="ghost"
                             size="sm"
                             onClick={() => setExpandedId(null)}
-                            className="text-gray-500"
+                            className="text-[var(--muted-foreground)]"
                           >
                             Cancelar
                           </Button>
@@ -573,16 +645,22 @@ export function ContractEditor({ space }: Props) {
       </div>
 
       {/* ── Generate PDF ── */}
-      <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4">
+      <div className="flex items-center justify-between bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm px-5 py-4">
         <div>
-          <p className="text-sm font-medium text-gray-800">Pronto para gerar o contrato?</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Preencha todos os campos obrigatórios e revise as cláusulas antes de gerar.
+          <p className="text-sm font-medium text-[var(--foreground)]">Pronto para gerar o contrato?</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+            Revise as cláusulas e verifique os dados antes de gerar.
           </p>
           {!isValid && (
-            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+            <p className="text-xs text-[var(--warning)] mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               Há campos obrigatórios não preenchidos ou inválidos.
+            </p>
+          )}
+          {isValid && !clausesApplied && (
+            <p className="text-xs text-[var(--muted-foreground)] mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Clique em &ldquo;Aplicar dados do formulário&rdquo; para atualizar as cláusulas.
             </p>
           )}
         </div>
@@ -590,6 +668,7 @@ export function ContractEditor({ space }: Props) {
           space={space}
           clauses={clauses}
           getFormData={getFormDataForPDF}
+          isValid={isValid}
         />
       </div>
     </div>

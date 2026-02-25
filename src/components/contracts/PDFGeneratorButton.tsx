@@ -4,23 +4,32 @@ import { useState } from 'react'
 import { pdf } from '@react-pdf/renderer'
 import { FileDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { ContractClause, ContractFormData, SpaceConfig } from '@/lib/contractTemplates'
+import { ContractClause, ContractFormData, SpaceConfig, substituteClause } from '@/lib/contractTemplates'
 import { ContractPDFDocument } from './ContractPDF'
 
 interface Props {
   space: SpaceConfig
   clauses: ContractClause[]
   getFormData: () => ContractFormData
+  isValid?: boolean
 }
 
-export default function PDFGeneratorButton({ space, clauses, getFormData }: Props) {
+export default function PDFGeneratorButton({ space, clauses, getFormData, isValid }: Props) {
   const [loading, setLoading] = useState(false)
 
   const handleGenerate = async () => {
     setLoading(true)
     try {
       const formData = getFormData()
-      const doc = <ContractPDFDocument formData={formData} clauses={clauses} space={space} />
+
+      // Garante que todos os placeholders {token} das cláusulas são substituídos,
+      // mesmo que o usuário não tenha clicado em "Aplicar dados do formulário"
+      const finalClauses = clauses.map((clause) => ({
+        ...clause,
+        content: substituteClause(clause.content, formData, space),
+      }))
+
+      const doc = <ContractPDFDocument formData={formData} clauses={finalClauses} space={space} />
       const blob = await pdf(doc).toBlob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -42,7 +51,7 @@ export default function PDFGeneratorButton({ space, clauses, getFormData }: Prop
     <Button
       type="button"
       onClick={handleGenerate}
-      disabled={loading}
+      disabled={loading || isValid === false}
       size="lg"
       className="gap-2 min-w-52 font-semibold"
     >

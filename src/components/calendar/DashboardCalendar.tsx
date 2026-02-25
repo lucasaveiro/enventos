@@ -114,20 +114,20 @@ export function DashboardCalendar() {
   }, [fetchData])
 
   const eventStyleGetter = (event: CalendarEvent) => {
-    let backgroundColor = '#6366f1' // primary indigo
+    let backgroundColor = '#4a6fa5' // muted steel blue
 
     if (event.type === 'event') {
       const status = event.resource.status
-      if (status === 'confirming') backgroundColor = '#f59e0b' // warning amber
-      else if (status === 'reserved') backgroundColor = '#10b981' // success emerald
+      if (status === 'confirming') backgroundColor = '#9e6c14' // muted amber
+      else if (status === 'reserved') backgroundColor = '#1e7a4e' // muted forest green
     } else if (event.type === 'task') {
       const serviceName = event.resource.serviceType.name
-      if (serviceName === 'Limpeza') backgroundColor = '#3b82f6' // blue-500
-      else if (serviceName === 'Jardinagem') backgroundColor = '#22c55e' // green-500
-      else if (serviceName === 'Piscina') backgroundColor = '#06b6d4' // cyan-500
-      else backgroundColor = '#8b5cf6' // violet-500
+      if (serviceName === 'Limpeza') backgroundColor = '#3a6aac' // muted blue
+      else if (serviceName === 'Jardinagem') backgroundColor = '#2a7a42' // muted forest green
+      else if (serviceName === 'Piscina') backgroundColor = '#1a7a88' // muted teal
+      else backgroundColor = '#5c6c90' // muted slate
     } else {
-      backgroundColor = event.resource.type === 'income' ? '#0ea5e9' : '#ef4444'
+      backgroundColor = event.resource.type === 'income' ? '#2a6aaa' : '#a83030' // muted sky / muted red
     }
 
     return {
@@ -209,31 +209,31 @@ export function DashboardCalendar() {
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-emerald-500" />
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#1e7a4e' }} />
             <span className="text-muted-foreground">Reservado</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-amber-500" />
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#9e6c14' }} />
             <span className="text-muted-foreground">Confirmando</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-blue-500" />
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#3a6aac' }} />
             <span className="text-muted-foreground">Limpeza</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-green-500" />
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#2a7a42' }} />
             <span className="text-muted-foreground">Jardinagem</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-cyan-500" />
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#1a7a88' }} />
             <span className="text-muted-foreground">Piscina</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-sky-500" />
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#2a6aaa' }} />
             <span className="text-muted-foreground">Receber</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-red-500" />
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#a83030' }} />
             <span className="text-muted-foreground">Pagar</span>
           </div>
         </div>

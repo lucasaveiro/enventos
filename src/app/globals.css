@@ -1,73 +1,73 @@
 @import "tailwindcss";
 
 :root {
-  /* Modern color palette */
-  --background: #f8fafc;
-  --foreground: #1e293b;
+  /* Sober neutral palette - light mode */
+  --background: #f5f7fa;
+  --foreground: #1c2230;
 
-  /* Primary - Indigo/Violet gradient theme */
-  --primary: #6366f1;
+  /* Primary - muted steel blue (replaces vivid indigo) */
+  --primary: #4a6fa5;
   --primary-foreground: #ffffff;
-  --primary-hover: #4f46e5;
-  --primary-light: #e0e7ff;
+  --primary-hover: #3a5d93;
+  --primary-light: #dde6f4;
 
   /* Secondary */
-  --secondary: #f1f5f9;
-  --secondary-foreground: #475569;
-  --secondary-hover: #e2e8f0;
+  --secondary: #edf0f5;
+  --secondary-foreground: #4a5568;
+  --secondary-hover: #e0e4ec;
 
-  /* Accent */
-  --accent: #8b5cf6;
+  /* Accent - muted slate blue (replaces vivid violet) */
+  --accent: #5c7090;
   --accent-foreground: #ffffff;
 
   /* Muted */
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --muted: #edf0f5;
+  --muted-foreground: #6b7a8e;
 
   /* Card */
   --card: #ffffff;
-  --card-foreground: #1e293b;
+  --card-foreground: #1c2230;
 
   /* Border */
-  --border: #e2e8f0;
-  --border-hover: #cbd5e1;
+  --border: #d5dbe6;
+  --border-hover: #b8c2ce;
 
-  /* Input */
-  --input-bg: #ffffff;
-  --input-text: #1e293b;
-  --input-placeholder: #94a3b8;
-  --input-border: #cbd5e1;
-  --input-focus: #6366f1;
+  /* Input - slightly tinted so clearly visible against white card */
+  --input-bg: #f0f3f8;
+  --input-text: #1c2230;
+  --input-placeholder: #94a0ae;
+  --input-border: #c6cdd8;
+  --input-focus: #4a6fa5;
 
   /* Ring */
-  --ring: #6366f1;
+  --ring: #4a6fa5;
 
-  /* Success */
-  --success: #10b981;
-  --success-light: #d1fae5;
-  --success-foreground: #065f46;
+  /* Success - muted forest green */
+  --success: #1e7a4e;
+  --success-light: #e4f5ec;
+  --success-foreground: #0d3d24;
 
-  /* Warning */
-  --warning: #f59e0b;
-  --warning-light: #fef3c7;
-  --warning-foreground: #92400e;
+  /* Warning - muted amber */
+  --warning: #9e6c14;
+  --warning-light: #fef0d0;
+  --warning-foreground: #5c3a0a;
 
-  /* Destructive */
-  --destructive: #ef4444;
-  --destructive-light: #fee2e2;
-  --destructive-foreground: #991b1b;
+  /* Destructive - muted red */
+  --destructive: #a83030;
+  --destructive-light: #fde8e8;
+  --destructive-foreground: #6b1a1a;
 
-  /* Info */
-  --info: #3b82f6;
-  --info-light: #dbeafe;
-  --info-foreground: #1e40af;
+  /* Info - muted blue */
+  --info: #2558a0;
+  --info-light: #dce8f5;
+  --info-foreground: #0f2a5e;
 
-  /* Sidebar */
-  --sidebar-bg: linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #3730a3 100%);
-  --sidebar-text: #e0e7ff;
-  --sidebar-text-muted: #a5b4fc;
-  --sidebar-hover: rgba(99, 102, 241, 0.2);
-  --sidebar-active: rgba(99, 102, 241, 0.3);
+  /* Sidebar - dark neutral charcoal (replaces vivid indigo/purple gradient) */
+  --sidebar-bg: linear-gradient(180deg, #111926 0%, #161e2e 100%);
+  --sidebar-text: #bdc8d8;
+  --sidebar-text-muted: #7a8a9e;
+  --sidebar-hover: rgba(255, 255, 255, 0.07);
+  --sidebar-active: rgba(255, 255, 255, 0.12);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -83,16 +83,16 @@
   --radius-xl: 1rem;
 
   /* Table selected state */
-  --table-selected-bg: #1e293b;
-  --table-selected-foreground: #f8fafc;
+  --table-selected-bg: #2a3448;
+  --table-selected-foreground: #e8edf5;
 
-  /* Calendar selected/today day */
-  --calendar-selected-bg: #334155;
-  --calendar-selected-foreground: #f8fafc;
-  --calendar-header-bg: #1e293b;
-  --calendar-header-foreground: #cbd5e1;
-  --calendar-toolbar-bg: #0f172a;
-  --calendar-toolbar-foreground: #e2e8f0;
+  /* Calendar */
+  --calendar-selected-bg: #2a3448;
+  --calendar-selected-foreground: #e8edf5;
+  --calendar-header-bg: #1e2840;
+  --calendar-header-foreground: #8a9bb0;
+  --calendar-toolbar-bg: #141c2e;
+  --calendar-toolbar-foreground: #bdc8d8;
 }
 
 @theme inline {
@@ -119,28 +119,47 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f172a;
-    --foreground: #f1f5f9;
-    --card: #1e293b;
-    --card-foreground: #f1f5f9;
-    --border: #334155;
-    --border-hover: #475569;
-    --input-bg: #1e293b;
-    --input-text: #f1f5f9;
-    --input-placeholder: #64748b;
-    --input-border: #475569;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --secondary: #1e293b;
-    --secondary-foreground: #f1f5f9;
-    --table-selected-bg: #334155;
-    --table-selected-foreground: #f8fafc;
-    --calendar-selected-bg: #475569;
-    --calendar-selected-foreground: #f8fafc;
-    --calendar-header-bg: #1e293b;
-    --calendar-header-foreground: #e2e8f0;
-    --calendar-toolbar-bg: #0f172a;
-    --calendar-toolbar-foreground: #f8fafc;
+    --background: #0d1117;
+    --foreground: #d5dce8;
+    --card: #141a26;
+    --card-foreground: #d5dce8;
+    --border: #232d40;
+    --border-hover: #38465a;
+
+    /* Input darker than card - creates visible "well" effect */
+    --input-bg: #0a0e16;
+    --input-text: #d5dce8;
+    --input-placeholder: #4d5a70;
+    --input-border: #2a3448;
+
+    --muted: #141a26;
+    --muted-foreground: #7a8c9e;
+    --secondary: #141a26;
+    --secondary-foreground: #d5dce8;
+    --secondary-hover: #1c2434;
+
+    /* Slightly brighter semantic colors for dark bg contrast */
+    --success: #3aaa70;
+    --success-light: #0d2518;
+    --success-foreground: #a0e0c0;
+    --warning: #c49030;
+    --warning-light: #261806;
+    --warning-foreground: #f0c878;
+    --destructive: #c04848;
+    --destructive-light: #280d0d;
+    --destructive-foreground: #f09090;
+    --info: #4080c0;
+    --info-light: #0d1e35;
+    --info-foreground: #90bce8;
+
+    --table-selected-bg: #1e2838;
+    --table-selected-foreground: #dce5f0;
+    --calendar-selected-bg: #1e2838;
+    --calendar-selected-foreground: #dce5f0;
+    --calendar-header-bg: #141a26;
+    --calendar-header-foreground: #7a8c9e;
+    --calendar-toolbar-bg: #0d1117;
+    --calendar-toolbar-foreground: #b5c0d0;
   }
 }
 
@@ -302,13 +321,13 @@ body {
 }
 
 .rbc-toolbar button.rbc-active {
-  background: #334155 !important;
-  color: #f8fafc !important;
-  border-color: #475569 !important;
+  background: #2a3448 !important;
+  color: #dce5f0 !important;
+  border-color: #38465a !important;
 }
 
 .rbc-toolbar button.rbc-active:hover {
-  background: #475569 !important;
+  background: #38465a !important;
 }
 
 .rbc-toolbar button:disabled {
@@ -507,7 +526,7 @@ select {
 select:focus {
   outline: none;
   border-color: var(--input-focus);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.15);
 }
 
 select option {

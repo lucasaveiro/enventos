@@ -23,18 +23,18 @@ export function Sidebar() {
     <div className="flex h-full w-72 flex-col" style={{ background: 'var(--sidebar-bg)' }}>
       {/* Logo Section */}
       <div className="flex h-20 items-center gap-3 px-6 border-b border-white/10">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm">
-          <Sparkles className="h-5 w-5 text-indigo-300" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
+          <Sparkles className="h-5 w-5" style={{ color: 'var(--sidebar-text)' }} />
         </div>
         <div>
           <h1 className="font-bold text-lg text-white">Gestor de Espaços</h1>
-          <p className="text-xs text-indigo-300">Sistema de reservas</p>
+          <p className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>Sistema de reservas</p>
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-6">
-        <p className="px-3 mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300/70">
+        <p className="px-3 mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--sidebar-text-muted)' }}>
           Menu Principal
         </p>
         {navigation.map((item) => {
@@ -46,32 +46,38 @@ export function Sidebar() {
               className={cn(
                 'group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200',
                 isActive
-                  ? 'bg-white/15 text-white shadow-lg shadow-indigo-500/20 backdrop-blur-sm'
-                  : 'text-indigo-200 hover:bg-white/10 hover:text-white'
+                  ? 'shadow-sm'
+                  : ''
               )}
+              style={{
+                background: isActive ? 'var(--sidebar-active)' : 'transparent',
+                color: isActive ? '#ffffff' : 'var(--sidebar-text)',
+              }}
+              onMouseEnter={e => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'
+              }}
+              onMouseLeave={e => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }}
             >
-              <div className={cn(
-                'flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200',
-                isActive
-                  ? 'bg-white/20 shadow-inner'
-                  : 'bg-white/5 group-hover:bg-white/10'
-              )}>
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200"
+                style={{ background: isActive ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)' }}
+              >
                 <item.icon
-                  className={cn(
-                    'h-5 w-5 transition-colors duration-200',
-                    isActive ? 'text-white' : 'text-indigo-300 group-hover:text-white'
-                  )}
+                  className="h-5 w-5 transition-colors duration-200"
+                  style={{ color: isActive ? '#ffffff' : 'var(--sidebar-text-muted)' }}
                   aria-hidden="true"
                 />
               </div>
               <div className="flex-1">
                 <span className="block">{item.name}</span>
                 {isActive && (
-                  <span className="text-xs text-indigo-300/80">{item.description}</span>
+                  <span className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>{item.description}</span>
                 )}
               </div>
               {isActive && (
-                <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <div className="h-2 w-2 rounded-full bg-green-500 opacity-80" />
               )}
             </Link>
           )
@@ -79,14 +85,14 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 mx-3 mb-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
+      <div className="p-4 mx-3 mb-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.05)' }}>
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15">
             <span className="text-sm font-bold text-white">GE</span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">Gestão de Espaços</p>
-            <p className="text-xs text-indigo-300">v1.0.0</p>
+            <p className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>v1.0.0</p>
           </div>
         </div>
       </div>

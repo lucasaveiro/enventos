@@ -43,9 +43,13 @@ type EventModalCategory = 'event' | 'visit'
 export function DashboardCalendar() {
   const router = useRouter()
   // No mobile usa view Agenda por padrão (mais legível em telas pequenas)
-  const [view, setView] = useState<View>(
-    typeof window !== 'undefined' && window.innerWidth < 768 ? Views.AGENDA : Views.MONTH
-  )
+  const [view, setView] = useState<View>(Views.MONTH)
+
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setView(Views.AGENDA)
+    }
+  }, [])
   const [date, setDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [isCreateTypeDialogOpen, setIsCreateTypeDialogOpen] = useState(false)

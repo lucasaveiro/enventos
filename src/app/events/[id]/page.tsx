@@ -17,6 +17,18 @@ const statusLabels: Record<string, string> = {
   confirming: 'Confirmando',
   reserved: 'Reservado',
   available: 'Disponivel',
+  visit_scheduled: 'Visita Agendada',
+  visit_done: 'Visita Realizada',
+  visit_cancelled: 'Visita Cancelada',
+  proposal_pending: 'Pendente de Envio',
+  proposal_sent: 'Proposta Enviada',
+  proposal_cancelled: 'Proposta Cancelada',
+}
+
+const categoryLabels: Record<string, string> = {
+  event: 'Evento',
+  visit: 'Visita',
+  proposal: 'Enviar Proposta',
 }
 
 const paymentLabels: Record<string, string> = {
@@ -92,6 +104,8 @@ export default function EventPage() {
   }
 
   const professionals = event.professionals || []
+  const category = event.category || 'event'
+  const isFinancialEvent = category === 'event'
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -135,25 +149,30 @@ export default function EventPage() {
             )}
           </div>
           <div className="flex flex-wrap gap-3">
+            <Badge variant="info">{categoryLabels[category] || category}</Badge>
             <Badge variant="secondary">{statusLabels[event.status] || event.status}</Badge>
-            <Badge variant="info">{paymentLabels[event.paymentStatus] || event.paymentStatus}</Badge>
+            {isFinancialEvent && (
+              <Badge variant="info">{paymentLabels[event.paymentStatus] || event.paymentStatus}</Badge>
+            )}
           </div>
-          <div className="grid gap-3 md:grid-cols-3 text-sm">
-            <div className="rounded-lg border border-border bg-secondary/30 p-3">
-              <div className="text-xs text-muted-foreground">Valor total</div>
-              <div className="font-semibold text-foreground">{formatCurrency(event.totalValue)}</div>
-            </div>
-            <div className="rounded-lg border border-border bg-secondary/30 p-3">
-              <div className="text-xs text-muted-foreground">Sinal</div>
-              <div className="font-semibold text-foreground">{formatCurrency(event.deposit)}</div>
-            </div>
-            <div className="rounded-lg border border-border bg-secondary/30 p-3">
-              <div className="text-xs text-muted-foreground">Status</div>
-              <div className="font-semibold text-foreground">
-                {paymentLabels[event.paymentStatus] || event.paymentStatus}
+          {isFinancialEvent && (
+            <div className="grid gap-3 md:grid-cols-3 text-sm">
+              <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                <div className="text-xs text-muted-foreground">Valor total</div>
+                <div className="font-semibold text-foreground">{formatCurrency(event.totalValue)}</div>
+              </div>
+              <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                <div className="text-xs text-muted-foreground">Sinal</div>
+                <div className="font-semibold text-foreground">{formatCurrency(event.deposit)}</div>
+              </div>
+              <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                <div className="text-xs text-muted-foreground">Status</div>
+                <div className="font-semibold text-foreground">
+                  {paymentLabels[event.paymentStatus] || event.paymentStatus}
+                </div>
               </div>
             </div>
-          </div>
+          )}
           {event.notes && (
             <div className="rounded-lg border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
               {event.notes}

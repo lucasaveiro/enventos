@@ -3,7 +3,13 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
-export async function getEvents(start?: Date, end?: Date) {
+type EventCategory = 'event' | 'visit' | 'proposal'
+
+export async function getEvents(
+  start?: Date,
+  end?: Date,
+  options?: { categories?: EventCategory[] }
+) {
   try {
     const where: any = {}
     if (start && end) {
@@ -11,6 +17,10 @@ export async function getEvents(start?: Date, end?: Date) {
         gte: start,
         lte: end
       }
+    }
+
+    if (options?.categories?.length) {
+      where.category = { in: options.categories }
     }
 
     const events = await prisma.event.findMany({
@@ -47,6 +57,7 @@ export async function createEvent(data: {
   title: string
   start: Date
   end: Date
+  category?: EventCategory
   status: string
   paymentStatus: string
   contractStatus: string
@@ -58,10 +69,11 @@ export async function createEvent(data: {
   professionalIds?: number[]
 }) {
   try {
-    const { professionalIds, ...eventData } = data
+    const { professionalIds, category, ...eventData } = data
 
     const event = await prisma.event.create({
       data: {
+        category: category ?? 'event',
         ...eventData,
         professionals: professionalIds ? {
             create: professionalIds.map(id => ({
@@ -89,6 +101,7 @@ export async function updateEvent(id: number, data: Partial<{
     title: string
     start: Date
     end: Date
+    category: EventCategory
     status: string
     paymentStatus: string
     contractStatus: string

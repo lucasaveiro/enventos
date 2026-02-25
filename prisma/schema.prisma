@@ -42,6 +42,7 @@ model Professional {
 model Event {
   id              Int                 @id @default(autoincrement())
   title           String
+  category        String              @default("event") // event, visit, proposal
   start           DateTime
   end             DateTime
   status          String              // available, confirming, reserved

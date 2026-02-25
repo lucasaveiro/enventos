@@ -38,6 +38,8 @@ interface CalendarEvent {
   allDay?: boolean
 }
 
+type EventModalCategory = 'event' | 'visit'
+
 export function DashboardCalendar() {
   const router = useRouter()
   const [view, setView] = useState<View>(Views.MONTH)
@@ -45,6 +47,7 @@ export function DashboardCalendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [isCreateTypeDialogOpen, setIsCreateTypeDialogOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedEventCategory, setSelectedEventCategory] = useState<EventModalCategory>('event')
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<any | undefined>(undefined)
@@ -63,9 +66,15 @@ export function DashboardCalendar() {
 
     if (eventsResult.success && eventsResult.data) {
         eventsResult.data.forEach((e: any) => {
+            const category = e.category || 'event'
+            const prefix = category === 'visit'
+              ? 'Visita'
+              : category === 'proposal'
+                ? 'Enviar Proposta'
+                : e.space.name
             calendarEvents.push({
                 id: e.id,
-                title: `${e.space.name} - ${e.title}`,
+                title: `${prefix} - ${e.title}`,
                 start: new Date(e.start),
                 end: new Date(e.end),
                 type: 'event',
@@ -117,8 +126,17 @@ export function DashboardCalendar() {
     let backgroundColor = '#4a6fa5' // muted steel blue
 
     if (event.type === 'event') {
+      const category = event.resource.category || 'event'
       const status = event.resource.status
-      if (status === 'confirming') backgroundColor = '#9e6c14' // muted amber
+      if (category === 'visit') {
+        if (status === 'visit_done') backgroundColor = '#1e7a4e' // muted forest green
+        else if (status === 'visit_cancelled') backgroundColor = '#a83030' // muted red
+        else backgroundColor = '#0d9488' // muted teal
+      } else if (category === 'proposal') {
+        if (status === 'proposal_sent') backgroundColor = '#1e7a4e' // muted forest green
+        else if (status === 'proposal_cancelled') backgroundColor = '#a83030' // muted red
+        else backgroundColor = '#2a6aaa' // muted sky blue
+      } else if (status === 'confirming') backgroundColor = '#9e6c14' // muted amber
       else if (status === 'reserved') backgroundColor = '#1e7a4e' // muted forest green
     } else if (event.type === 'task') {
       const serviceName = event.resource.serviceType.name
@@ -170,6 +188,13 @@ export function DashboardCalendar() {
 
   const handleOpenEventModal = () => {
     setIsCreateTypeDialogOpen(false)
+    setSelectedEventCategory('event')
+    setIsModalOpen(true)
+  }
+
+  const handleOpenVisitModal = () => {
+    setIsCreateTypeDialogOpen(false)
+    setSelectedEventCategory('visit')
     setIsModalOpen(true)
   }
 
@@ -181,6 +206,7 @@ export function DashboardCalendar() {
 
   const handleCloseEventModal = () => {
     setIsModalOpen(false)
+    setSelectedEventCategory('event')
     setSelectedDate(undefined)
   }
 
@@ -191,7 +217,15 @@ export function DashboardCalendar() {
   }
 
   // Count events by type for the legend
-  const eventCount = events.filter(e => e.type === 'event').length
+  const reservationCount = events.filter(
+    (e) => e.type === 'event' && (e.resource?.category || 'event') === 'event'
+  ).length
+  const visitCount = events.filter(
+    (e) => e.type === 'event' && e.resource?.category === 'visit'
+  ).length
+  const proposalCount = events.filter(
+    (e) => e.type === 'event' && e.resource?.category === 'proposal'
+  ).length
   const taskCount = events.filter(e => e.type === 'task').length
   const financialCount = events.filter(e => e.type === 'financial').length
 
@@ -202,7 +236,9 @@ export function DashboardCalendar() {
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold text-foreground">Agenda</h2>
           <div className="flex items-center gap-2">
-            <Badge variant="info">{eventCount} Reservas</Badge>
+            <Badge variant="info">{reservationCount} Eventos</Badge>
+            <Badge variant="secondary">{visitCount} Visitas</Badge>
+            <Badge variant="warning">{proposalCount} Enviar Proposta</Badge>
             <Badge variant="secondary">{taskCount} Tarefas</Badge>
             <Badge variant="warning">{financialCount} Financeiro</Badge>
           </div>
@@ -215,6 +251,14 @@ export function DashboardCalendar() {
           <div className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#9e6c14' }} />
             <span className="text-muted-foreground">Confirmando</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#0d9488' }} />
+            <span className="text-muted-foreground">Visita</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#2a6aaa' }} />
+            <span className="text-muted-foreground">Enviar Proposta</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#3a6aac' }} />
@@ -292,7 +336,7 @@ export function DashboardCalendar() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Button
               type="button"
               size="lg"
@@ -300,6 +344,15 @@ export function DashboardCalendar() {
               onClick={handleOpenEventModal}
             >
               Evento
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="h-24 text-lg font-semibold"
+              onClick={handleOpenVisitModal}
+            >
+              Visita
             </Button>
             <Button
               type="button"
@@ -318,6 +371,7 @@ export function DashboardCalendar() {
         isOpen={isModalOpen}
         onClose={handleCloseEventModal}
         initialDate={selectedDate}
+        initialCategory={selectedEventCategory}
         onSuccess={fetchData}
       />
 

@@ -62,10 +62,11 @@ function buildBaseTransactionWhere(filters?: FinancialFilters): Prisma.Transacti
 async function recalculateEventPaymentStatus(eventId: number) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { totalValue: true, deposit: true },
+    select: { totalValue: true, deposit: true, category: true },
   })
 
   if (!event) return
+  if (event.category !== 'event') return
 
   const payments = await prisma.transaction.aggregate({
     where: {
@@ -310,7 +311,7 @@ export async function getFinancialCalendarItems(start?: Date, end?: Date) {
 // Get all financial data including events and transactions
 export async function getAllFinancialData(start?: Date, end?: Date) {
   try {
-    const eventWhere: Prisma.EventWhereInput = {}
+    const eventWhere: Prisma.EventWhereInput = { category: 'event' }
     const transactionWhere: Prisma.TransactionWhereInput = buildBaseTransactionWhere({ start, end })
 
     if (start && end) {
@@ -407,7 +408,7 @@ export async function getAllFinancialData(start?: Date, end?: Date) {
 // Get comprehensive financial summary including event balances + transaction status
 export async function getFinancialSummary(start?: Date, end?: Date) {
   try {
-    const eventWhere: Prisma.EventWhereInput = {}
+    const eventWhere: Prisma.EventWhereInput = { category: 'event' }
     const transactionWhere: Prisma.TransactionWhereInput = {}
 
     if (start && end) {

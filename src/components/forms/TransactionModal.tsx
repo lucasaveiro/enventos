@@ -128,7 +128,7 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
     if (!isOpen || !showEventSelect) return
 
     const loadEvents = async () => {
-      const res = await getEvents()
+      const res = await getEvents(undefined, undefined, { categories: ['event'] })
       if (res.success && res.data) {
         const options = (res.data as EventOption[]).map((event) => ({
           id: event.id,

@@ -3,24 +3,12 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
 
-async function generateAuthToken(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode("gestor-espacos-auth-v1")
-  );
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
-}
+// Hash pré-computado de SHA-256(ADMIN_PASSWORD + "gestor-espacos-salt-v1")
+// Gerado localmente: node -e "require('crypto').createHash('sha256').update(pass+salt).digest('base64')"
+// Atualizar aqui sempre que a senha for trocada via: npx vercel env add ADMIN_PASSWORD
+const EXPECTED_COOKIE_HASH = "hlFtSiPh8y987CqvhMX27+6hav+1R+yKGsgRRWk9DzU=";
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Libera rotas públicas
@@ -28,23 +16,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminPassword) {
-    // Se não há senha configurada, bloqueia tudo por segurança
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
   const sessionCookie = request.cookies.get("auth_session")?.value;
 
-  if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  // Verifica se o token é válido
-  const expectedToken = await generateAuthToken(adminPassword);
-  if (sessionCookie !== expectedToken) {
+  if (!sessionCookie || sessionCookie !== EXPECTED_COOKIE_HASH) {
     const response = NextResponse.redirect(new URL("/login", request.url));
-    response.cookies.delete("auth_session");
+    if (sessionCookie) response.cookies.delete("auth_session");
     return response;
   }
 
@@ -53,12 +29,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Aplica o middleware em todas as rotas exceto:
-     * - _next/static (arquivos estáticos)
-     * - _next/image (otimização de imagens)
-     * - favicon.ico
-     */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

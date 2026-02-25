@@ -1,40 +1,20 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function LoginPage() {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+function LoginForm() {
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-
-      if (res.ok) {
-        router.push("/");
-        router.refresh();
-      } else {
-        const data = await res.json();
-        setError(data.error || "Senha incorreta.");
-        setPassword("");
-      }
-    } catch {
-      setError("Erro ao conectar. Tente novamente.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const errorMessage =
+    error === "wrong"
+      ? "Senha incorreta."
+      : error === "config"
+      ? "Servidor não configurado. Contate o administrador."
+      : null;
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
@@ -62,7 +42,14 @@ export default function LoginPage() {
 
         {/* Card do formulário */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* POST nativo para /api/auth/login — o servidor faz o redirect
+              com o cookie já embutido, sem depender de JS para setar cookie */}
+          <form
+            action="/api/auth/login"
+            method="POST"
+            className="space-y-4"
+            onSubmit={() => setLoading(true)}
+          >
             <div>
               <label
                 htmlFor="password"
@@ -72,9 +59,8 @@ export default function LoginPage() {
               </label>
               <input
                 id="password"
+                name="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
                 autoFocus
@@ -84,7 +70,7 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && (
+            {errorMessage && (
               <div className="flex items-center gap-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
                 <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path
@@ -93,13 +79,13 @@ export default function LoginPage() {
                     clipRule="evenodd"
                   />
                 </svg>
-                {error}
+                {errorMessage}
               </div>
             )}
 
             <button
               type="submit"
-              disabled={loading || !password}
+              disabled={loading}
               className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-gray-900"
             >
               {loading ? (
@@ -126,5 +112,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

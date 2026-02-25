@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+const SALT = "gestor-espacos-salt-v1";
 
-// Hash pré-computado de SHA-256(ADMIN_PASSWORD + "gestor-espacos-salt-v1")
-// Gerado localmente: node -e "require('crypto').createHash('sha256').update(pass+salt).digest('base64')"
-// Atualizar aqui sempre que a senha for trocada via: npx vercel env add ADMIN_PASSWORD
-const EXPECTED_COOKIE_HASH = "hlFtSiPh8y987CqvhMX27+6hav+1R+yKGsgRRWk9DzU=";
+async function computeHash(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + SALT);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return btoa(String.fromCharCode(...new Uint8Array(hashBuffer)));
+}
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Libera rotas públicas
@@ -18,9 +21,24 @@ export function middleware(request: NextRequest) {
 
   const sessionCookie = request.cookies.get("auth_session")?.value;
 
-  if (!sessionCookie || sessionCookie !== EXPECTED_COOKIE_HASH) {
+  if (!sessionCookie) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Calcula hash da senha atual para comparar com o cookie
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    // Sem ADMIN_PASSWORD configurado → nega acesso
     const response = NextResponse.redirect(new URL("/login", request.url));
-    if (sessionCookie) response.cookies.delete("auth_session");
+    response.cookies.delete("auth_session");
+    return response;
+  }
+
+  const expectedHash = await computeHash(adminPassword);
+
+  if (sessionCookie !== expectedHash) {
+    const response = NextResponse.redirect(new URL("/login", request.url));
+    response.cookies.delete("auth_session");
     return response;
   }
 

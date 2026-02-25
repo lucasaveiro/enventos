@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { Menu, Sparkles } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Trava o scroll do body quando o sidebar está aberto no mobile
@@ -18,6 +20,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       document.body.style.overflow = ''
     }
   }, [sidebarOpen])
+
+  // Rotas sem layout (login, etc.) — renderiza apenas o conteúdo
+  if (pathname === '/login') {
+    return <>{children}</>
+  }
 
   return (
     <div className="flex h-full">

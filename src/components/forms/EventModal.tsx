@@ -76,11 +76,11 @@ const eventSchema = z.object({
 
   if (data.category === 'event') {
     const total = Number((data.totalValue || '0').replace(',', '.'))
-    if (Number.isNaN(total) || total <= 0) {
+    if (Number.isNaN(total) || total < 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['totalValue'],
-        message: 'Valor total deve ser maior que zero',
+        message: 'Valor total não pode ser negativo',
       })
     }
 

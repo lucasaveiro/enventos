@@ -6,8 +6,9 @@ import { Calendar as BigCalendar, dateFnsLocalizer, Views, View } from 'react-bi
 import { format, parse, startOfWeek, getDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
 import { getEvents } from '@/app/actions/events'
-import { getServiceTasks } from '@/app/actions/services'
+import { getServiceTasks, getPendingServiceTasks } from '@/app/actions/services'
 import { getFinancialCalendarItems } from '@/app/actions/transactions'
 import { EventModal } from '@/components/forms/EventModal'
 import { ServiceTaskModal } from '@/components/forms/ServiceTaskModal'
@@ -52,6 +53,8 @@ export function DashboardCalendar() {
   }, [])
   const [date, setDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [pendingTasks, setPendingTasks] = useState<any[]>([])
+  const [isPendingPanelOpen, setIsPendingPanelOpen] = useState(true)
   const [isCreateTypeDialogOpen, setIsCreateTypeDialogOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedEventCategory, setSelectedEventCategory] = useState<EventModalCategory>('event')
@@ -63,10 +66,11 @@ export function DashboardCalendar() {
   const fetchData = useCallback(async () => {
     setIsLoading(true)
 
-    const [eventsResult, tasksResult, financialResult] = await Promise.all([
+    const [eventsResult, tasksResult, financialResult, pendingResult] = await Promise.all([
       getEvents(),
       getServiceTasks(),
       getFinancialCalendarItems(),
+      getPendingServiceTasks(),
     ])
 
     const calendarEvents: CalendarEvent[] = []
@@ -118,6 +122,10 @@ export function DashboardCalendar() {
           resource: item,
         })
       })
+    }
+
+    if (pendingResult.success && pendingResult.data) {
+      setPendingTasks(pendingResult.data)
     }
 
     setEvents(calendarEvents)
@@ -193,6 +201,12 @@ export function DashboardCalendar() {
       }
   }
 
+  const handleOpenPendingTask = (task: any) => {
+    setSelectedTask(task)
+    setSelectedDate(undefined)
+    setIsTaskModalOpen(true)
+  }
+
   const handleOpenEventModal = () => {
     setIsCreateTypeDialogOpen(false)
     setSelectedEventCategory('event')
@@ -242,12 +256,15 @@ export function DashboardCalendar() {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-4 bg-secondary/30">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold text-foreground">Agenda</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="info">{reservationCount} Eventos</Badge>
             <Badge variant="secondary">{visitCount} Visitas</Badge>
             <Badge variant="warning">{proposalCount} Enviar Proposta</Badge>
             <Badge variant="secondary">{taskCount} Tarefas</Badge>
             <Badge variant="warning">{financialCount} Financeiro</Badge>
+            {pendingTasks.length > 0 && (
+              <Badge variant="warning">{pendingTasks.length} Sem Data</Badge>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -330,6 +347,55 @@ export function DashboardCalendar() {
             onSelectEvent={handleSelectEvent}
             selectable
           />
+        )}
+      </div>
+
+      {/* Pending Services Panel */}
+      <div className="border-t border-border">
+        <button
+          type="button"
+          onClick={() => setIsPendingPanelOpen((prev) => !prev)}
+          className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-secondary/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-yellow-600" />
+            <span className="text-foreground">Serviços Pendentes sem Data</span>
+            {pendingTasks.length > 0 && (
+              <Badge variant="warning">{pendingTasks.length}</Badge>
+            )}
+          </div>
+          {isPendingPanelOpen ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+
+        {isPendingPanelOpen && (
+          <div className="px-4 pb-4">
+            {pendingTasks.length === 0 ? (
+              <p className="py-2 text-sm text-muted-foreground">
+                Nenhum serviço pendente sem data. ✓
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {pendingTasks.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => handleOpenPendingTask(task)}
+                    className="flex items-center gap-2 rounded-lg border border-yellow-400/40 bg-yellow-50 px-3 py-2 text-sm hover:bg-yellow-100 transition-colors text-left dark:bg-yellow-900/20 dark:border-yellow-600/40 dark:hover:bg-yellow-900/30"
+                  >
+                    <span className="font-medium text-foreground">{task.serviceType.name}</span>
+                    <span className="text-muted-foreground">— {task.space.name}</span>
+                    {task.responsible && (
+                      <span className="text-xs text-muted-foreground">({task.responsible})</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getServiceTasks } from '@/app/actions/services'
+import { getServiceTasks, getPendingServiceTasks } from '@/app/actions/services'
 import { ServiceTaskModal } from '@/components/forms/ServiceTaskModal'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -15,21 +15,40 @@ import {
   TableRow,
 } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Plus, CheckSquare, Calendar, Home, User, Clock, CheckCircle, Loader2, Pencil } from 'lucide-react'
+import {
+  Plus,
+  CheckSquare,
+  Calendar,
+  CalendarOff,
+  Home,
+  User,
+  Clock,
+  CheckCircle,
+  Loader2,
+  Pencil,
+  AlertCircle,
+} from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 export default function ServicesPage() {
   const [tasks, setTasks] = useState<any[]>([])
+  const [pendingTasks, setPendingTasks] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<any | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchTasks = async () => {
     setIsLoading(true)
-    const res = await getServiceTasks()
+    const [res, pendingRes] = await Promise.all([
+      getServiceTasks(),
+      getPendingServiceTasks(),
+    ])
     if (res.success && res.data) {
       setTasks(res.data)
+    }
+    if (pendingRes.success && pendingRes.data) {
+      setPendingTasks(pendingRes.data)
     }
     setIsLoading(false)
   }
@@ -62,9 +81,10 @@ export default function ServicesPage() {
   }
 
   // Stats
-  const pendingTasks = tasks.filter(t => t.status === 'pending').length
-  const completedTasks = tasks.filter(t => t.status === 'completed').length
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length
+  const statusPendingCount = tasks.filter((t) => t.status === 'pending').length
+  const completedTasks = tasks.filter((t) => t.status === 'completed').length
+  const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length
+  const unscheduledCount = pendingTasks.length
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -86,7 +106,7 @@ export default function ServicesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="p-6">
           <div className="flex items-center gap-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -94,7 +114,7 @@ export default function ServicesPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{tasks.length}</p>
-              <p className="text-sm text-muted-foreground">Total de Tarefas</p>
+              <p className="text-sm text-muted-foreground">Agendados</p>
             </div>
           </div>
         </Card>
@@ -104,7 +124,7 @@ export default function ServicesPage() {
               <Clock className="h-5 w-5 text-warning" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{pendingTasks}</p>
+              <p className="text-2xl font-bold text-foreground">{statusPendingCount}</p>
               <p className="text-sm text-muted-foreground">Pendentes</p>
             </div>
           </div>
@@ -131,10 +151,89 @@ export default function ServicesPage() {
             </div>
           </div>
         </Card>
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
+              <CalendarOff className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{unscheduledCount}</p>
+              <p className="text-sm text-muted-foreground">Sem Data</p>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Table Card */}
+      {/* Pending Services without date — shown only when there are any */}
+      {pendingTasks.length > 0 && (
+        <Card className="overflow-hidden border-yellow-300 dark:border-yellow-700/50">
+          <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-yellow-50 dark:bg-yellow-900/20">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              <h2 className="font-semibold text-foreground">
+                Serviços Pendentes sem Data Agendada
+              </h2>
+              <Badge variant="warning">{pendingTasks.length}</Badge>
+            </div>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Serviço</TableHead>
+                <TableHead>Espaço</TableHead>
+                <TableHead>Responsável</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Observações</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingTasks.map((task) => (
+                <TableRow key={task.id} className="bg-yellow-50/50 dark:bg-yellow-900/10">
+                  <TableCell>
+                    <Badge variant="warning">{task.serviceType.name}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Home className="h-4 w-4" />
+                      {task.space.name}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {task.responsible ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <User className="h-4 w-4" />
+                        {task.responsible}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>{getStatusBadge(task.status)}</TableCell>
+                  <TableCell>
+                    <span className="text-sm text-muted-foreground">{task.notes || '-'}</span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(task)}>
+                      <Calendar className="h-4 w-4 mr-1" />
+                      Agendar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {/* Scheduled Tasks Table */}
       <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-secondary/20">
+          <h2 className="font-semibold text-foreground">Serviços Agendados</h2>
+          {tasks.length > 0 && (
+            <Badge variant="secondary">{tasks.length} tarefas</Badge>
+          )}
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="flex flex-col items-center gap-3">
@@ -145,8 +244,8 @@ export default function ServicesPage() {
         ) : tasks.length === 0 ? (
           <EmptyState
             icon={CheckSquare}
-            title="Nenhuma tarefa encontrada"
-            description="Comece criando uma nova tarefa de serviço."
+            title="Nenhuma tarefa agendada"
+            description="Crie uma nova tarefa ou agende um serviço pendente acima."
             action={
               <Button onClick={handleCreate}>
                 <Plus className="h-4 w-4" />
@@ -170,15 +269,19 @@ export default function ServicesPage() {
               {tasks.map((task) => (
                 <TableRow key={task.id}>
                   <TableCell>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      <span className="font-medium text-foreground">
-                        {format(new Date(task.start), "dd/MM/yyyy", { locale: ptBR })}
-                      </span>
-                      <span className="text-xs">
-                        {format(new Date(task.start), "HH:mm", { locale: ptBR })}
-                      </span>
-                    </div>
+                    {task.start ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span className="font-medium text-foreground">
+                          {format(new Date(task.start), 'dd/MM/yyyy', { locale: ptBR })}
+                        </span>
+                        <span className="text-xs">
+                          {format(new Date(task.start), 'HH:mm', { locale: ptBR })}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">{task.serviceType.name}</Badge>
@@ -199,15 +302,9 @@ export default function ServicesPage() {
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
-                  <TableCell>
-                    {getStatusBadge(task.status)}
-                  </TableCell>
+                  <TableCell>{getStatusBadge(task.status)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(task)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleEdit(task)}>
                       <Pencil className="h-4 w-4 mr-1" />
                       Editar
                     </Button>

@@ -85,7 +85,7 @@ model ServiceType {
 
 model ServiceTask {
   id              Int           @id @default(autoincrement())
-  start           DateTime
+  start           DateTime?
   end             DateTime?
   responsible     String?
   status          String        // pending, in_progress, completed, cancelled

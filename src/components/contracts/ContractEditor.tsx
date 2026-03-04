@@ -563,37 +563,41 @@ export function ContractEditor({ space }: Props) {
 
       {/* ── SECTION 6: Cláusulas ── */}
       <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)] flex items-center justify-between">
+        <div className="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">
             Cláusulas do Contrato
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:flex-wrap sm:items-center">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={applyFormDataToClauses}
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário'}
+              <span className="sm:hidden">{clausesApplied ? 'Reatualizar' : 'Aplicar dados'}</span>
+              <span className="hidden sm:inline">
+                {clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário'}
+              </span>
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={toggleAllClauses}
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center"
             >
               {allExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {allExpanded ? 'Recolher' : 'Expandir'} todas
+              <span className="sm:hidden">{allExpanded ? 'Recolher' : 'Expandir'}</span>
+              <span className="hidden sm:inline">{allExpanded ? 'Recolher' : 'Expandir'} todas</span>
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={resetAllClauses}
-              className="gap-1.5 text-xs text-[var(--muted-foreground)]"
+              className="gap-1.5 text-xs text-[var(--muted-foreground)] w-full justify-start sm:w-auto sm:justify-center"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Restaurar
@@ -603,7 +607,7 @@ export function ContractEditor({ space }: Props) {
               variant="outline"
               size="sm"
               onClick={openAddClauseForm}
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center"
             >
               <Plus className="h-3.5 w-3.5" />
               Nova cláusula

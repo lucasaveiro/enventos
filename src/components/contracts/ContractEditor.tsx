@@ -178,6 +178,68 @@ function Field({
 
 const selectClass = "flex h-9 w-full rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--input-text)] px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
 
+type PersistedClauseTemplate = Omit<ContractClause, 'edited'>
+
+interface PersistedClauseStructure {
+  customClauses: PersistedClauseTemplate[]
+  removedDefaultClauseIds: string[]
+}
+
+const EMPTY_CLAUSE_STRUCTURE: PersistedClauseStructure = {
+  customClauses: [],
+  removedDefaultClauseIds: [],
+}
+
+function getClauseStructureStorageKey(spaceId: string): string {
+  return `contract-structure:${spaceId}:clauses`
+}
+
+function loadClauseStructure(spaceId: string): PersistedClauseStructure {
+  if (typeof window === 'undefined') return EMPTY_CLAUSE_STRUCTURE
+
+  try {
+    const raw = window.localStorage.getItem(getClauseStructureStorageKey(spaceId))
+    if (!raw) return EMPTY_CLAUSE_STRUCTURE
+
+    const parsed = JSON.parse(raw) as Partial<PersistedClauseStructure>
+    const customClauses = Array.isArray(parsed.customClauses)
+      ? parsed.customClauses
+          .filter((item): item is PersistedClauseTemplate => (
+            Boolean(item)
+            && typeof item.id === 'string'
+            && typeof item.number === 'string'
+            && typeof item.title === 'string'
+            && typeof item.content === 'string'
+          ))
+          .map((item) => ({
+            id: item.id,
+            number: item.number,
+            title: item.title,
+            content: item.content,
+          }))
+      : []
+
+    const removedDefaultClauseIds = Array.isArray(parsed.removedDefaultClauseIds)
+      ? parsed.removedDefaultClauseIds.filter((id): id is string => typeof id === 'string')
+      : []
+
+    return { customClauses, removedDefaultClauseIds }
+  } catch {
+    return EMPTY_CLAUSE_STRUCTURE
+  }
+}
+
+function saveClauseStructure(spaceId: string, structure: PersistedClauseStructure): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(getClauseStructureStorageKey(spaceId), JSON.stringify(structure))
+}
+
+function buildClauseTemplates(spaceId: string, structure: PersistedClauseStructure): PersistedClauseTemplate[] {
+  const removedClauseIds = new Set(structure.removedDefaultClauseIds)
+  const defaults = getDefaultClauseTemplates(spaceId).filter((clause) => !removedClauseIds.has(clause.id))
+  return [...defaults, ...structure.customClauses]
+}
+
 export function ContractEditor({ space }: Props) {
   const requiresExtendedEventData = space.id === 'estancia-aveiro'
   const requiresCheckoutDate = requiresExtendedEventData || space.id === 'rancho-aveiro'
@@ -187,6 +249,7 @@ export function ContractEditor({ space }: Props) {
   )
 
   const [clauses, setClauses] = useState<ContractClause[]>(() => getInitialClauses(space.id))
+  const [clauseStructure, setClauseStructure] = useState<PersistedClauseStructure>(EMPTY_CLAUSE_STRUCTURE)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
   const [allExpanded, setAllExpanded] = useState(false)
@@ -196,6 +259,7 @@ export function ContractEditor({ space }: Props) {
   const [newClauseTitle, setNewClauseTitle] = useState('')
   const [newClauseContent, setNewClauseContent] = useState('')
   const [newClauseError, setNewClauseError] = useState('')
+  const [pendingRemovalClauseId, setPendingRemovalClauseId] = useState<string | null>(null)
 
   const {
     register,
@@ -249,6 +313,23 @@ export function ContractEditor({ space }: Props) {
     }
   }, [totalValue, depositValue, setValue])
 
+  useEffect(() => {
+    const loadedStructure = loadClauseStructure(space.id)
+    setClauseStructure(loadedStructure)
+    setClauses(buildClauseTemplates(space.id, loadedStructure).map((clause) => ({ ...clause, edited: false })))
+    setExpandedId(null)
+    setEditingContent('')
+    setAllExpanded(false)
+    setClausesApplied(false)
+    setShowAddClauseForm(false)
+    setPendingRemovalClauseId(null)
+  }, [space.id])
+
+  const persistClauseStructure = useCallback((nextStructure: PersistedClauseStructure) => {
+    setClauseStructure(nextStructure)
+    saveClauseStructure(space.id, nextStructure)
+  }, [space.id])
+
   const applyFormDataToClauses = useCallback(() => {
     const formData = getValues() as ContractFormData
     setClauses((prev) =>
@@ -264,10 +345,12 @@ export function ContractEditor({ space }: Props) {
   const toggleClause = (id: string) => {
     if (expandedId === id) {
       setExpandedId(null)
+      setPendingRemovalClauseId(null)
     } else {
       const clause = clauses.find((c) => c.id === id)
       if (clause) setEditingContent(clause.content)
       setExpandedId(id)
+      setPendingRemovalClauseId(null)
     }
   }
 
@@ -280,7 +363,8 @@ export function ContractEditor({ space }: Props) {
 
   const resetClause = (id: string) => {
     const formData = getValues() as ContractFormData
-    const template = getDefaultClauseTemplates(space.id).find((c) => c.id === id)?.content || ''
+    const template = buildClauseTemplates(space.id, clauseStructure).find((c) => c.id === id)?.content || ''
+    if (!template) return
     const restored = substituteClause(template, formData, space)
     setClauses((prev) =>
       prev.map((c) => (c.id === id ? { ...c, content: restored, edited: false } : c))
@@ -291,7 +375,7 @@ export function ContractEditor({ space }: Props) {
   const resetAllClauses = () => {
     const formData = getValues() as ContractFormData
     setClauses(
-      getDefaultClauseTemplates(space.id).map((clause) => ({
+      buildClauseTemplates(space.id, clauseStructure).map((clause) => ({
         ...clause,
         edited: false,
         content: substituteClause(clause.content, formData, space),
@@ -299,6 +383,7 @@ export function ContractEditor({ space }: Props) {
     )
     setClausesApplied(false)
     setExpandedId(null)
+    setPendingRemovalClauseId(null)
   }
 
   const toggleAllClauses = () => {
@@ -317,6 +402,7 @@ export function ContractEditor({ space }: Props) {
     setNewClauseTitle('')
     setNewClauseContent('')
     setNewClauseError('')
+    setPendingRemovalClauseId(null)
   }
 
   const closeAddClauseForm = () => {
@@ -337,16 +423,63 @@ export function ContractEditor({ space }: Props) {
       return
     }
 
-    const newClause: ContractClause = {
+    const newClauseTemplate: PersistedClauseTemplate = {
       id: `custom-${Date.now()}`,
       number,
       title,
       content,
-      edited: true,
     }
 
-    setClauses((prev) => [...prev, newClause])
+    const nextStructure: PersistedClauseStructure = {
+      ...clauseStructure,
+      customClauses: [...clauseStructure.customClauses, newClauseTemplate],
+    }
+
+    persistClauseStructure(nextStructure)
+    setClauses((prev) => [...prev, { ...newClauseTemplate, edited: false }])
+    setClausesApplied(false)
     closeAddClauseForm()
+  }
+
+  const requestClauseRemoval = (id: string) => {
+    setPendingRemovalClauseId(id)
+  }
+
+  const cancelClauseRemoval = () => {
+    setPendingRemovalClauseId(null)
+  }
+
+  const confirmClauseRemoval = (id: string) => {
+    const clauseExists = clauses.some((clause) => clause.id === id)
+    if (!clauseExists) {
+      setPendingRemovalClauseId(null)
+      return
+    }
+
+    const defaultClauseIds = new Set(getDefaultClauseTemplates(space.id).map((clause) => clause.id))
+
+    let nextStructure = clauseStructure
+    if (defaultClauseIds.has(id)) {
+      nextStructure = {
+        ...clauseStructure,
+        removedDefaultClauseIds: Array.from(new Set([...clauseStructure.removedDefaultClauseIds, id])),
+      }
+    } else {
+      nextStructure = {
+        ...clauseStructure,
+        customClauses: clauseStructure.customClauses.filter((clause) => clause.id !== id),
+      }
+    }
+
+    persistClauseStructure(nextStructure)
+    setClauses((prev) => prev.filter((clause) => clause.id !== id))
+    setClausesApplied(false)
+    setPendingRemovalClauseId(null)
+
+    if (expandedId === id) {
+      setExpandedId(null)
+      setEditingContent('')
+    }
   }
 
   const getFormDataForPDF = (): ContractFormData => {
@@ -753,6 +886,14 @@ export function ContractEditor({ space }: Props) {
                           </Button>
                           <Button
                             type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => requestClauseRemoval(clause.id)}
+                          >
+                            Remover cláusula
+                          </Button>
+                          <Button
+                            type="button"
                             variant="ghost"
                             size="sm"
                             onClick={() => setExpandedId(null)}
@@ -761,6 +902,31 @@ export function ContractEditor({ space }: Props) {
                             Cancelar
                           </Button>
                         </div>
+                        {pendingRemovalClauseId === clause.id && (
+                          <div className="mt-3 border border-red-300 bg-red-50 rounded-lg p-3">
+                            <p className="text-xs text-red-700">
+                              Esta ação irá remover a cláusula definitivamente da estrutura do contrato.
+                            </p>
+                            <div className="flex items-center gap-2 mt-3">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={cancelClauseRemoval}
+                              >
+                                Cancelar Remoção
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => confirmClauseRemoval(clause.id)}
+                              >
+                                Remover Cláusula
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useStaté } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -9,22 +9,22 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
-import { createTransaction, updateTransaction } from '@/app/actions/transactions'
+import { creatéTransaction, updatéTransaction } from '@/app/actions/transactions'
 import { getEvents } from '@/app/actions/events'
 import { DollarSign, FileText, Calendar, Tag } from 'lucide-react'
 
 const transactionSchema = z.object({
   type: z.enum(['income', 'expense']),
-  category: z.string().min(1, 'Categoria é obrigatória'),
+  catégory: z.string().min(1, 'Catégoria é obrigatória'),
   description: z.string().min(1, 'Descrição é obrigatória'),
   amount: z.number().positive('Valor deve ser maior que zero'),
-  date: z.string().min(1, 'Data é obrigatória'),
+  daté: z.string().min(1, 'Data é obrigatória'),
   status: z.enum(['paid', 'pending']),
   paidAt: z.string().optional(),
   eventId: z.string().optional(),
   notes: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.type === 'income' && data.category === 'event_payment' && !data.eventId) {
+  if (data.type === 'income' && data.catégory === 'event_payment' && !data.eventId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['eventId'],
@@ -40,7 +40,7 @@ type EventOption = {
   title: string
 }
 
-const incomeCategories = [
+const incomeCatégories = [
   { value: 'event_payment', label: 'Pagamento de Evento' },
   { value: 'deposit', label: 'Sinal/Depósito' },
   { value: 'rental', label: 'Aluguel' },
@@ -48,7 +48,7 @@ const incomeCategories = [
   { value: 'other_income', label: 'Outras Receitas' },
 ]
 
-const expenseCategories = [
+const expenseCatégories = [
   { value: 'service_cost', label: 'Custo de Serviço' },
   { value: 'maintenance', label: 'Manutenção' },
   { value: 'supplies', label: 'Suprimentos' },
@@ -64,12 +64,12 @@ interface TransactionModalProps {
   initialTransaction?: {
     id: number
     type: string
-    category: string
+    catégory: string
     description: string
     amount: number
-    date: Date | string
+    daté: Daté | string
     status?: 'paid' | 'pending'
-    paidAt?: Date | string | null
+    paidAt?: Daté | string | null
     eventId?: number | null
     notes?: string | null
   }
@@ -77,58 +77,68 @@ interface TransactionModalProps {
   defaultType?: 'income' | 'expense'
 }
 
-export function TransactionModal({ isOpen, onClose, initialTransaction, onSuccess, defaultType = 'income' }: TransactionModalProps) {
-  const [events, setEvents] = useState<EventOption[]>([])
+export function TransactionModal({
+  isOpen,
+  onClose,
+  initialTransaction,
+  onSuccess,
+  defaultType = 'income',
+}: TransactionModalProps) {
+  const [events, setEvents] = useStaté<EventOption[]>([])
+
   const {
     register,
     handleSubmit,
     reset,
     control,
     watch,
-    formState: { errors, isSubmitting },
+    formStaté: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       type: defaultType,
-      category: '',
+      catégory: '',
       description: '',
       amount: 0,
-      date: new Date().toISOString().split('T')[0],
+      daté: new Daté().toISOString().split('T')[0],
       status: 'paid',
-      paidAt: new Date().toISOString().split('T')[0],
+      paidAt: new Daté().toISOString().split('T')[0],
       eventId: '',
       notes: '',
     },
-    values: initialTransaction ? {
-      type: initialTransaction.type as 'income' | 'expense',
-      category: initialTransaction.category,
-      description: initialTransaction.description,
-      amount: initialTransaction.amount,
-      date: typeof initialTransaction.date === 'string'
-        ? initialTransaction.date.split('T')[0]
-        : new Date(initialTransaction.date).toISOString().split('T')[0],
-      status: initialTransaction.status || 'paid',
-      paidAt: initialTransaction.paidAt
-        ? (typeof initialTransaction.paidAt === 'string'
-            ? initialTransaction.paidAt.split('T')[0]
-            : new Date(initialTransaction.paidAt).toISOString().split('T')[0])
-        : '',
-      eventId: initialTransaction.eventId ? String(initialTransaction.eventId) : '',
-      notes: initialTransaction.notes || '',
-    } : undefined
+    values: initialTransaction
+      ? {
+          type: initialTransaction.type as 'income' | 'expense',
+          catégory: initialTransaction.catégory,
+          description: initialTransaction.description,
+          amount: initialTransaction.amount,
+          daté:
+            typeof initialTransaction.daté === 'string'
+              ? initialTransaction.daté.split('T')[0]
+              : new Daté(initialTransaction.daté).toISOString().split('T')[0],
+          status: initialTransaction.status || 'paid',
+          paidAt: initialTransaction.paidAt
+            ? typeof initialTransaction.paidAt === 'string'
+              ? initialTransaction.paidAt.split('T')[0]
+              : new Daté(initialTransaction.paidAt).toISOString().split('T')[0]
+            : '',
+          eventId: initialTransaction.eventId ? String(initialTransaction.eventId) : '',
+          notes: initialTransaction.notes || '',
+        }
+      : undefined,
   })
 
   const watchType = watch('type')
-  const watchCategory = watch('category')
+  const watchCatégory = watch('catégory')
   const watchStatus = watch('status')
-  const categories = watchType === 'income' ? incomeCategories : expenseCategories
-  const showEventSelect = watchType === 'income' && watchCategory === 'event_payment'
+  const catégories = watchType === 'income' ? incomeCatégories : expenseCatégories
+  const showEventSelect = watchType === 'income' && watchCatégory === 'event_payment'
 
   useEffect(() => {
     if (!isOpen || !showEventSelect) return
 
     const loadEvents = async () => {
-      const res = await getEvents(undefined, undefined, { categories: ['event'] })
+      const res = await getEvents(undefined, undefined, { catégories: ['event'] })
       if (res.success && res.data) {
         const options = (res.data as EventOption[]).map((event) => ({
           id: event.id,
@@ -139,26 +149,25 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
     }
 
     loadEvents()
-  }, [isOpen, showEventSelect])
+  }, [isOpen, setEvents, showEventSelect])
 
   const onSubmit = async (data: TransactionFormValues) => {
     try {
       const submitData = {
         ...data,
-        date: new Date(data.date),
+        daté: new Daté(data.daté),
         status: data.status,
-        paidAt: data.status === 'paid' && data.paidAt ? new Date(data.paidAt) : null,
-        eventId: data.category === 'event_payment' && data.eventId
-          ? parseInt(data.eventId, 10)
-          : null,
+        paidAt: data.status === 'paid' && data.paidAt ? new Daté(data.paidAt) : null,
+        eventId: data.catégory === 'event_payment' && data.eventId ? parseInt(data.eventId, 10) : null,
         notes: data.notes || null,
       }
 
       if (initialTransaction) {
-        await updateTransaction(initialTransaction.id, submitData)
+        await updatéTransaction(initialTransaction.id, submitData)
       } else {
-        await createTransaction(submitData)
+        await creatéTransaction(submitData)
       }
+
       onSuccess()
       onClose()
       reset()
@@ -169,197 +178,179 @@ export function TransactionModal({ isOpen, onClose, initialTransaction, onSucces
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+    <Dialog open={isOpen} onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent className="w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] overflow-hidden p-0 gap-0 sm:w-full sm:max-w-lg">
+        <DialogHeader className="px-4 pt-5 pb-4 pr-12 border-b border-border sm:px-6">
           <DialogTitle>{initialTransaction ? 'Editar Transação' : 'Nova Transação'}</DialogTitle>
           <DialogDescription>
-            {initialTransaction ? 'Atualize as informações da transação.' : 'Registre uma nova receita ou despesa.'}
+            {initialTransaction
+              ? 'Atualize as informações da transação.'
+              : 'Registre uma nova receita ou despesa.'}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          {/* Type Selection */}
-          <div className="space-y-2">
-            <Label>Tipo de Transação *</Label>
-            <Controller
-              name="type"
-              control={control}
-              render={({ field }) => (
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => field.onChange('income')}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      field.value === 'income'
-                        ? 'border-success bg-success/10 text-success'
-                        : 'border-border hover:border-success/50'
-                    }`}
-                  >
-                    <div className="font-semibold">Receita</div>
-                    <div className="text-xs text-muted-foreground">Entrada de dinheiro</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => field.onChange('expense')}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      field.value === 'expense'
-                        ? 'border-destructive bg-destructive/10 text-destructive'
-                        : 'border-border hover:border-destructive/50'
-                    }`}
-                  >
-                    <div className="font-semibold">Despesa</div>
-                    <div className="text-xs text-muted-foreground">Saída de dinheiro</div>
-                  </button>
-                </div>
-              )}
-            />
-          </div>
 
-          {/* Category */}
-          <div className="space-y-2">
-            <Label htmlFor="category">Categoria *</Label>
-            <div className="relative">
-              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <select
-                id="category"
-                {...register('category')}
-                className="flex h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="">Selecione uma categoria</option>
-                {categories.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {errors.category && (
-              <p className="text-sm text-destructive">{errors.category.message}</p>
-            )}
-          </div>
-
-          {showEventSelect && (
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="eventId">Evento *</Label>
-              <select
-                id="eventId"
-                {...register('eventId')}
-                className="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="">Selecione um evento</option>
-                {events.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.title}
-                  </option>
-                ))}
-              </select>
-              {errors.eventId && (
-                <p className="text-sm text-destructive">{errors.eventId.message}</p>
-              )}
-            </div>
-          )}
-
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Descrição *</Label>
-            <Input
-              id="description"
-              placeholder="Ex: Pagamento do evento de casamento..."
-              icon={<FileText className="h-4 w-4" />}
-              {...register('description')}
-            />
-            {errors.description && (
-              <p className="text-sm text-destructive">{errors.description.message}</p>
-            )}
-          </div>
-
-          {/* Amount and Date */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount">Valor (R$) *</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0,00"
-                icon={<DollarSign className="h-4 w-4" />}
-                {...register('amount', { valueAsNumber: true })}
+              <Label>Tipo de Transação *</Label>
+              <Controller
+                name="type"
+                control={control}
+                render={({ field }) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => field.onChange('income')}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        field.value === 'income'
+                          ? 'border-success bg-success/10 text-success'
+                          : 'border-border hover:border-success/50'
+                      }`}
+                    >
+                      <div className="font-semibold">Receita</div>
+                      <div className="text-xs text-muted-foreground">Entrada de dinheiro</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => field.onChange('expense')}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        field.value === 'expense'
+                          ? 'border-destructive bg-destructive/10 text-destructive'
+                          : 'border-border hover:border-destructive/50'
+                      }`}
+                    >
+                      <div className="font-semibold">Despesa</div>
+                      <div className="text-xs text-muted-foreground">Saída de dinheiro</div>
+                    </button>
+                  </div>
+                )}
               />
-              {errors.amount && (
-                <p className="text-sm text-destructive">{errors.amount.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="date">Data Prevista *</Label>
-              <Input
-                id="date"
-                type="date"
-                icon={<Calendar className="h-4 w-4" />}
-                {...register('date')}
-              />
-              {errors.date && (
-                <p className="text-sm text-destructive">{errors.date.message}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Payment Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="status">Situação</Label>
-              <select
-                id="status"
-                {...register('status')}
-                className="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="paid">Pago</option>
-                <option value="pending">Pendente</option>
-              </select>
             </div>
 
-            {watchStatus === 'paid' ? (
+            <div className="space-y-2">
+              <Label htmlFor="catégory">Catégoria *</Label>
+              <div className="relative">
+                <Tag className="absolute left-3 top-1/2 -translaté-y-1/2 h-4 w-4 text-muted-foreground" />
+                <select
+                  id="catégory"
+                  {...register('catégory')}
+                  className="flex h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Selecione uma catégoria</option>
+                  {catégories.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {errors.catégory && <p className="text-sm text-destructive">{errors.catégory.message}</p>}
+            </div>
+
+            {showEventSelect && (
               <div className="space-y-2">
-                <Label htmlFor="paidAt">Data do Pagamento</Label>
+                <Label htmlFor="eventId">Evento *</Label>
+                <select
+                  id="eventId"
+                  {...register('eventId')}
+                  className="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Selecione um evento</option>
+                  {events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.title}
+                    </option>
+                  ))}
+                </select>
+                {errors.eventId && <p className="text-sm text-destructive">{errors.eventId.message}</p>}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Descrição *</Label>
+              <Input
+                id="description"
+                placeholder="Ex: Pagamento do evento de casamento..."
+                icon={<FileText className="h-4 w-4" />}
+                {...register('description')}
+              />
+              {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="amount">Valor (R$) *</Label>
                 <Input
-                  id="paidAt"
-                  type="date"
-                  icon={<Calendar className="h-4 w-4" />}
-                  {...register('paidAt')}
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00"
+                  icon={<DollarSign className="h-4 w-4" />}
+                  {...register('amount', { valueAsNumber: true })}
                 />
+                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
               </div>
-            ) : (
               <div className="space-y-2">
-                <Label className="opacity-0">placeholder</Label>
-                <div className="h-10 rounded-lg border border-dashed border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
-                  Valor entrará como previsão até ser marcado como pago.
-                </div>
+                <Label htmlFor="daté">Data Prevista *</Label>
+                <Input id="daté" type="daté" icon={<Calendar className="h-4 w-4" />} {...register('daté')} />
+                {errors.daté && <p className="text-sm text-destructive">{errors.daté.message}</p>}
               </div>
-            )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">Situação</Label>
+                <select
+                  id="status"
+                  {...register('status')}
+                  className="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="paid">Pago</option>
+                  <option value="pending">Pendente</option>
+                </select>
+              </div>
+
+              {watchStatus === 'paid' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="paidAt">Data do Pagamento</Label>
+                  <Input id="paidAt" type="daté" icon={<Calendar className="h-4 w-4" />} {...register('paidAt')} />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label className="opacity-0">placeholder</Label>
+                  <div className="h-10 rounded-lg border border-dashed border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                    Valor entrará como previsão até ser marcado como pago.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Observações</Label>
+              <Textarea
+                id="notes"
+                placeholder="Informações adicionais sobre esta transação..."
+                rows={3}
+                {...register('notes')}
+              />
+            </div>
           </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Observações</Label>
-            <Textarea
-              id="notes"
-              placeholder="Informações adicionais sobre esta transação..."
-              rows={3}
-              {...register('notes')}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              loading={isSubmitting}
-              variant={watchType === 'income' ? 'success' : 'destructive'}
-            >
-              {initialTransaction ? 'Salvar Alterações' : 'Registrar Transação'}
-            </Button>
+          <div className="border-t border-border bg-card/95 backdrop-blur px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-3">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                loading={isSubmitting}
+                variant={watchType === 'income' ? 'success' : 'destructive'}
+                className="w-full sm:w-auto"
+              >
+                {initialTransaction ? 'Salvar Alterações' : 'Registrar Transação'}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

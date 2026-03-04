@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Edit3,
   AlertCircle,
+  Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -71,16 +72,18 @@ const baseSchema = z.object({
   observations: z.string().optional(),
 })
 
-function createSchema(requiresExtendedEventData: boolean) {
-  if (!requiresExtendedEventData) return baseSchema
+function createSchema(requiresExtendedEventData: boolean, requiresCheckoutDate: boolean) {
+  if (!requiresExtendedEventData && !requiresCheckoutDate) return baseSchema
 
   return baseSchema.superRefine((data, ctx) => {
-    if (!data.dailyCount?.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dailyCount'], message: 'Obrigatório' })
+    if (requiresCheckoutDate && !data.eventCheckoutDate?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventCheckoutDate'], message: 'Obrigatório' })
     }
 
-    if (!data.eventCheckoutDate?.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventCheckoutDate'], message: 'Obrigatório' })
+    if (!requiresExtendedEventData) return
+
+    if (!data.dailyCount?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dailyCount'], message: 'Obrigatório' })
     }
 
     if (!data.packageType?.trim()) {
@@ -177,13 +180,22 @@ const selectClass = "flex h-9 w-full rounded-md border border-[var(--input-borde
 
 export function ContractEditor({ space }: Props) {
   const requiresExtendedEventData = space.id === 'estancia-aveiro'
-  const schema = useMemo(() => createSchema(requiresExtendedEventData), [requiresExtendedEventData])
+  const requiresCheckoutDate = requiresExtendedEventData || space.id === 'rancho-aveiro'
+  const schema = useMemo(
+    () => createSchema(requiresExtendedEventData, requiresCheckoutDate),
+    [requiresCheckoutDate, requiresExtendedEventData]
+  )
 
   const [clauses, setClauses] = useState<ContractClause[]>(() => getInitialClauses(space.id))
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
   const [allExpanded, setAllExpanded] = useState(false)
   const [clausesApplied, setClausesApplied] = useState(false)
+  const [showAddClauseForm, setShowAddClauseForm] = useState(false)
+  const [newClauseNumber, setNewClauseNumber] = useState('')
+  const [newClauseTitle, setNewClauseTitle] = useState('')
+  const [newClauseContent, setNewClauseContent] = useState('')
+  const [newClauseError, setNewClauseError] = useState('')
 
   const {
     register,
@@ -292,6 +304,49 @@ export function ContractEditor({ space }: Props) {
   const toggleAllClauses = () => {
     setAllExpanded((v) => !v)
     setExpandedId(null)
+  }
+
+  const getNextAdditionalClauseNumber = useCallback(() => {
+    const count = clauses.filter((clause) => clause.id.startsWith('custom-')).length + 1
+    return `ADICIONAL ${count}`
+  }, [clauses])
+
+  const openAddClauseForm = () => {
+    setShowAddClauseForm(true)
+    setNewClauseNumber(getNextAdditionalClauseNumber())
+    setNewClauseTitle('')
+    setNewClauseContent('')
+    setNewClauseError('')
+  }
+
+  const closeAddClauseForm = () => {
+    setShowAddClauseForm(false)
+    setNewClauseNumber('')
+    setNewClauseTitle('')
+    setNewClauseContent('')
+    setNewClauseError('')
+  }
+
+  const addCustomClause = () => {
+    const title = newClauseTitle.trim()
+    const content = newClauseContent.trim()
+    const number = newClauseNumber.trim() || getNextAdditionalClauseNumber()
+
+    if (!title || !content) {
+      setNewClauseError('Preencha o título e o conteúdo da nova cláusula.')
+      return
+    }
+
+    const newClause: ContractClause = {
+      id: `custom-${Date.now()}`,
+      number,
+      title,
+      content,
+      edited: true,
+    }
+
+    setClauses((prev) => [...prev, newClause])
+    closeAddClauseForm()
   }
 
   const getFormDataForPDF = (): ContractFormData => {
@@ -405,6 +460,13 @@ export function ContractEditor({ space }: Props) {
             <Input type="number" {...register('guestCount')} placeholder="150" min="1" />
           </Field>
         </FieldRow>
+        {space.id === 'rancho-aveiro' && (
+          <FieldRow>
+            <Field label="Data de Saída *" error={errors.eventCheckoutDate?.message}>
+              <Input type="date" {...register('eventCheckoutDate')} />
+            </Field>
+          </FieldRow>
+        )}
         {requiresExtendedEventData && (
           <FieldRow>
             <Field label="Quantidade de Diárias *" error={errors.dailyCount?.message}>
@@ -536,6 +598,16 @@ export function ContractEditor({ space }: Props) {
               <RotateCcw className="h-3.5 w-3.5" />
               Restaurar
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openAddClauseForm}
+              className="gap-1.5 text-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Nova cláusula
+            </Button>
           </div>
         </div>
 
@@ -545,6 +617,52 @@ export function ContractEditor({ space }: Props) {
             <p className="text-xs text-[var(--success)]">
               Dados do formulário aplicados nas cláusulas. Clique em qualquer cláusula para revisar e editar.
             </p>
+          </div>
+        )}
+
+        {showAddClauseForm && (
+          <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--secondary)]/30">
+            <p className="text-sm font-medium text-[var(--foreground)] mb-3">Adicionar nova cláusula</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              <Field label="Número da Cláusula">
+                <Input
+                  value={newClauseNumber}
+                  onChange={(e) => setNewClauseNumber(e.target.value)}
+                  placeholder="ADICIONAL 1 ou DÉCIMA QUARTA"
+                />
+              </Field>
+              <Field label="Título *" className="md:col-span-2">
+                <Input
+                  value={newClauseTitle}
+                  onChange={(e) => setNewClauseTitle(e.target.value)}
+                  placeholder="Ex.: DAS CONDIÇÕES ESPECIAIS"
+                />
+              </Field>
+            </div>
+            <Field label="Conteúdo da Cláusula *">
+              <Textarea
+                value={newClauseContent}
+                onChange={(e) => setNewClauseContent(e.target.value)}
+                rows={5}
+                placeholder="Digite o texto da nova cláusula..."
+                className="text-sm leading-relaxed"
+              />
+            </Field>
+            {newClauseError && (
+              <p className="text-xs text-[var(--destructive)] mt-2 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {newClauseError}
+              </p>
+            )}
+            <div className="flex items-center gap-2 mt-3">
+              <Button type="button" size="sm" onClick={addCustomClause} className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                Incluir cláusula
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={closeAddClauseForm}>
+                Cancelar
+              </Button>
+            </div>
           </div>
         )}
 
@@ -572,6 +690,11 @@ export function ContractEditor({ space }: Props) {
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-[var(--warning-light)] text-[var(--warning-foreground)]">
                           <Edit3 className="h-2.5 w-2.5" />
                           Editada
+                        </span>
+                      )}
+                      {clause.id.startsWith('custom-') && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]">
+                          Nova
                         </span>
                       )}
                     </div>

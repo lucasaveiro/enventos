@@ -266,6 +266,90 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     color: '#888',
   },
+  ranchoPage: {
+    fontFamily: 'Roboto',
+    fontSize: 9.5,
+    paddingTop: 42,
+    paddingBottom: 42,
+    paddingHorizontal: 48,
+    color: '#111',
+    lineHeight: 1.45,
+  },
+  ranchoAddressLine: {
+    textAlign: 'center',
+    fontSize: 9,
+    marginBottom: 14,
+  },
+  ranchoTitle: {
+    fontSize: 11.5,
+    fontWeight: 700,
+    marginBottom: 12,
+  },
+  ranchoIntro: {
+    fontSize: 9.3,
+    textAlign: 'justify',
+    lineHeight: 1.5,
+    marginBottom: 8,
+  },
+  ranchoClauseBlock: {
+    marginTop: 6,
+  },
+  ranchoClauseTitle: {
+    fontSize: 9.4,
+    fontWeight: 700,
+    marginBottom: 3,
+  },
+  ranchoClauseText: {
+    fontSize: 9.3,
+    textAlign: 'justify',
+    lineHeight: 1.5,
+  },
+  ranchoEventData: {
+    marginTop: 12,
+  },
+  ranchoEventLine: {
+    fontSize: 9.2,
+    marginBottom: 4,
+  },
+  ranchoDate: {
+    fontSize: 9.2,
+    textAlign: 'right',
+    marginTop: 18,
+    marginBottom: 26,
+  },
+  ranchoSignatureSection: {
+    marginTop: 6,
+  },
+  ranchoSignatureRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  ranchoSignatureBlock: {
+    width: '44%',
+    alignItems: 'center',
+  },
+  ranchoSignatureName: {
+    fontSize: 8.7,
+    textAlign: 'center',
+  },
+  ranchoSignatureRole: {
+    fontSize: 8.7,
+    textAlign: 'center',
+    marginTop: 2,
+    fontWeight: 700,
+  },
+  ranchoWitnessHeading: {
+    fontSize: 8.8,
+    fontWeight: 700,
+    marginBottom: 14,
+    textAlign: 'center',
+  },
+  ranchoWitnessText: {
+    fontSize: 8.5,
+    textAlign: 'center',
+    marginTop: 2,
+  },
 })
 
 interface Props {
@@ -287,7 +371,109 @@ function getPackageLabel(packageType: string): string {
   return '-'
 }
 
+function formatDateLong(dateStr: string): string {
+  if (!dateStr) return '____ de ____________ de ______'
+  const [year, month, day] = dateStr.split('-')
+  if (!year || !month || !day) return dateStr
+
+  const monthNames = [
+    'Janeiro',
+    'Fevereiro',
+    'Março',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro',
+  ]
+
+  const monthNumber = Number(month)
+  const monthName = monthNames[monthNumber - 1]
+  if (!monthName) return formatDate(dateStr)
+
+  return `${day} de ${monthName} de ${year}`
+}
+
+function RanchoContractPage({ formData, clauses, space }: Props) {
+  const preamble = clauses.find((clause) => clause.number === 'PREÂMBULO')
+  const legalClauses = clauses.filter((clause) => clause.id !== preamble?.id)
+
+  return (
+    <Page size="A4" style={styles.ranchoPage}>
+      <Text style={styles.ranchoAddressLine}>{space.address}, Campinas-SP CEP 13101-499</Text>
+      <Text style={styles.ranchoTitle}>Contrato de locação de imóvel por tempo pré-determinado N: {formData.contractNumber}</Text>
+
+      {preamble ? <Text style={styles.ranchoIntro}>{preamble.content}</Text> : null}
+
+      {legalClauses.map((clause) => (
+        <View key={clause.id} style={styles.ranchoClauseBlock}>
+          <Text style={styles.ranchoClauseTitle}>CLÁUSULA {clause.number}: {clause.title}</Text>
+          <Text style={styles.ranchoClauseText}>{clause.content}</Text>
+        </View>
+      ))}
+
+      <View style={styles.ranchoEventData} wrap={false}>
+        <Text style={styles.ranchoEventLine}>Locação para {formData.guestCount || '___'} convidados</Text>
+        <Text style={styles.ranchoEventLine}>Local da cerimônia: {space.displayName}</Text>
+        <Text style={styles.ranchoEventLine}>
+          Tipo de evento: {formData.eventType || '______________________'} às {formData.eventStartTime || '__:__'} horas.
+        </Text>
+        <Text style={styles.ranchoEventLine}>Buffet: ______________________________________________________________________________________</Text>
+        <Text style={styles.ranchoEventLine}>Cerimonial: __________________________________________________________________________________</Text>
+        <Text style={styles.ranchoEventLine}>Decoração: __________________________________________________________________________________</Text>
+        <Text style={styles.ranchoEventLine}>Som: ________________________________________________________________________________________</Text>
+        <Text style={styles.ranchoEventLine}>Fotografia: ___________________________________________________________________________________</Text>
+        <Text style={styles.ranchoEventLine}>Bartender: ___________________________________________________________________________________</Text>
+        <Text style={styles.ranchoEventLine}>Outros: ______________________________________________________________________________________</Text>
+      </View>
+
+      <View style={styles.ranchoSignatureSection} wrap={false}>
+        <Text style={styles.ranchoDate}>Campinas, {formatDateLong(formData.contractDate)}.</Text>
+
+        <View style={styles.ranchoSignatureRow}>
+          <View style={styles.ranchoSignatureBlock}>
+            <View style={styles.signatureLine} />
+            <Text style={styles.ranchoSignatureName}>{space.ownerName}</Text>
+            <Text style={styles.ranchoSignatureRole}>LOCADOR</Text>
+          </View>
+          <View style={styles.ranchoSignatureBlock}>
+            <View style={styles.signatureLine} />
+            <Text style={styles.ranchoSignatureName}>{formData.clientName || '________________________________'}</Text>
+            <Text style={styles.ranchoSignatureRole}>LOCATÁRIO</Text>
+          </View>
+        </View>
+
+        <Text style={styles.ranchoWitnessHeading}>TESTEMUNHAS</Text>
+        <View style={styles.ranchoSignatureRow}>
+          <View style={styles.ranchoSignatureBlock}>
+            <View style={styles.signatureLine} />
+            <Text style={styles.ranchoWitnessText}>Nome: ____________________________</Text>
+            <Text style={styles.ranchoWitnessText}>CPF: _____________________________</Text>
+          </View>
+          <View style={styles.ranchoSignatureBlock}>
+            <View style={styles.signatureLine} />
+            <Text style={styles.ranchoWitnessText}>Nome: ____________________________</Text>
+            <Text style={styles.ranchoWitnessText}>CPF: _____________________________</Text>
+          </View>
+        </View>
+      </View>
+    </Page>
+  )
+}
+
 export function ContractPDFDocument({ formData, clauses, space }: Props) {
+  if (space.id === 'rancho-aveiro') {
+    return (
+      <Document title={`Contrato ${formData.contractNumber} - ${space.displayName}`} author={space.ownerName}>
+        <RanchoContractPage formData={formData} clauses={clauses} space={space} />
+      </Document>
+    )
+  }
+
   return (
     <Document title={`Contrato ${formData.contractNumber} - ${space.displayName}`} author={space.ownerName}>
       <Page size="A4" style={styles.page}>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/webhooks/clicksign"];
 const SALT = "gestor-espacos-salt-v1";
 
 async function computeHash(password: string): Promise<string> {

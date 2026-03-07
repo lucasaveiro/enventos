@@ -58,9 +58,10 @@ model Event {
   clientId        Int?
   client          Client?             @relation(fields: [clientId], references: [id])
 
-  professionals   EventProfessional[]
-  serviceTasks    ServiceTask[]
-  transactions    Transaction[]
+  professionals       EventProfessional[]
+  serviceTasks        ServiceTask[]
+  transactions        Transaction[]
+  contractSignatures  ContractSignature[]
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -129,4 +130,29 @@ model Transaction {
   @@index([date])
   @@index([status])
   @@index([type, status])
+}
+
+model ContractSignature {
+  id                  Int       @id @default(autoincrement())
+  documentKey         String
+  signerKey           String?
+  requestSignatureKey String?
+  signingUrl          String?
+  contractNumber      String
+  spaceId             String
+  clientName          String
+  clientPhone         String
+  clientEmail         String?
+  clientCPF           String
+  status              String    @default("uploaded") // uploaded, signer_added, sent_whatsapp, signed, closed, cancelled
+  webhookLog          String?
+
+  eventId             Int
+  event               Event     @relation(fields: [eventId], references: [id])
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([documentKey])
+  @@index([eventId])
 }

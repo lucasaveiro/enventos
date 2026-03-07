@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useStaté } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -9,35 +9,34 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
-import { creatéTransaction, updatéTransaction } from '@/app/actions/transactions'
+import { createTransaction, updateTransaction } from '@/app/actions/transactions'
 import { getEvents } from '@/app/actions/events'
 import { EventCombobox, type EventOption } from '@/components/forms/EventCombobox'
 import { DollarSign, FileText, Calendar, Tag } from 'lucide-react'
 
 const transactionSchema = z.object({
   type: z.enum(['income', 'expense']),
-  catégory: z.string().min(1, 'Catégoria é obrigatória'),
+  category: z.string().min(1, 'Categoria é obrigatória'),
   description: z.string().min(1, 'Descrição é obrigatória'),
   amount: z.number().positive('Valor deve ser maior que zero'),
-  daté: z.string().min(1, 'Data é obrigatória'),
+  date: z.string().min(1, 'Data é obrigatória'),
   status: z.enum(['paid', 'pending']),
   paidAt: z.string().optional(),
   eventId: z.string().optional(),
   notes: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.type === 'income' && data.catégory === 'event_payment' && !data.eventId) {
+  if (data.type === 'income' && data.category === 'event_payment' && !data.eventId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['eventId'],
-      message: 'Evento e obrigatorio para pagamento de evento',
+      message: 'Evento é obrigatório para pagamento de evento',
     })
   }
 })
 
 type TransactionFormValues = z.infer<typeof transactionSchema>
 
-
-const incomeCatégories = [
+const incomeCategories = [
   { value: 'event_payment', label: 'Pagamento de Evento' },
   { value: 'deposit', label: 'Sinal/Depósito' },
   { value: 'rental', label: 'Aluguel' },
@@ -45,7 +44,7 @@ const incomeCatégories = [
   { value: 'other_income', label: 'Outras Receitas' },
 ]
 
-const expenseCatégories = [
+const expenseCategories = [
   { value: 'service_cost', label: 'Custo de Serviço' },
   { value: 'maintenance', label: 'Manutenção' },
   { value: 'supplies', label: 'Suprimentos' },
@@ -61,12 +60,12 @@ interface TransactionModalProps {
   initialTransaction?: {
     id: number
     type: string
-    catégory: string
+    category: string
     description: string
     amount: number
-    daté: Daté | string
+    date: Date | string
     status?: 'paid' | 'pending'
-    paidAt?: Daté | string | null
+    paidAt?: Date | string | null
     eventId?: number | null
     notes?: string | null
   }
@@ -81,7 +80,7 @@ export function TransactionModal({
   onSuccess,
   defaultType = 'income',
 }: TransactionModalProps) {
-  const [events, setEvents] = useStaté<EventOption[]>([])
+  const [events, setEvents] = useState<EventOption[]>([])
 
   const {
     register,
@@ -90,35 +89,35 @@ export function TransactionModal({
     control,
     watch,
     setValue,
-    formStaté: { errors, isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       type: defaultType,
-      catégory: '',
+      category: '',
       description: '',
       amount: 0,
-      daté: new Daté().toISOString().split('T')[0],
+      date: new Date().toISOString().split('T')[0],
       status: 'paid',
-      paidAt: new Daté().toISOString().split('T')[0],
+      paidAt: new Date().toISOString().split('T')[0],
       eventId: '',
       notes: '',
     },
     values: initialTransaction
       ? {
           type: initialTransaction.type as 'income' | 'expense',
-          catégory: initialTransaction.catégory,
+          category: initialTransaction.category,
           description: initialTransaction.description,
           amount: initialTransaction.amount,
-          daté:
-            typeof initialTransaction.daté === 'string'
-              ? initialTransaction.daté.split('T')[0]
-              : new Daté(initialTransaction.daté).toISOString().split('T')[0],
+          date:
+            typeof initialTransaction.date === 'string'
+              ? initialTransaction.date.split('T')[0]
+              : new Date(initialTransaction.date).toISOString().split('T')[0],
           status: initialTransaction.status || 'paid',
           paidAt: initialTransaction.paidAt
             ? typeof initialTransaction.paidAt === 'string'
               ? initialTransaction.paidAt.split('T')[0]
-              : new Daté(initialTransaction.paidAt).toISOString().split('T')[0]
+              : new Date(initialTransaction.paidAt).toISOString().split('T')[0]
             : '',
           eventId: initialTransaction.eventId ? String(initialTransaction.eventId) : '',
           notes: initialTransaction.notes || '',
@@ -127,16 +126,16 @@ export function TransactionModal({
   })
 
   const watchType = watch('type')
-  const watchCatégory = watch('catégory')
+  const watchCategory = watch('category')
   const watchStatus = watch('status')
-  const catégories = watchType === 'income' ? incomeCatégories : expenseCatégories
-  const showEventSelect = watchType === 'income' && watchCatégory === 'event_payment'
+  const categories = watchType === 'income' ? incomeCategories : expenseCategories
+  const showEventSelect = watchType === 'income' && watchCategory === 'event_payment'
 
   useEffect(() => {
     if (!isOpen || !showEventSelect) return
 
     const loadEvents = async () => {
-      const res = await getEvents(undefined, undefined, { catégories: ['event'] })
+      const res = await getEvents(undefined, undefined, { categories: ['event'] })
       if (res.success && res.data) {
         const options = (res.data as any[]).map((event) => ({
           id: event.id,
@@ -156,17 +155,17 @@ export function TransactionModal({
     try {
       const submitData = {
         ...data,
-        daté: new Daté(data.daté),
+        date: new Date(data.date),
         status: data.status,
-        paidAt: data.status === 'paid' && data.paidAt ? new Daté(data.paidAt) : null,
-        eventId: data.catégory === 'event_payment' && data.eventId ? parseInt(data.eventId, 10) : null,
+        paidAt: data.status === 'paid' && data.paidAt ? new Date(data.paidAt) : null,
+        eventId: data.category === 'event_payment' && data.eventId ? parseInt(data.eventId, 10) : null,
         notes: data.notes || null,
       }
 
       if (initialTransaction) {
-        await updatéTransaction(initialTransaction.id, submitData)
+        await updateTransaction(initialTransaction.id, submitData)
       } else {
-        await creatéTransaction(submitData)
+        await createTransaction(submitData)
       }
 
       onSuccess()
@@ -229,23 +228,23 @@ export function TransactionModal({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="catégory">Catégoria *</Label>
+              <Label htmlFor="category">Categoria *</Label>
               <div className="relative">
-                <Tag className="absolute left-3 top-1/2 -translaté-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <select
-                  id="catégory"
-                  {...register('catégory')}
+                  id="category"
+                  {...register('category')}
                   className="flex h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <option value="">Selecione uma catégoria</option>
-                  {catégories.map((cat) => (
+                  <option value="">Selecione uma categoria</option>
+                  {categories.map((cat) => (
                     <option key={cat.value} value={cat.value}>
                       {cat.label}
                     </option>
                   ))}
                 </select>
               </div>
-              {errors.catégory && <p className="text-sm text-destructive">{errors.catégory.message}</p>}
+              {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
             </div>
 
             {showEventSelect && (
@@ -288,9 +287,9 @@ export function TransactionModal({
                 {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="daté">Data Prevista *</Label>
-                <Input id="daté" type="daté" icon={<Calendar className="h-4 w-4" />} {...register('daté')} />
-                {errors.daté && <p className="text-sm text-destructive">{errors.daté.message}</p>}
+                <Label htmlFor="date">Data Prevista *</Label>
+                <Input id="date" type="date" icon={<Calendar className="h-4 w-4" />} {...register('date')} />
+                {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
               </div>
             </div>
 
@@ -310,7 +309,7 @@ export function TransactionModal({
               {watchStatus === 'paid' ? (
                 <div className="space-y-2">
                   <Label htmlFor="paidAt">Data do Pagamento</Label>
-                  <Input id="paidAt" type="daté" icon={<Calendar className="h-4 w-4" />} {...register('paidAt')} />
+                  <Input id="paidAt" type="date" icon={<Calendar className="h-4 w-4" />} {...register('paidAt')} />
                 </div>
               ) : (
                 <div className="space-y-2">

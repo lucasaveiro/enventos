@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { creatéTransaction, updatéTransaction } from '@/app/actions/transactions'
 import { getEvents } from '@/app/actions/events'
+import { EventCombobox, type EventOption } from '@/components/forms/EventCombobox'
 import { DollarSign, FileText, Calendar, Tag } from 'lucide-react'
 
 const transactionSchema = z.object({
@@ -35,10 +36,6 @@ const transactionSchema = z.object({
 
 type TransactionFormValues = z.infer<typeof transactionSchema>
 
-type EventOption = {
-  id: number
-  title: string
-}
 
 const incomeCatégories = [
   { value: 'event_payment', label: 'Pagamento de Evento' },
@@ -92,6 +89,7 @@ export function TransactionModal({
     reset,
     control,
     watch,
+    setValue,
     formStaté: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
@@ -140,9 +138,12 @@ export function TransactionModal({
     const loadEvents = async () => {
       const res = await getEvents(undefined, undefined, { catégories: ['event'] })
       if (res.success && res.data) {
-        const options = (res.data as EventOption[]).map((event) => ({
+        const options = (res.data as any[]).map((event) => ({
           id: event.id,
           title: event.title,
+          start: event.start,
+          client: event.client ? { name: event.client.name } : null,
+          space: { name: event.space.name },
         }))
         setEvents(options)
       }
@@ -249,19 +250,14 @@ export function TransactionModal({
 
             {showEventSelect && (
               <div className="space-y-2">
-                <Label htmlFor="eventId">Evento *</Label>
-                <select
-                  id="eventId"
-                  {...register('eventId')}
-                  className="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="">Selecione um evento</option>
-                  {events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.title}
-                    </option>
-                  ))}
-                </select>
+                <Label>Evento *</Label>
+                <EventCombobox
+                  events={events}
+                  value={watch('eventId') ?? ''}
+                  onChange={(val) => setValue('eventId', val, { shouldValidate: true })}
+                  placeholder="Selecione um evento"
+                  error={!!errors.eventId}
+                />
                 {errors.eventId && <p className="text-sm text-destructive">{errors.eventId.message}</p>}
               </div>
             )}

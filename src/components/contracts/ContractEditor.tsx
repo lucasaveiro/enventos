@@ -17,6 +17,8 @@ import {
   Edit3,
   AlertCircle,
   Plus,
+  Calendar,
+  Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -31,14 +33,26 @@ import {
   getInitialClauses,
   substituteClause,
 } from '@/lib/contractTemplates'
+import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
+import { ContractStatusBadge } from './ContractStatusBadge'
 
-// Dynamic import to avoid SSR issues with @react-pdf/renderer
+// Dynamic imports to avoid SSR issues with @react-pdf/renderer
 const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
   ssr: false,
   loading: () => (
     <Button disabled className="gap-2 min-w-48">
       <Loader2 className="h-4 w-4 animate-spin" />
       Preparando PDF...
+    </Button>
+  ),
+})
+
+const ClicksignButton = dynamic(() => import('./ClicksignButton'), {
+  ssr: false,
+  loading: () => (
+    <Button disabled className="gap-2 min-w-48 bg-orange-500 text-white">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Carregando...
     </Button>
   ),
 })
@@ -102,6 +116,7 @@ type FormValues = z.infer<typeof baseSchema>
 
 interface Props {
   space: SpaceConfig
+  eventId?: number
 }
 
 const EVENT_TYPES = [
@@ -240,7 +255,21 @@ function buildClauseTemplates(spaceId: string, structure: PersistedClauseStructu
   return [...defaults, ...structure.customClauses]
 }
 
-export function ContractEditor({ space }: Props) {
+interface EventOption {
+  id: number
+  title: string
+  start: string
+  clientName: string
+  clientPhone: string
+  clientEmail: string
+  spaceName: string
+  spaceId: number
+  contractStatus: string
+  totalValue: number
+  deposit: number
+}
+
+export function ContractEditor({ space, eventId: initialEventId }: Props) {
   const requiresExtendedEventData = space.id === 'estancia-aveiro'
   const requiresCheckoutDate = requiresExtendedEventData || space.id === 'rancho-aveiro'
   const schema = useMemo(
@@ -260,6 +289,49 @@ export function ContractEditor({ space }: Props) {
   const [newClauseContent, setNewClauseContent] = useState('')
   const [newClauseError, setNewClauseError] = useState('')
   const [pendingRemovalClauseId, setPendingRemovalClauseId] = useState<string | null>(null)
+
+  // Clicksign integration state
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(initialEventId ?? null)
+  const [events, setEvents] = useState<EventOption[]>([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventSearch, setEventSearch] = useState('')
+  const [existingSignature, setExistingSignature] = useState<{
+    status: string
+    signingUrl?: string | null
+  } | null>(null)
+
+  // Load events for linking
+  useEffect(() => {
+    let cancelled = false
+    setEventsLoading(true)
+    getEventsForContractLinking().then((result) => {
+      if (cancelled) return
+      if (result.success && result.data) setEvents(result.data)
+      setEventsLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // Load existing signature when event is selected
+  useEffect(() => {
+    if (!selectedEventId) {
+      setExistingSignature(null)
+      return
+    }
+    let cancelled = false
+    getContractSignature(selectedEventId).then((result) => {
+      if (cancelled) return
+      if (result.success && result.data) {
+        setExistingSignature({
+          status: result.data.status,
+          signingUrl: result.data.signingUrl,
+        })
+      } else {
+        setExistingSignature(null)
+      }
+    })
+    return () => { cancelled = true }
+  }, [selectedEventId])
 
   const {
     register,
@@ -518,6 +590,90 @@ export function ContractEditor({ space }: Props) {
           <p className="text-sm text-[var(--muted-foreground)]">Gerador de Contrato de Locação</p>
         </div>
       </div>
+
+      {/* ── SECTION 0: Vincular Evento (Clicksign) ── */}
+      <SectionCard title="Vincular ao Evento (Clicksign)">
+        <div className="space-y-3">
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Selecione um evento para habilitar o envio do contrato para assinatura via Clicksign/WhatsApp.
+          </p>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted-foreground)]" />
+            <Input
+              placeholder="Buscar evento por nome do cliente..."
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          {eventsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)] py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Carregando eventos...
+            </div>
+          ) : (
+            <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-[var(--border)] p-1">
+              {events
+                .filter((e) => {
+                  if (!eventSearch) return true
+                  const q = eventSearch.toLowerCase()
+                  return (
+                    e.clientName.toLowerCase().includes(q) ||
+                    e.title.toLowerCase().includes(q)
+                  )
+                })
+                .map((e) => {
+                  const isSelected = selectedEventId === e.id
+                  const eventDate = new Date(e.start).toLocaleDateString('pt-BR')
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => setSelectedEventId(isSelected ? null : e.id)}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                        isSelected
+                          ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                          : 'hover:bg-[var(--secondary)]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="font-medium">{e.clientName}</span>
+                          <span className="text-xs opacity-70">- {e.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs opacity-70">{eventDate}</span>
+                          <ContractStatusBadge status={e.contractStatus} />
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              {events.length === 0 && (
+                <p className="text-xs text-[var(--muted-foreground)] text-center py-3">
+                  Nenhum evento encontrado.
+                </p>
+              )}
+            </div>
+          )}
+          {selectedEventId && existingSignature && (
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--secondary)] p-3">
+              <ContractStatusBadge status={existingSignature.status} />
+              {existingSignature.signingUrl && (
+                <a
+                  href={existingSignature.signingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Ver link de assinatura
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </SectionCard>
 
       {/* ── SECTION 1: Identificação ── */}
       <SectionCard title="Identificação do Contrato">
@@ -937,7 +1093,7 @@ export function ContractEditor({ space }: Props) {
         </div>
       </div>
 
-      {/* ── Generate PDF ── */}
+      {/* ── Generate PDF / Send to Clicksign ── */}
       <div className="flex items-center justify-between bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm px-5 py-4">
         <div>
           <p className="text-sm font-medium text-[var(--foreground)]">Pronto para gerar o contrato?</p>
@@ -956,13 +1112,29 @@ export function ContractEditor({ space }: Props) {
               Clique em &ldquo;Aplicar dados do formulário&rdquo; para atualizar as cláusulas.
             </p>
           )}
+          {isValid && !selectedEventId && (
+            <p className="text-xs text-[var(--muted-foreground)] mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Vincule um evento acima para enviar via Clicksign.
+            </p>
+          )}
         </div>
-        <PDFGeneratorButton
-          space={space}
-          clauses={clauses}
-          getFormData={getFormDataForPDF}
-          isValid={isValid}
-        />
+        <div className="flex items-center gap-3">
+          <PDFGeneratorButton
+            space={space}
+            clauses={clauses}
+            getFormData={getFormDataForPDF}
+            isValid={isValid}
+          />
+          <ClicksignButton
+            space={space}
+            clauses={clauses}
+            getFormData={getFormDataForPDF}
+            isValid={isValid}
+            eventId={selectedEventId}
+            existingSignature={existingSignature}
+          />
+        </div>
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { ContractEditor } from '@/components/contracts/ContractEditor'
 
 interface Props {
   params: Promise<{ space: string }>
+  searchParams: Promise<{ eventId?: string }>
 }
 
 export async function generateStaticParams() {
@@ -17,11 +18,17 @@ export async function generateMetadata({ params }: Props) {
   return { title: `Contrato — ${space.displayName}` }
 }
 
-export default async function ContractSpacePage({ params }: Props) {
+export default async function ContractSpacePage({ params, searchParams }: Props) {
   const { space: spaceId } = await params
+  const { eventId } = await searchParams
   const space = SPACES[spaceId]
 
   if (!space) notFound()
 
-  return <ContractEditor space={space} />
+  return (
+    <ContractEditor
+      space={space}
+      eventId={eventId ? Number(eventId) : undefined}
+    />
+  )
 }

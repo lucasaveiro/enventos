@@ -4,9 +4,8 @@ import path from "path";
 const nextConfig: NextConfig = {
   reactCompiler: true,
   turbopack: {
-    // Fix: prevent Turbopack panic on non-ASCII characters (ç) in the project path.
-    // Setting root to the project directory makes module idents relative and ASCII-safe.
-    root: path.resolve(__dirname),
+    // Root must include node_modules. In worktree context, resolve up to the main repo.
+    root: path.resolve(__dirname, '../../..'),
   },
 };
 

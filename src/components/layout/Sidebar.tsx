@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText, X } from 'lucide-react'
+import { Calendar, CalendarDays, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
   { name: 'Calendário', href: '/', icon: Calendar, description: 'Visualize suas reservas' },
+  { name: 'Eventos', href: '/events', icon: CalendarDays, description: 'Gerenciamento de eventos' },
   { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Receitas e despesas' },
   { name: 'Financeiro', href: '/financial', icon: Wallet, description: 'Planilha e previsões' },
   { name: 'Espaços', href: '/spaces', icon: Home, description: 'Gerencie seus espaços' },
@@ -79,7 +80,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             Menu Principal
           </p>
           {navigation.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
             return (
               <Link
                 key={item.name}

@@ -1,17 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, CalendarDays, MapPin, Users } from 'lucide-react'
+import { ArrowLeft, CalendarDays, MapPin, Users, DollarSign, FileText, Plus, Pencil, Trash2 } from 'lucide-react'
 import { getEventById } from '@/app/actions/events'
+import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
+import { getContractSignature } from '@/app/actions/clicksign'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
-import { buttonVariants } from '@/components/ui/Button'
+import { Button, buttonVariants } from '@/components/ui/Button'
+import { ContractStatusBadge } from '@/components/contracts/ContractStatusBadge'
 import { EventDetailsActions } from '@/components/events/EventDetailsActions'
+import { TransactionModal } from '@/components/forms/TransactionModal'
 
 const statusLabels: Record<string, string> = {
   confirming: 'Confirmando',
@@ -48,8 +52,18 @@ export default function EventPage() {
   const rawId = Array.isArray(params?.id) ? params?.id?.[0] : params?.id
   const eventId = rawId ? Number.parseInt(String(rawId), 10) : Number.NaN
   const [event, setEvent] = useState<any | null>(null)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [contractSignature, setContractSignature] = useState<any | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState<any | undefined>(undefined)
+
+  const fetchTransactions = useCallback(async () => {
+    if (!eventId || Number.isNaN(eventId)) return
+    const res = await getTransactionsByEventId(eventId)
+    if (res.success && res.data) setTransactions(res.data)
+  }, [eventId])
 
   useEffect(() => {
     if (!rawId || Number.isNaN(eventId) || eventId <= 0) {
@@ -59,12 +73,18 @@ export default function EventPage() {
     }
 
     const loadEvent = async () => {
-      const eventRes = await getEventById(eventId)
+      const [eventRes, txRes, contractRes] = await Promise.all([
+        getEventById(eventId),
+        getTransactionsByEventId(eventId),
+        getContractSignature(eventId),
+      ])
       if (!eventRes.success || !eventRes.data) {
         setErrorMessage('Esse evento nao esta mais disponivel.')
       } else {
         setEvent(eventRes.data)
       }
+      if (txRes.success && txRes.data) setTransactions(txRes.data)
+      if (contractRes.success && contractRes.data) setContractSignature(contractRes.data)
       setIsLoading(false)
     }
 
@@ -93,9 +113,9 @@ export default function EventPage() {
           <CardContent className="space-y-4 text-sm text-muted-foreground">
             <p>{errorMessage || 'Esse evento nao esta mais disponivel.'}</p>
             <p>ID recebido: {rawId ?? 'vazio'}</p>
-            <Link href="/" className={buttonVariants({ variant: 'outline' })}>
+            <Link href="/events" className={buttonVariants({ variant: 'outline' })}>
               <ArrowLeft className="h-4 w-4" />
-              Voltar ao calendario
+              Voltar aos eventos
             </Link>
           </CardContent>
         </Card>
@@ -124,9 +144,9 @@ export default function EventPage() {
         </div>
         <div className="flex items-center gap-2">
           <EventDetailsActions event={event} />
-          <Link href="/" className={buttonVariants({ variant: 'outline' })}>
+          <Link href="/events" className={buttonVariants({ variant: 'outline' })}>
             <ArrowLeft className="h-4 w-4" />
-            Voltar ao calendario
+            Voltar aos eventos
           </Link>
         </div>
       </div>
@@ -214,6 +234,162 @@ export default function EventPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Transactions Section */}
+      {isFinancialEvent && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-muted-foreground" />
+                <CardTitle>Transacoes Vinculadas</CardTitle>
+              </div>
+              <Button
+                size="sm"
+                className="gap-1"
+                onClick={() => {
+                  setSelectedTransaction(undefined)
+                  setIsTransactionModalOpen(true)
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Nova Transacao
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {transactions.length === 0 ? (
+              <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+                Nenhuma transacao vinculada a este evento
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Descricao</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead className="text-right">Acoes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((tx: any) => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {format(new Date(tx.date), 'dd/MM/yyyy', { locale: ptBR })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={tx.type === 'income' ? 'success' : 'destructive'}>
+                          {tx.type === 'income' ? 'Receita' : 'Despesa'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{tx.description}</TableCell>
+                      <TableCell>
+                        <Badge variant={tx.status === 'paid' ? 'success' : 'warning'}>
+                          {tx.status === 'paid' ? 'Pago' : 'Pendente'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap">
+                        {formatCurrency(tx.amount)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => {
+                              setSelectedTransaction(tx)
+                              setIsTransactionModalOpen(true)
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            onClick={async () => {
+                              if (confirm('Excluir esta transacao?')) {
+                                await deleteTransaction(tx.id)
+                                fetchTransactions()
+                                // Reload event to update payment status
+                                const res = await getEventById(eventId)
+                                if (res.success && res.data) setEvent(res.data)
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Contract Section */}
+      {isFinancialEvent && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Contrato</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">Status:</span>
+              <ContractStatusBadge
+                status={contractSignature?.status || event.contractStatus || 'not_sent'}
+              />
+            </div>
+            {contractSignature?.signingUrl && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Link de assinatura:</span>
+                <a
+                  href={contractSignature.signingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  Abrir link
+                </a>
+              </div>
+            )}
+            {(!contractSignature || contractSignature.status === 'cancelled') && (
+              <p className="text-sm text-muted-foreground">
+                Use a pagina de{' '}
+                <Link href="/contracts" className="text-blue-600 hover:underline">
+                  Contratos
+                </Link>{' '}
+                para gerar e enviar o contrato.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Transaction Modal */}
+      <TransactionModal
+        isOpen={isTransactionModalOpen}
+        onClose={() => {
+          setIsTransactionModalOpen(false)
+          setSelectedTransaction(undefined)
+        }}
+        initialTransaction={selectedTransaction}
+        onSuccess={async () => {
+          await fetchTransactions()
+          const res = await getEventById(eventId)
+          if (res.success && res.data) setEvent(res.data)
+        }}
+      />
     </div>
   )
 }

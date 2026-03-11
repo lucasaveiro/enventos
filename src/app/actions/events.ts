@@ -83,6 +83,7 @@ export async function createEvent(data: {
       }
     })
     revalidatePath('/')
+    revalidatePath('/events')
     return {
       success: true,
       data: {
@@ -135,6 +136,7 @@ export async function updateEvent(id: number, data: Partial<{
             data: updateData
         })
         revalidatePath('/')
+        revalidatePath('/events')
         revalidatePath(`/events/${event.id}`)
         return {
             success: true,
@@ -180,5 +182,91 @@ export async function getEventById(id: number) {
   } catch (error) {
     console.error('Error fetching event:', error)
     return { success: false, error: 'Failed to fetch event' }
+  }
+}
+
+// ── Events List (for /events page) ───────────────────────────────────────────
+
+export async function getEventsForList(filters?: {
+  spaceId?: number
+  status?: string
+  paymentStatus?: string
+  contractStatus?: string
+  startDate?: Date
+  endDate?: Date
+}) {
+  try {
+    const where: any = { category: 'event' }
+
+    if (filters?.spaceId) where.spaceId = filters.spaceId
+    if (filters?.status) where.status = filters.status
+    if (filters?.paymentStatus) where.paymentStatus = filters.paymentStatus
+    if (filters?.contractStatus) where.contractStatus = filters.contractStatus
+    if (filters?.startDate || filters?.endDate) {
+      where.start = {}
+      if (filters.startDate) where.start.gte = filters.startDate
+      if (filters.endDate) where.start.lte = filters.endDate
+    }
+
+    const events = await prisma.event.findMany({
+      where,
+      include: {
+        client: true,
+        space: true,
+        professionals: { include: { professional: true } },
+        contractSignatures: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { status: true, signingUrl: true },
+        },
+        _count: { select: { transactions: true } },
+      },
+      orderBy: { start: 'desc' },
+    })
+
+    const serialized = events.map((e) => ({
+      ...e,
+      totalValue: e.totalValue.toNumber(),
+      deposit: e.deposit.toNumber(),
+    }))
+
+    const summary = {
+      totalEvents: serialized.length,
+      paidCount: serialized.filter((e) => e.paymentStatus === 'paid').length,
+      partialCount: serialized.filter((e) => e.paymentStatus === 'partial').length,
+      unpaidCount: serialized.filter((e) => e.paymentStatus === 'unpaid').length,
+    }
+
+    return { success: true, data: serialized, summary }
+  } catch (error) {
+    console.error('Error fetching events for list:', error)
+    return { success: false, error: 'Failed to fetch events' }
+  }
+}
+
+// ── Delete Event ─────────────────────────────────────────────────────────────
+
+export async function deleteEvent(id: number) {
+  try {
+    // Delete related records first
+    await prisma.$transaction(async (tx) => {
+      await tx.contractSignature.deleteMany({ where: { eventId: id } })
+      await tx.transaction.deleteMany({ where: { eventId: id } })
+      await tx.serviceTask.deleteMany({ where: { eventId: id } })
+      await tx.eventProfessional.deleteMany({ where: { eventId: id } })
+      await tx.event.delete({ where: { id } })
+    })
+
+    revalidatePath('/')
+    revalidatePath('/events')
+    revalidatePath('/financial')
+    revalidatePath('/dashboard')
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting event:', error)
+    return {
+      success: false,
+      error: 'Erro ao excluir evento. Tente novamente.',
+    }
   }
 }

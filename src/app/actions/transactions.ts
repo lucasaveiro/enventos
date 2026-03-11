@@ -669,6 +669,7 @@ export async function createTransaction(data: {
 
     revalidatePath('/dashboard')
     revalidatePath('/financial')
+    revalidatePath('/events')
     return {
       success: true,
       data: {
@@ -734,6 +735,7 @@ export async function updateTransaction(
 
     revalidatePath('/dashboard')
     revalidatePath('/financial')
+    revalidatePath('/events')
     return {
       success: true,
       data: {
@@ -800,9 +802,29 @@ export async function deleteTransaction(id: number) {
 
     revalidatePath('/dashboard')
     revalidatePath('/financial')
+    revalidatePath('/events')
     return { success: true }
   } catch (error) {
     console.error('Error deleting transaction:', error)
     return { success: false, error: 'Failed to delete transaction' }
+  }
+}
+
+// ── Transactions by Event ────────────────────────────────────────────────────
+
+export async function getTransactionsByEventId(eventId: number) {
+  try {
+    const transactions = await prisma.transaction.findMany({
+      where: { eventId },
+      orderBy: { date: 'desc' },
+    })
+    const serialized = transactions.map((t) => ({
+      ...t,
+      amount: toNumber(t.amount),
+    }))
+    return { success: true, data: serialized }
+  } catch (error) {
+    console.error('Error fetching transactions by event:', error)
+    return { success: false, error: 'Failed to fetch transactions' }
   }
 }

@@ -5,8 +5,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, CalendarDays, MapPin, Users, DollarSign, FileText, Plus, Pencil, Trash2 } from 'lucide-react'
-import { getEventById } from '@/app/actions/events'
+import { ArrowLeft, CalendarDays, MapPin, Users, DollarSign, FileText, Plus, Pencil, Trash2, Link2 } from 'lucide-react'
+import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
 import { getContractSignature } from '@/app/actions/clicksign'
 import { Badge } from '@/components/ui/Badge'
@@ -15,6 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button, buttonVariants } from '@/components/ui/Button'
 import { ContractStatusBadge } from '@/components/contracts/ContractStatusBadge'
 import { EventDetailsActions } from '@/components/events/EventDetailsActions'
+import { AddProfessionalPopover } from '@/components/events/AddProfessionalPopover'
+import { LinkTransactionModal } from '@/components/events/LinkTransactionModal'
 import { TransactionModal } from '@/components/forms/TransactionModal'
 
 const statusLabels: Record<string, string> = {
@@ -57,7 +59,14 @@ export default function EventPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
+  const [isLinkTransactionModalOpen, setIsLinkTransactionModalOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<any | undefined>(undefined)
+
+  const fetchEvent = useCallback(async () => {
+    if (!eventId || Number.isNaN(eventId)) return
+    const res = await getEventById(eventId)
+    if (res.success && res.data) setEvent(res.data)
+  }, [eventId])
 
   const fetchTransactions = useCallback(async () => {
     if (!eventId || Number.isNaN(eventId)) return
@@ -90,6 +99,26 @@ export default function EventPage() {
 
     loadEvent()
   }, [eventId, rawId])
+
+  const handleRefreshAfterTransaction = useCallback(async () => {
+    await fetchTransactions()
+    await fetchEvent()
+  }, [fetchTransactions, fetchEvent])
+
+  const handleRemoveProfessional = useCallback(
+    async (professionalId: number) => {
+      if (!event || !confirm('Remover este profissional do evento?')) return
+      const currentIds = (event.professionals || []).map(
+        (item: any) => item.professional?.id || item.professionalId,
+      )
+      const newIds = currentIds.filter((id: number) => id !== professionalId)
+      const res = await updateEvent(eventId, { professionalIds: newIds })
+      if (res.success) {
+        await fetchEvent()
+      }
+    },
+    [event, eventId, fetchEvent],
+  )
 
   if (isLoading) {
     return (
@@ -124,6 +153,9 @@ export default function EventPage() {
   }
 
   const professionals = event.professionals || []
+  const currentProfessionalIds = professionals.map(
+    (item: any) => item.professional?.id || item.professionalId,
+  )
   const category = event.category || 'event'
   const isFinancialEvent = category === 'event'
 
@@ -201,9 +233,20 @@ export default function EventPage() {
         </CardContent>
       </Card>
 
+      {/* Professionals Section */}
       <Card>
         <CardHeader>
-          <CardTitle>Profissionais no Evento</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Profissionais no Evento</CardTitle>
+            </div>
+            <AddProfessionalPopover
+              eventId={eventId}
+              currentProfessionalIds={currentProfessionalIds}
+              onSuccess={fetchEvent}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {professionals.length === 0 ? (
@@ -217,18 +260,32 @@ export default function EventPage() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Telefone</TableHead>
+                  <TableHead className="text-right">Acoes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {professionals.map((item: any) => (
-                  <TableRow key={item.professional?.id || item.professionalId}>
-                    <TableCell className="font-medium text-foreground">
-                      {item.professional?.name || '-'}
-                    </TableCell>
-                    <TableCell>{item.professional?.type || '-'}</TableCell>
-                    <TableCell>{item.professional?.phone || '-'}</TableCell>
-                  </TableRow>
-                ))}
+                {professionals.map((item: any) => {
+                  const profId = item.professional?.id || item.professionalId
+                  return (
+                    <TableRow key={profId}>
+                      <TableCell className="font-medium text-foreground">
+                        {item.professional?.name || '-'}
+                      </TableCell>
+                      <TableCell>{item.professional?.type || '-'}</TableCell>
+                      <TableCell>{item.professional?.phone || '-'}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => handleRemoveProfessional(profId)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}
@@ -244,17 +301,28 @@ export default function EventPage() {
                 <DollarSign className="h-5 w-5 text-muted-foreground" />
                 <CardTitle>Transacoes Vinculadas</CardTitle>
               </div>
-              <Button
-                size="sm"
-                className="gap-1"
-                onClick={() => {
-                  setSelectedTransaction(undefined)
-                  setIsTransactionModalOpen(true)
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                Nova Transacao
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setIsLinkTransactionModalOpen(true)}
+                >
+                  <Link2 className="h-4 w-4" />
+                  Vincular Existente
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => {
+                    setSelectedTransaction(undefined)
+                    setIsTransactionModalOpen(true)
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Criar Nova
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -314,10 +382,7 @@ export default function EventPage() {
                             onClick={async () => {
                               if (confirm('Excluir esta transacao?')) {
                                 await deleteTransaction(tx.id)
-                                fetchTransactions()
-                                // Reload event to update payment status
-                                const res = await getEventById(eventId)
-                                if (res.success && res.data) setEvent(res.data)
+                                await handleRefreshAfterTransaction()
                               }
                             }}
                           >
@@ -384,11 +449,16 @@ export default function EventPage() {
           setSelectedTransaction(undefined)
         }}
         initialTransaction={selectedTransaction}
-        onSuccess={async () => {
-          await fetchTransactions()
-          const res = await getEventById(eventId)
-          if (res.success && res.data) setEvent(res.data)
-        }}
+        defaultEventId={selectedTransaction ? undefined : eventId}
+        onSuccess={handleRefreshAfterTransaction}
+      />
+
+      {/* Link Transaction Modal */}
+      <LinkTransactionModal
+        isOpen={isLinkTransactionModalOpen}
+        onClose={() => setIsLinkTransactionModalOpen(false)}
+        eventId={eventId}
+        onSuccess={handleRefreshAfterTransaction}
       />
     </div>
   )

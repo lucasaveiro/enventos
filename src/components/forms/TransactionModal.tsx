@@ -71,6 +71,7 @@ interface TransactionModalProps {
   }
   onSuccess: () => void
   defaultType?: 'income' | 'expense'
+  defaultEventId?: number
 }
 
 export function TransactionModal({
@@ -79,6 +80,7 @@ export function TransactionModal({
   initialTransaction,
   onSuccess,
   defaultType = 'income',
+  defaultEventId,
 }: TransactionModalProps) {
   const [events, setEvents] = useState<EventOption[]>([])
 
@@ -93,14 +95,14 @@ export function TransactionModal({
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
-      type: defaultType,
-      category: '',
+      type: defaultEventId ? 'income' : defaultType,
+      category: defaultEventId ? 'event_payment' : '',
       description: '',
       amount: 0,
       date: new Date().toISOString().split('T')[0],
       status: 'paid',
       paidAt: new Date().toISOString().split('T')[0],
-      eventId: '',
+      eventId: defaultEventId ? String(defaultEventId) : '',
       notes: '',
     },
     values: initialTransaction
@@ -129,7 +131,7 @@ export function TransactionModal({
   const watchCategory = watch('category')
   const watchStatus = watch('status')
   const categories = watchType === 'income' ? incomeCategories : expenseCategories
-  const showEventSelect = watchType === 'income' && watchCategory === 'event_payment'
+  const showEventSelect = watchType === 'income' && watchCategory === 'event_payment' && !defaultEventId
 
   useEffect(() => {
     if (!isOpen || !showEventSelect) return
@@ -258,6 +260,12 @@ export function TransactionModal({
                   error={!!errors.eventId}
                 />
                 {errors.eventId && <p className="text-sm text-destructive">{errors.eventId.message}</p>}
+              </div>
+            )}
+
+            {defaultEventId && (
+              <div className="rounded-lg border border-border bg-success/5 px-3 py-2 text-xs text-muted-foreground">
+                Transacao sera vinculada automaticamente ao evento atual.
               </div>
             )}
 

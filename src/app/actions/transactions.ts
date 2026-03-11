@@ -828,3 +828,23 @@ export async function getTransactionsByEventId(eventId: number) {
     return { success: false, error: 'Failed to fetch transactions' }
   }
 }
+
+// ── Unlinked Transactions (no event associated) ──────────────────────────────
+
+export async function getUnlinkedTransactions() {
+  try {
+    const transactions = await prisma.transaction.findMany({
+      where: { eventId: null },
+      orderBy: { date: 'desc' },
+      take: 50,
+    })
+    const serialized = transactions.map((t) => ({
+      ...t,
+      amount: toNumber(t.amount),
+    }))
+    return { success: true, data: serialized }
+  } catch (error) {
+    console.error('Error fetching unlinked transactions:', error)
+    return { success: false, error: 'Failed to fetch unlinked transactions' }
+  }
+}

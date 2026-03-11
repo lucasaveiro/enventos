@@ -296,8 +296,12 @@ export default function EventsPage() {
                 icon={CalendarDays}
                 title="Nenhum evento encontrado"
                 description="Crie um novo evento para comecar"
-                actionLabel="Novo Evento"
-                onAction={handleCreate}
+                action={
+                  <Button onClick={handleCreate} className="mt-4 gap-2">
+                    <Plus className="h-4 w-4" />
+                    Novo Evento
+                  </Button>
+                }
               />
             </div>
           ) : (

@@ -36,6 +36,10 @@ const transactionSchema = z.object({
 
 type TransactionFormValues = z.infer<typeof transactionSchema>
 
+type EventOption = {
+  id: number
+  title: string
+}
 const incomeCategories = [
   { value: 'event_payment', label: 'Pagamento de Evento' },
   { value: 'deposit', label: 'Sinal/Depósito' },

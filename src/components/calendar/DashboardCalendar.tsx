@@ -10,6 +10,7 @@ import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
 import { getEvents } from '@/app/actions/events'
 import { getServiceTasks, getPendingServiceTasks } from '@/app/actions/services'
 import { getFinancialCalendarItems } from '@/app/actions/transactions'
+import { getInterestDatesForCalendar } from '@/app/actions/interestDates'
 import { EventModal } from '@/components/forms/EventModal'
 import { ServiceTaskModal } from '@/components/forms/ServiceTaskModal'
 import { Card } from '@/components/ui/Card'
@@ -30,11 +31,11 @@ const localizer = dateFnsLocalizer({
 })
 
 interface CalendarEvent {
-  id: number
+  id: number | string
   title: string
   start: Date
   end: Date
-  type: 'event' | 'task' | 'financial'
+  type: 'event' | 'task' | 'financial' | 'interest'
   resource?: any
   allDay?: boolean
 }
@@ -66,11 +67,12 @@ export function DashboardCalendar() {
   const fetchData = useCallback(async () => {
     setIsLoading(true)
 
-    const [eventsResult, tasksResult, financialResult, pendingResult] = await Promise.all([
+    const [eventsResult, tasksResult, financialResult, pendingResult, interestResult] = await Promise.all([
       getEvents(),
       getServiceTasks(),
       getFinancialCalendarItems(),
       getPendingServiceTasks(),
+      getInterestDatesForCalendar(),
     ])
 
     const calendarEvents: CalendarEvent[] = []
@@ -124,6 +126,24 @@ export function DashboardCalendar() {
       })
     }
 
+    if (interestResult.success && interestResult.data) {
+      interestResult.data.forEach((item: any) => {
+        const dateObj = new Date(item.date)
+        const startDate = new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 0, 0, 0)
+        const endDate = new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 23, 59, 59)
+
+        calendarEvents.push({
+          id: `interest-${item.id}`,
+          title: `Interesse - ${item.client.name} (${item.space.name})`,
+          start: startDate,
+          end: endDate,
+          type: 'interest',
+          allDay: true,
+          resource: item,
+        })
+      })
+    }
+
     if (pendingResult.success && pendingResult.data) {
       setPendingTasks(pendingResult.data)
     }
@@ -159,6 +179,10 @@ export function DashboardCalendar() {
       else if (serviceName === 'Jardinagem') backgroundColor = '#2a7a42' // muted forest green
       else if (serviceName === 'Piscina') backgroundColor = '#1a7a88' // muted teal
       else backgroundColor = '#5c6c90' // muted slate
+    } else if (event.type === 'interest') {
+      const status = event.resource?.status
+      if (status === 'confirmed') backgroundColor = '#1e7a4e'
+      else backgroundColor = '#7c3aed' // purple/violet
     } else {
       backgroundColor = event.resource.type === 'income' ? '#2a6aaa' : '#a83030' // muted sky / muted red
     }
@@ -196,6 +220,8 @@ export function DashboardCalendar() {
       } else if (event.type === 'task') {
         setSelectedTask(event.resource)
         setIsTaskModalOpen(true)
+      } else if (event.type === 'interest') {
+        router.push('/clients')
       } else {
         router.push('/financial')
       }
@@ -249,6 +275,7 @@ export function DashboardCalendar() {
   ).length
   const taskCount = events.filter(e => e.type === 'task').length
   const financialCount = events.filter(e => e.type === 'financial').length
+  const interestCount = events.filter(e => e.type === 'interest').length
 
   return (
     <Card className="overflow-hidden">
@@ -262,6 +289,7 @@ export function DashboardCalendar() {
             <Badge variant="warning">{proposalCount} Enviar Proposta</Badge>
             <Badge variant="secondary">{taskCount} Tarefas</Badge>
             <Badge variant="warning">{financialCount} Financeiro</Badge>
+            <Badge variant="secondary">{interestCount} Interesses</Badge>
             {pendingTasks.length > 0 && (
               <Badge variant="warning">{pendingTasks.length} Sem Data</Badge>
             )}
@@ -283,6 +311,10 @@ export function DashboardCalendar() {
           <div className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#2a6aaa' }} />
             <span className="text-muted-foreground">Enviar Proposta</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#7c3aed' }} />
+            <span className="text-muted-foreground">Interesse</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#3a6aac' }} />

@@ -8,7 +8,14 @@ export async function getClients() {
     const clients = await prisma.client.findMany({
       orderBy: {
         name: 'asc'
-      }
+      },
+      include: {
+        interestDates: {
+          where: { status: { not: 'cancelled' } },
+          include: { space: true },
+          orderBy: { date: 'asc' },
+        },
+      },
     })
     return { success: true, data: clients }
   } catch (error) {

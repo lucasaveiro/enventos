@@ -15,8 +15,9 @@ model Space {
   name      String
   address   String?
   active    Boolean       @default(true)
-  events    Event[]
-  tasks     ServiceTask[]
+  events        Event[]
+  tasks         ServiceTask[]
+  interestDates ClientInterestDate[]
 }
 
 model Client {
@@ -25,9 +26,10 @@ model Client {
   phone       String?
   email       String?
   notes       String?
-  events      Event[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  events        Event[]
+  interestDates ClientInterestDate[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Professional {
@@ -155,4 +157,27 @@ model ContractSignature {
 
   @@index([documentKey])
   @@index([eventId])
+}
+
+model ClientInterestDate {
+  id             Int      @id @default(autoincrement())
+  date           DateTime @db.Date
+  status         String   @default("interest") // interest, confirmed, cancelled
+  notes          String?
+  numberOfPeople Int?
+  eventType      String?  // casamento, aniversario, confraternizacao, outros
+
+  clientId  Int
+  client    Client   @relation(fields: [clientId], references: [id])
+
+  spaceId   Int
+  space     Space    @relation(fields: [spaceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([spaceId])
+  @@index([date])
+  @@index([status])
 }

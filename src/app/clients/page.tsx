@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Users, Phone, Mail } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users, Phone, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
 import {
   Table,
   TableBody,
@@ -15,12 +16,33 @@ import {
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getClients, deleteClient } from '@/app/actions/clients'
 import { ClientModal } from '@/components/forms/ClientModal'
+import { InterestDatesModal } from '@/components/forms/InterestDatesModal'
+
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  casamento: 'Casamento',
+  aniversario: 'Aniversario',
+  confraternizacao: 'Confraternizacao',
+  outros: 'Outros',
+}
+
+const EVENT_TYPE_COLORS: Record<string, string> = {
+  casamento: 'bg-pink-100 text-pink-700',
+  aniversario: 'bg-blue-100 text-blue-700',
+  confraternizacao: 'bg-amber-100 text-amber-700',
+  outros: 'bg-gray-100 text-gray-700',
+}
+
+function formatDateShort(date: string | Date) {
+  const d = new Date(date)
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
+}
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState<any | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(true)
+  const [interestDatesClient, setInterestDatesClient] = useState<any | null>(null)
 
   const fetchClients = async () => {
     setIsLoading(true)
@@ -51,6 +73,8 @@ export default function ClientsPage() {
       fetchClients()
     }
   }
+
+  const clientsWithInterest = clients.filter(c => c.interestDates && c.interestDates.length > 0)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -86,14 +110,14 @@ export default function ClientsPage() {
         </Card>
         <Card className="p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
-              <Mail className="h-5 w-5 text-success" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
+              <CalendarDays className="h-5 w-5 text-purple-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">
-                {clients.filter(c => c.email).length}
+                {clientsWithInterest.length}
               </p>
-              <p className="text-sm text-muted-foreground">Com E-mail</p>
+              <p className="text-sm text-muted-foreground">Com Datas de Interesse</p>
             </div>
           </div>
         </Card>
@@ -139,73 +163,126 @@ export default function ClientsPage() {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Telefone</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Observações</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead>Datas de Interesse</TableHead>
+                <TableHead>Tipo de Evento</TableHead>
+                <TableHead>Qtd. Pessoas</TableHead>
+                <TableHead className="text-right">Acoes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clients.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                        {client.name.charAt(0).toUpperCase()}
+              {clients.map((client) => {
+                const interestDates = client.interestDates || []
+                const nextDates = interestDates.slice(0, 3)
+                const eventTypes = [...new Set(interestDates.map((d: any) => d.eventType).filter(Boolean))] as string[]
+                const maxPeople = interestDates.reduce((max: number, d: any) => {
+                  return d.numberOfPeople && d.numberOfPeople > max ? d.numberOfPeople : max
+                }, 0)
+
+                return (
+                  <TableRow key={client.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                          {client.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-foreground">{client.name}</span>
                       </div>
-                      <span className="font-medium text-foreground">{client.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {client.phone ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-4 w-4" />
-                        {client.phone}
+                    </TableCell>
+                    <TableCell>
+                      {client.phone ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="h-4 w-4" />
+                          {client.phone}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {nextDates.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {nextDates.map((d: any) => (
+                            <Badge
+                              key={d.id}
+                              variant="outline"
+                              className="text-xs cursor-pointer hover:bg-purple-50"
+                              onClick={() => setInterestDatesClient(client)}
+                            >
+                              {formatDateShort(d.date)}
+                            </Badge>
+                          ))}
+                          {interestDates.length > 3 && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs cursor-pointer hover:bg-purple-50"
+                              onClick={() => setInterestDatesClient(client)}
+                            >
+                              +{interestDates.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {eventTypes.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {eventTypes.map((type: string) => (
+                            <Badge
+                              key={type}
+                              className={`text-xs ${EVENT_TYPE_COLORS[type] || EVENT_TYPE_COLORS.outros}`}
+                            >
+                              {EVENT_TYPE_LABELS[type] || type}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {maxPeople > 0 ? (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Users className="h-4 w-4" />
+                          {maxPeople}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setInterestDatesClient(client)}
+                          className="h-8 w-8"
+                          title="Datas de Interesse"
+                        >
+                          <CalendarDays className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(client)}
+                          className="h-8 w-8"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(client.id)}
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {client.email ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Mail className="h-4 w-4" />
-                        {client.email}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {client.notes ? (
-                      <span className="text-sm text-muted-foreground line-clamp-1 max-w-xs">
-                        {client.notes}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(client)}
-                        className="h-8 w-8"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(client.id)}
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}
@@ -216,6 +293,15 @@ export default function ClientsPage() {
         onClose={() => setIsModalOpen(false)}
         initialClient={selectedClient}
         onSuccess={fetchClients}
+      />
+
+      <InterestDatesModal
+        client={interestDatesClient}
+        isOpen={!!interestDatesClient}
+        onClose={() => {
+          setInterestDatesClient(null)
+          fetchClients()
+        }}
       />
     </div>
   )

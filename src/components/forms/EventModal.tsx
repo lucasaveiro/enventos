@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
@@ -15,6 +15,7 @@ import { getSpaces } from '@/app/actions/spaces'
 import { getClients, createClient } from '@/app/actions/clients'
 import { getProfessionals } from '@/app/actions/professionals'
 import { createEvent, updateEvent, deleteEvent } from '@/app/actions/events'
+import { createManyInterestDates } from '@/app/actions/interestDates'
 
 /** Format a Date to `YYYY-MM-DDTHH:mm` in local timezone (for datetime-local inputs) */
 function toLocalDatetimeString(date: Date): string {
@@ -170,6 +171,7 @@ export function EventModal({
   const [professionals, setProfessionals] = useState<any[]>([])
   const [isNewClient, setIsNewClient] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [interestDates, setInterestDates] = useState<Array<{ date: string; spaceId: string; notes: string }>>([])
 
   const handleDeleteEvent = async () => {
     if (!initialEvent?.id) return
@@ -236,6 +238,7 @@ export function EventModal({
     if (!isOpen) return
 
     setIsNewClient(false)
+    setInterestDates([])
 
     if (initialEvent) {
       const category = (initialEvent.category || 'event') as EventCategory
@@ -374,6 +377,23 @@ export function EventModal({
           notes: proposalNotes,
           professionalIds: [],
         })
+      }
+
+      if (
+        data.category === 'visit' &&
+        interestDates.length > 0 &&
+        clientId
+      ) {
+        await createManyInterestDates(
+          interestDates
+            .filter((d) => d.date && d.spaceId)
+            .map((d) => ({
+              clientId: clientId!,
+              spaceId: parseInt(d.spaceId, 10),
+              date: new Date(d.date),
+              notes: d.notes || undefined,
+            }))
+        )
       }
 
       onSuccess()
@@ -570,6 +590,92 @@ export function EventModal({
                       <Textarea id="proposalNotes" {...register('proposalNotes')} placeholder="Ex: enviar proposta com opção completa até 18h." />
                     </div>
                   </>
+                )}
+              </div>
+            )}
+
+            {selectedCategory === 'visit' && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <CalendarDays className="h-4 w-4" />
+                    Datas de Interesse
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const currentSpaceId = watch('spaceId') || ''
+                      setInterestDates([...interestDates, { date: '', spaceId: currentSpaceId, notes: '' }])
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Adicionar
+                  </Button>
+                </div>
+
+                {interestDates.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhuma data de interesse adicionada. Adicione datas em que o cliente tem interesse em locar.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {interestDates.map((item, index) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          <div>
+                            <Input
+                              type="date"
+                              value={item.date}
+                              onChange={(e) => {
+                                const updated = [...interestDates]
+                                updated[index].date = e.target.value
+                                setInterestDates(updated)
+                              }}
+                              placeholder="Data"
+                            />
+                          </div>
+                          <div>
+                            <select
+                              value={item.spaceId}
+                              onChange={(e) => {
+                                const updated = [...interestDates]
+                                updated[index].spaceId = e.target.value
+                                setInterestDates(updated)
+                              }}
+                            >
+                              <option value="">Espaço...</option>
+                              {spaces.map((space) => (
+                                <option key={space.id} value={space.id}>{space.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <Input
+                          className="w-32"
+                          value={item.notes}
+                          onChange={(e) => {
+                            const updated = [...interestDates]
+                            updated[index].notes = e.target.value
+                            setInterestDates(updated)
+                          }}
+                          placeholder="Notas"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            setInterestDates(interestDates.filter((_, i) => i !== index))
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

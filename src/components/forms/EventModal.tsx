@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
@@ -14,7 +14,17 @@ import { Checkbox } from '@/components/ui/Checkbox'
 import { getSpaces } from '@/app/actions/spaces'
 import { getClients, createClient } from '@/app/actions/clients'
 import { getProfessionals } from '@/app/actions/professionals'
-import { createEvent, updateEvent } from '@/app/actions/events'
+import { createEvent, updateEvent, deleteEvent } from '@/app/actions/events'
+
+/** Format a Date to `YYYY-MM-DDTHH:mm` in local timezone (for datetime-local inputs) */
+function toLocalDatetimeString(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${d}T${h}:${min}`
+}
 
 type EventCategory = 'event' | 'visit' | 'proposal'
 
@@ -143,6 +153,7 @@ interface EventModalProps {
   initialEvent?: any
   initialCategory?: EventCategory
   onSuccess: () => void
+  onDelete?: () => void
 }
 
 export function EventModal({
@@ -152,11 +163,36 @@ export function EventModal({
   initialEvent,
   initialCategory = 'event',
   onSuccess,
+  onDelete,
 }: EventModalProps) {
   const [spaces, setSpaces] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
   const [professionals, setProfessionals] = useState<any[]>([])
   const [isNewClient, setIsNewClient] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDeleteEvent = async () => {
+    if (!initialEvent?.id) return
+    if (!confirm('Tem certeza que deseja excluir esta marcação e todos os registros vinculados?')) return
+    setIsDeleting(true)
+    try {
+      const res = await deleteEvent(initialEvent.id)
+      if (!res.success) {
+        alert(res.error || 'Erro ao excluir marcação')
+        return
+      }
+      if (onDelete) {
+        onDelete()
+      } else {
+        onSuccess()
+      }
+      onClose()
+    } catch {
+      alert('Erro ao excluir marcação')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const {
     register,
@@ -207,8 +243,8 @@ export function EventModal({
       setValue('category', category)
       setValue('spaceId', String(initialEvent.spaceId))
       setValue('clientId', initialEvent.clientId ? String(initialEvent.clientId) : '')
-      setValue('start', new Date(initialEvent.start).toISOString().slice(0, 16))
-      setValue('end', new Date(initialEvent.end).toISOString().slice(0, 16))
+      setValue('start', toLocalDatetimeString(new Date(initialEvent.start)))
+      setValue('end', toLocalDatetimeString(new Date(initialEvent.end)))
       setValue('totalValue', String(initialEvent.totalValue ?? 0))
       setValue('deposit', String(initialEvent.deposit ?? 0))
       setValue('status', initialEvent.status || getDefaultStatus(category))
@@ -240,8 +276,8 @@ export function EventModal({
       spaceId: '',
       clientId: '',
       newClientName: '',
-      start: start.toISOString().slice(0, 16),
-      end: end.toISOString().slice(0, 16),
+      start: toLocalDatetimeString(start),
+      end: toLocalDatetimeString(end),
       totalValue: '0',
       deposit: '0',
       status: getDefaultStatus(category),
@@ -538,13 +574,29 @@ export function EventModal({
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Salvando...' : 'Salvar'}
-              </Button>
+            <div className="flex items-center justify-between pt-4">
+              {initialEvent ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDeleteEvent}
+                  disabled={isDeleting || isSubmitting}
+                  className="gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {isDeleting ? 'Excluindo...' : 'Excluir'}
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isSubmitting || isDeleting}>
+                  {isSubmitting ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
             </div>
           </form>
         </Dialog.Content>

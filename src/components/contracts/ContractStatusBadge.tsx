@@ -35,6 +35,10 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
     label: 'Cancelado',
     className: 'bg-red-50 text-red-600 border-red-200',
   },
+  manual_uploaded: {
+    label: 'Contrato Manual',
+    className: 'bg-violet-50 text-violet-700 border-violet-200',
+  },
 }
 
 interface Props {

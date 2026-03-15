@@ -21,11 +21,14 @@ import {
   Phone,
   PartyPopper,
   CreditCard,
+  Upload,
+  ExternalLink,
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
 import { getContractSignature } from '@/app/actions/clicksign'
 import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
+import { deleteManualContract } from '@/app/actions/manualContracts'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
@@ -41,6 +44,7 @@ import type { Installment } from '@/components/installments/InstallmentTable'
 import { PaymentPlanModal } from '@/components/installments/PaymentPlanModal'
 import { MarkAsPaidModal } from '@/components/installments/MarkAsPaidModal'
 import { EditInstallmentModal } from '@/components/installments/EditInstallmentModal'
+import { UploadContractModal } from '@/components/contracts/UploadContractModal'
 
 const statusLabels: Record<string, string> = {
   confirming: 'Confirmando',
@@ -122,6 +126,7 @@ export default function EventPage() {
   const [isMarkPaidModalOpen, setIsMarkPaidModalOpen] = useState(false)
   const [isEditInstallmentModalOpen, setIsEditInstallmentModalOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null)
+  const [isUploadContractModalOpen, setIsUploadContractModalOpen] = useState(false)
 
   const fetchEvent = useCallback(async () => {
     if (!eventId || Number.isNaN(eventId)) return
@@ -619,16 +624,32 @@ export default function EventPage() {
       {isFinancialEvent && (
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-              <CardTitle>Contrato</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+                <CardTitle>Contrato</CardTitle>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={() => setIsUploadContractModalOpen(true)}
+              >
+                <Upload className="h-4 w-4" />
+                Upload PDF
+              </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            {/* Clicksign contract info */}
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm text-muted-foreground">Status:</span>
               <ContractStatusBadge
-                status={contractSignature?.status || event.contractStatus || 'not_sent'}
+                status={
+                  event.manualContracts?.length > 0 && !contractSignature
+                    ? 'manual_uploaded'
+                    : contractSignature?.status || event.contractStatus || 'not_sent'
+                }
               />
               {contractSignature?.contractNumber && (
                 <Badge variant="outline">N. {contractSignature.contractNumber}</Badge>
@@ -647,14 +668,65 @@ export default function EventPage() {
                 </a>
               </div>
             )}
-            {(!contractSignature || contractSignature.status === 'cancelled') && (
+            {(!contractSignature || contractSignature.status === 'cancelled') &&
+              (!event.manualContracts || event.manualContracts.length === 0) && (
               <p className="text-sm text-muted-foreground">
                 Use a pagina de{' '}
                 <Link href="/contracts" className="text-blue-600 hover:underline">
                   Contratos
                 </Link>{' '}
-                para gerar e enviar o contrato.
+                para gerar e enviar o contrato, ou faca upload de um PDF manualmente.
               </p>
+            )}
+
+            {/* Manual contracts list */}
+            {event.manualContracts && event.manualContracts.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-foreground">Contratos Manuais</h4>
+                <div className="space-y-2">
+                  {event.manualContracts.map((mc: any) => (
+                    <div
+                      key={mc.id}
+                      className="flex items-center gap-3 rounded-lg border border-border bg-secondary/20 p-3"
+                    >
+                      <FileText className="h-5 w-5 flex-shrink-0 text-red-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {mc.fileName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(mc.createdAt), "dd/MM/yyyy 'as' HH:mm", { locale: ptBR })}
+                          {mc.notes && ` — ${mc.notes}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={mc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+                          title="Visualizar"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Excluir"
+                          onClick={async () => {
+                            if (confirm('Excluir este contrato?')) {
+                              await deleteManualContract(mc.id)
+                              await fetchEvent()
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -715,6 +787,14 @@ export default function EventPage() {
           setSelectedInstallment(null)
         }}
         installment={selectedInstallment}
+        onSuccess={fetchEvent}
+      />
+
+      {/* Upload Contract Modal */}
+      <UploadContractModal
+        isOpen={isUploadContractModalOpen}
+        onClose={() => setIsUploadContractModalOpen(false)}
+        eventId={eventId}
         onSuccess={fetchEvent}
       />
     </div>

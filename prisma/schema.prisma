@@ -65,6 +65,7 @@ model Event {
   transactions        Transaction[]
   contractSignatures  ContractSignature[]
   installments        PaymentInstallment[]
+  manualContracts     ManualContract[]
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -209,4 +210,20 @@ model PaymentInstallment {
   @@index([eventId])
   @@index([dueDate])
   @@index([status])
+}
+
+model ManualContract {
+  id        Int      @id @default(autoincrement())
+  fileName  String
+  fileUrl   String
+  fileSize  Int
+  notes     String?
+
+  eventId   Int
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
 }

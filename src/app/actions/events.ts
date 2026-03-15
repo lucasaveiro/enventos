@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
 
 type EventCategory = 'event' | 'visit' | 'proposal'
@@ -175,7 +176,10 @@ export async function getEventById(id: number) {
         installments: {
           orderBy: { installmentNumber: 'asc' },
           include: { transaction: true }
-        }
+        },
+        manualContracts: {
+          orderBy: { createdAt: 'desc' },
+        },
       }
     })
 
@@ -269,8 +273,18 @@ export async function getEventsForList(filters?: {
 
 export async function deleteEvent(id: number) {
   try {
-    // Delete related records first
+    // Clean up manual contract blobs before transaction
+    const manualContracts = await prisma.manualContract.findMany({
+      where: { eventId: id },
+      select: { fileUrl: true },
+    })
+    for (const mc of manualContracts) {
+      try { await del(mc.fileUrl) } catch { /* blob may already be gone */ }
+    }
+
+    // Delete related records
     await prisma.$transaction(async (tx) => {
+      await tx.manualContract.deleteMany({ where: { eventId: id } })
       await tx.paymentInstallment.deleteMany({ where: { eventId: id } })
       await tx.contractSignature.deleteMany({ where: { eventId: id } })
       await tx.transaction.deleteMany({ where: { eventId: id } })

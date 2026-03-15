@@ -326,7 +326,7 @@ export async function getInstallmentsForCalendar(filters?: {
       orderBy: { dueDate: 'asc' },
     })
 
-    const items = installments.map((inst) => ({
+    const items: any[] = installments.map((inst) => ({
       id: inst.id,
       installmentNumber: inst.installmentNumber,
       title: `${inst.isSinal ? 'Sinal' : `Parcela ${inst.installmentNumber}`} - ${inst.event.client?.name || inst.event.title}`,
@@ -344,7 +344,86 @@ export async function getInstallmentsForCalendar(filters?: {
       clientPhone: inst.event.client?.phone ?? null,
       spaceName: inst.event.space.name,
       spaceId: inst.event.space.id,
+      isTransaction: false,
     }))
+
+    // Also fetch pending transactions NOT linked to any installment
+    const txWhere: any = {
+      status: 'pending',
+      installment: { is: null }, // no linked installment (standalone transactions)
+    }
+
+    if (filters?.start || filters?.end) {
+      txWhere.date = {}
+      if (filters.start) txWhere.date.gte = filters.start
+      if (filters.end) txWhere.date.lte = filters.end
+    }
+
+    // Map status filter: 'paid' transactions won't be pending so skip them
+    if (filters?.status === 'paid') {
+      // Don't fetch transactions when filtering for paid — they are pending by definition
+    } else {
+      if (filters?.spaceId) {
+        txWhere.event = { spaceId: filters.spaceId }
+      }
+
+      const transactions = await prisma.transaction.findMany({
+        where: txWhere,
+        include: {
+          event: {
+            include: {
+              client: { select: { id: true, name: true, phone: true } },
+              space: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { date: 'asc' },
+      })
+
+      for (const tx of transactions) {
+        // Skip transactions without an event (standalone expense transactions etc.)
+        if (!tx.event || !tx.event.space) continue
+
+        const amount = toNumber(tx.amount)
+        const prefix = tx.type === 'income' ? 'Receber' : 'Pagar'
+
+        // Determine status: pending transactions past due date are overdue
+        let txStatus = 'pending'
+        if (tx.date < new Date()) {
+          txStatus = 'overdue'
+        }
+
+        // Apply status filter for overdue
+        if (filters?.status === 'overdue' && txStatus !== 'overdue') continue
+        if (filters?.status === 'pending' && txStatus !== 'pending') continue
+
+        items.push({
+          id: tx.id + 1_000_000, // offset to avoid id collision with installments
+          installmentNumber: 0,
+          title: `${prefix}: ${tx.description}`,
+          amount,
+          paidAmount: null,
+          dueDate: tx.date,
+          status: txStatus,
+          paymentMethod: null,
+          isSinal: false,
+          paidAt: null,
+          notes: tx.notes ?? null,
+          eventId: tx.eventId,
+          eventTitle: tx.event.title,
+          clientName: tx.event.client?.name ?? null,
+          clientPhone: tx.event.client?.phone ?? null,
+          spaceName: tx.event.space.name,
+          spaceId: tx.event.space.id,
+          isTransaction: true,
+          transactionId: tx.id,
+          transactionType: tx.type,
+        })
+      }
+    }
+
+    // Sort all items by dueDate
+    items.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
 
     return { success: true, data: items }
   } catch (error) {
@@ -363,7 +442,7 @@ export async function getFinancialCalendarSummary(filters?: {
     const monthEnd = filters?.end ?? endOfMonth(now)
     const sevenDaysFromNow = addDays(now, 7)
 
-    // Total due this month (pending + overdue)
+    // --- Installments ---
     const dueThisMonth = await prisma.paymentInstallment.aggregate({
       where: {
         dueDate: { gte: monthStart, lte: monthEnd },
@@ -373,14 +452,12 @@ export async function getFinancialCalendarSummary(filters?: {
       _count: true,
     })
 
-    // Overdue total
     const overdue = await prisma.paymentInstallment.aggregate({
       where: { status: 'overdue' },
       _sum: { amount: true },
       _count: true,
     })
 
-    // Upcoming 7 days
     const upcoming = await prisma.paymentInstallment.aggregate({
       where: {
         dueDate: { gte: now, lte: sevenDaysFromNow },
@@ -390,7 +467,6 @@ export async function getFinancialCalendarSummary(filters?: {
       _count: true,
     })
 
-    // Paid this month
     const paidThisMonth = await prisma.paymentInstallment.aggregate({
       where: {
         paidAt: { gte: monthStart, lte: monthEnd },
@@ -400,24 +476,78 @@ export async function getFinancialCalendarSummary(filters?: {
       _count: true,
     })
 
+    // --- Pending transactions NOT linked to installments ---
+    const txDueThisMonth = await prisma.transaction.aggregate({
+      where: {
+        status: 'pending',
+        installment: { is: null },
+        date: { gte: monthStart, lte: monthEnd },
+      },
+      _sum: { amount: true },
+      _count: true,
+    })
+
+    const txOverdue = await prisma.transaction.aggregate({
+      where: {
+        status: 'pending',
+        installment: { is: null },
+        date: { lt: now },
+      },
+      _sum: { amount: true },
+      _count: true,
+    })
+
+    const txUpcoming = await prisma.transaction.aggregate({
+      where: {
+        status: 'pending',
+        installment: { is: null },
+        date: { gte: now, lte: sevenDaysFromNow },
+      },
+      _sum: { amount: true },
+      _count: true,
+    })
+
+    // Paid transactions this month (standalone, not linked to installments)
+    const txPaidThisMonth = await prisma.transaction.aggregate({
+      where: {
+        status: 'paid',
+        installment: { is: null },
+        paidAt: { gte: monthStart, lte: monthEnd },
+      },
+      _sum: { amount: true },
+      _count: true,
+    })
+
+    const instDueAmt = dueThisMonth._sum.amount ? toNumber(dueThisMonth._sum.amount) : 0
+    const txDueAmt = txDueThisMonth._sum.amount ? toNumber(txDueThisMonth._sum.amount) : 0
+
+    const instOverdueAmt = overdue._sum.amount ? toNumber(overdue._sum.amount) : 0
+    const txOverdueAmt = txOverdue._sum.amount ? toNumber(txOverdue._sum.amount) : 0
+
+    const instUpcomingAmt = upcoming._sum.amount ? toNumber(upcoming._sum.amount) : 0
+    const txUpcomingAmt = txUpcoming._sum.amount ? toNumber(txUpcoming._sum.amount) : 0
+
+    const instPaidAmt = paidThisMonth._sum.paidAmount ? toNumber(paidThisMonth._sum.paidAmount) : 0
+    const txPaidAmt = txPaidThisMonth._sum.amount ? toNumber(txPaidThisMonth._sum.amount) : 0
+
     return {
       success: true,
       data: {
         dueThisMonth: {
-          amount: dueThisMonth._sum.amount ? toNumber(dueThisMonth._sum.amount) : 0,
-          count: dueThisMonth._count,
+          amount: instDueAmt + txDueAmt,
+          count: dueThisMonth._count + txDueThisMonth._count,
         },
         overdue: {
-          amount: overdue._sum.amount ? toNumber(overdue._sum.amount) : 0,
-          count: overdue._count,
+          amount: instOverdueAmt + txOverdueAmt,
+          count: overdue._count + txOverdue._count,
         },
         upcoming7Days: {
-          amount: upcoming._sum.amount ? toNumber(upcoming._sum.amount) : 0,
-          count: upcoming._count,
+          amount: instUpcomingAmt + txUpcomingAmt,
+          count: upcoming._count + txUpcoming._count,
         },
         paidThisMonth: {
-          amount: paidThisMonth._sum.paidAmount ? toNumber(paidThisMonth._sum.paidAmount) : 0,
-          count: paidThisMonth._count,
+          amount: instPaidAmt + txPaidAmt,
+          count: paidThisMonth._count + txPaidThisMonth._count,
         },
       },
     }

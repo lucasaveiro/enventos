@@ -57,6 +57,9 @@ interface CalendarInstallment {
   dueDate: Date
   paidAt: Date | string | null
   notes: string | null
+  isTransaction?: boolean
+  transactionId?: number
+  transactionType?: string
 }
 
 interface SummaryData {
@@ -343,7 +346,11 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {selectedItem?.isSinal ? 'Sinal' : `Parcela ${selectedItem?.installmentNumber}`}
+              {selectedItem?.isTransaction
+                ? selectedItem?.title
+                : selectedItem?.isSinal
+                  ? 'Sinal'
+                  : `Parcela ${selectedItem?.installmentNumber}`}
             </DialogTitle>
             <DialogDescription>{selectedItem?.eventTitle}</DialogDescription>
           </DialogHeader>
@@ -378,7 +385,7 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
               </div>
 
               <div className="flex gap-2">
-                {selectedItem.status !== 'paid' && (
+                {selectedItem.status !== 'paid' && !selectedItem.isTransaction && (
                   <Button
                     className="flex-1 gap-1"
                     onClick={() => {

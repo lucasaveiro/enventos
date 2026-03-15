@@ -9,7 +9,6 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
 import { getEvents } from '@/app/actions/events'
 import { getServiceTasks, getPendingServiceTasks } from '@/app/actions/services'
-import { getFinancialCalendarItems } from '@/app/actions/transactions'
 import { getInterestDatesForCalendar } from '@/app/actions/interestDates'
 import { EventModal } from '@/components/forms/EventModal'
 import { ServiceTaskModal } from '@/components/forms/ServiceTaskModal'
@@ -35,7 +34,7 @@ interface CalendarEvent {
   title: string
   start: Date
   end: Date
-  type: 'event' | 'task' | 'financial' | 'interest'
+  type: 'event' | 'task' | 'interest'
   resource?: any
   allDay?: boolean
 }
@@ -67,10 +66,9 @@ export function DashboardCalendar() {
   const fetchData = useCallback(async () => {
     setIsLoading(true)
 
-    const [eventsResult, tasksResult, financialResult, pendingResult, interestResult] = await Promise.all([
+    const [eventsResult, tasksResult, pendingResult, interestResult] = await Promise.all([
       getEvents(),
       getServiceTasks(),
-      getFinancialCalendarItems(),
       getPendingServiceTasks(),
       getInterestDatesForCalendar(),
     ])
@@ -105,23 +103,6 @@ export function DashboardCalendar() {
           end: t.end ? new Date(t.end) : new Date(new Date(t.start).setHours(new Date(t.start).getHours() + 1)),
           type: 'task',
           resource: t
-        })
-      })
-    }
-
-    if (financialResult.success && financialResult.data) {
-      financialResult.data.forEach((item: any) => {
-        const startDate = new Date(item.date)
-        const endDate = new Date(startDate)
-        endDate.setHours(endDate.getHours() + 1)
-
-        calendarEvents.push({
-          id: item.id + 1_000_000,
-          title: `${item.type === 'income' ? 'Receber' : 'Pagar'}: ${item.title.replace(/^Receber: |^Pagar: /, '')}`,
-          start: startDate,
-          end: endDate,
-          type: 'financial',
-          resource: item,
         })
       })
     }
@@ -183,8 +164,6 @@ export function DashboardCalendar() {
       const status = event.resource?.status
       if (status === 'confirmed') backgroundColor = '#1e7a4e'
       else backgroundColor = '#7c3aed' // purple/violet
-    } else {
-      backgroundColor = event.resource.type === 'income' ? '#2a6aaa' : '#a83030' // muted sky / muted red
     }
 
     return {
@@ -222,8 +201,6 @@ export function DashboardCalendar() {
         setIsTaskModalOpen(true)
       } else if (event.type === 'interest') {
         router.push('/clients')
-      } else {
-        router.push('/financial')
       }
   }
 
@@ -274,7 +251,6 @@ export function DashboardCalendar() {
     (e) => e.type === 'event' && e.resource?.category === 'proposal'
   ).length
   const taskCount = events.filter(e => e.type === 'task').length
-  const financialCount = events.filter(e => e.type === 'financial').length
   const interestCount = events.filter(e => e.type === 'interest').length
 
   return (
@@ -288,7 +264,6 @@ export function DashboardCalendar() {
             <Badge variant="secondary">{visitCount} Visitas</Badge>
             <Badge variant="warning">{proposalCount} Enviar Proposta</Badge>
             <Badge variant="secondary">{taskCount} Tarefas</Badge>
-            <Badge variant="warning">{financialCount} Financeiro</Badge>
             <Badge variant="secondary">{interestCount} Interesses</Badge>
             {pendingTasks.length > 0 && (
               <Badge variant="warning">{pendingTasks.length} Sem Data</Badge>
@@ -327,14 +302,6 @@ export function DashboardCalendar() {
           <div className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#1a7a88' }} />
             <span className="text-muted-foreground">Piscina</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#2a6aaa' }} />
-            <span className="text-muted-foreground">Receber</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#a83030' }} />
-            <span className="text-muted-foreground">Pagar</span>
           </div>
         </div>
       </div>

@@ -157,7 +157,15 @@ export async function getEventById(id: number) {
     const event = await prisma.event.findUnique({
       where: { id },
       include: {
-        client: true,
+        client: {
+          include: {
+            interestDates: {
+              where: { status: { not: 'cancelled' } },
+              include: { space: true },
+              orderBy: { date: 'asc' },
+            },
+          },
+        },
         space: true,
         professionals: {
           include: {

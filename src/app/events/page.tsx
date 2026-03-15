@@ -11,8 +11,6 @@ import {
   Pencil,
   Trash2,
   Eye,
-  DollarSign,
-  FileText,
   CheckCircle2,
   AlertCircle,
   Clock,

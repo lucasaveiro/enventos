@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Badge } from '@/components/ui/Badge'
-import { CalendarDays, Plus, Trash2, Users, PartyPopper } from 'lucide-react'
+import { CalendarDays, Plus, Trash2, Users } from 'lucide-react'
 import { getInterestDatesByClient, createInterestDate, updateInterestDate, deleteInterestDate } from '@/app/actions/interestDates'
 import { getSpaces } from '@/app/actions/spaces'
 
@@ -53,7 +53,7 @@ export function InterestDatesModal({ client, isOpen, onClose }: InterestDatesMod
   const [newEventType, setNewEventType] = useState('')
   const [isAdding, setIsAdding] = useState(false)
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!client) return
     setIsLoading(true)
     const [datesRes, spacesRes] = await Promise.all([
@@ -63,7 +63,7 @@ export function InterestDatesModal({ client, isOpen, onClose }: InterestDatesMod
     if (datesRes.success) setInterestDates(datesRes.data || [])
     if (spacesRes.success) setSpaces(spacesRes.data || [])
     setIsLoading(false)
-  }
+  }, [client])
 
   useEffect(() => {
     if (isOpen && client) {
@@ -74,7 +74,7 @@ export function InterestDatesModal({ client, isOpen, onClose }: InterestDatesMod
       setNewNumberOfPeople('')
       setNewEventType('')
     }
-  }, [isOpen, client])
+  }, [isOpen, client, fetchData])
 
   const handleAdd = async () => {
     if (!client || !newDate || !newSpaceId) return

@@ -5,7 +5,22 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, CalendarDays, MapPin, Users, DollarSign, FileText, Plus, Pencil, Trash2, Link2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  CalendarDays,
+  MapPin,
+  Users,
+  DollarSign,
+  FileText,
+  Plus,
+  Pencil,
+  Trash2,
+  Link2,
+  Mail,
+  MessageSquare,
+  Phone,
+  PartyPopper,
+} from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
 import { getContractSignature } from '@/app/actions/clicksign'
@@ -43,11 +58,45 @@ const paymentLabels: Record<string, string> = {
   unpaid: 'Pendente',
 }
 
+const interestStatusLabels: Record<string, string> = {
+  interest: 'Interesse',
+  confirmed: 'Confirmado',
+  cancelled: 'Cancelado',
+}
+
+const interestStatusClasses: Record<string, string> = {
+  interest: 'bg-purple-100 text-purple-700',
+  confirmed: 'bg-green-100 text-green-700',
+  cancelled: 'bg-red-100 text-red-700',
+}
+
+const interestEventTypeLabels: Record<string, string> = {
+  casamento: 'Casamento',
+  aniversario: 'Aniversario',
+  confraternizacao: 'Confraternizacao',
+  outros: 'Outros',
+}
+
+const interestEventTypeClasses: Record<string, string> = {
+  casamento: 'bg-pink-100 text-pink-700',
+  aniversario: 'bg-blue-100 text-blue-700',
+  confraternizacao: 'bg-amber-100 text-amber-700',
+  outros: 'bg-gray-100 text-gray-700',
+}
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(value)
+
+const formatDateOnly = (value: string | Date) =>
+  new Date(value).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
 
 export default function EventPage() {
   const params = useParams()
@@ -158,6 +207,9 @@ export default function EventPage() {
   )
   const category = event.category || 'event'
   const isFinancialEvent = category === 'event'
+  const isVisit = category === 'visit'
+  const client = event.client
+  const interestDates = client?.interestDates || []
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -193,10 +245,10 @@ export default function EventPage() {
               <MapPin className="h-4 w-4" />
               <span>{event.space?.name || '-'}</span>
             </div>
-            {event.client?.name && (
+            {client?.name && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Users className="h-4 w-4" />
-                <span>{event.client.name}</span>
+                <span>{client.name}</span>
               </div>
             )}
           </div>
@@ -233,64 +285,178 @@ export default function EventPage() {
         </CardContent>
       </Card>
 
-      {/* Professionals Section */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              <CardTitle>Profissionais no Evento</CardTitle>
-            </div>
-            <AddProfessionalPopover
-              eventId={eventId}
-              currentProfessionalIds={currentProfessionalIds}
-              onSuccess={fetchEvent}
-            />
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-muted-foreground" />
+            <CardTitle>Cliente Vinculado</CardTitle>
           </div>
         </CardHeader>
-        <CardContent>
-          {professionals.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground">
-              Nenhum profissional vinculado
+        <CardContent className="space-y-5">
+          {!client ? (
+            <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+              Nenhum cliente vinculado a este evento.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead className="text-right">Acoes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {professionals.map((item: any) => {
-                  const profId = item.professional?.id || item.professionalId
-                  return (
-                    <TableRow key={profId}>
-                      <TableCell className="font-medium text-foreground">
-                        {item.professional?.name || '-'}
-                      </TableCell>
-                      <TableCell>{item.professional?.type || '-'}</TableCell>
-                      <TableCell>{item.professional?.phone || '-'}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveProfessional(profId)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <div className="text-xs text-muted-foreground">Cliente</div>
+                  <div className="font-semibold text-foreground">{client.name}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>Telefone</span>
+                  </div>
+                  <div className="font-medium text-foreground">{client.phone || '-'}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Mail className="h-3.5 w-3.5" />
+                    <span>E-mail</span>
+                  </div>
+                  <div className="font-medium text-foreground break-words">{client.email || '-'}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <div className="text-xs text-muted-foreground">Datas de interesse</div>
+                  <div className="font-semibold text-foreground">{interestDates.length}</div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-secondary/20 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  Observacoes do cliente
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {client.notes || 'Nenhuma observacao cadastrada para este cliente.'}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <PartyPopper className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="text-sm font-semibold text-foreground">Datas de Interesse</h2>
+                </div>
+                {interestDates.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    Nenhuma data de interesse cadastrada para este cliente.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {interestDates.map((interestDate: any) => (
+                      <div
+                        key={interestDate.id}
+                        className="rounded-lg border border-border bg-background p-4"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{formatDateOnly(interestDate.date)}</Badge>
+                          <Badge
+                            className={
+                              interestStatusClasses[interestDate.status] ||
+                              interestStatusClasses.interest
+                            }
+                          >
+                            {interestStatusLabels[interestDate.status] || interestDate.status}
+                          </Badge>
+                          {interestDate.eventType && (
+                            <Badge
+                              className={
+                                interestEventTypeClasses[interestDate.eventType] ||
+                                interestEventTypeClasses.outros
+                              }
+                            >
+                              {interestEventTypeLabels[interestDate.eventType] ||
+                                interestDate.eventType}
+                            </Badge>
+                          )}
+                          {interestDate.numberOfPeople && (
+                            <Badge variant="outline">{interestDate.numberOfPeople} pessoas</Badge>
+                          )}
+                        </div>
+                        <div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span>{interestDate.space?.name || '-'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4" />
+                            <span>{formatDateOnly(interestDate.date)}</span>
+                          </div>
+                        </div>
+                        {interestDate.notes && (
+                          <p className="mt-3 text-sm text-muted-foreground">{interestDate.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
+
+      {!isVisit && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-muted-foreground" />
+                <CardTitle>Profissionais no Evento</CardTitle>
+              </div>
+              <AddProfessionalPopover
+                eventId={eventId}
+                currentProfessionalIds={currentProfessionalIds}
+                onSuccess={fetchEvent}
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {professionals.length === 0 ? (
+              <div className="flex h-40 items-center justify-center text-muted-foreground">
+                Nenhum profissional vinculado
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead className="text-right">Acoes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {professionals.map((item: any) => {
+                    const profId = item.professional?.id || item.professionalId
+                    return (
+                      <TableRow key={profId}>
+                        <TableCell className="font-medium text-foreground">
+                          {item.professional?.name || '-'}
+                        </TableCell>
+                        <TableCell>{item.professional?.type || '-'}</TableCell>
+                        <TableCell>{item.professional?.phone || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            onClick={() => handleRemoveProfessional(profId)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Transactions Section */}
       {isFinancialEvent && (

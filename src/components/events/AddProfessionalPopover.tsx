@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Search, Plus, User, ChevronDown, Loader2 } from 'lucide-react'
+import { Search, Plus, User, Loader2 } from 'lucide-react'
 import { getProfessionals } from '@/app/actions/professionals'
 import { updateEvent } from '@/app/actions/events'
 import { Button } from '@/components/ui/Button'

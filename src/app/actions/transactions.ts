@@ -59,7 +59,7 @@ function buildBaseTransactionWhere(filters?: FinancialFilters): Prisma.Transacti
   return where
 }
 
-async function recalculateEventPaymentStatus(eventId: number) {
+export async function recalculateEventPaymentStatus(eventId: number) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { totalValue: true, deposit: true, category: true },

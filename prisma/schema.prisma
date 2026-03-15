@@ -64,6 +64,7 @@ model Event {
   serviceTasks        ServiceTask[]
   transactions        Transaction[]
   contractSignatures  ContractSignature[]
+  installments        PaymentInstallment[]
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -126,6 +127,8 @@ model Transaction {
   serviceTaskId   Int?
   serviceTask     ServiceTask? @relation(fields: [serviceTaskId], references: [id])
 
+  installment     PaymentInstallment?
+
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -179,5 +182,31 @@ model ClientInterestDate {
   @@index([clientId])
   @@index([spaceId])
   @@index([date])
+  @@index([status])
+}
+
+model PaymentInstallment {
+  id                Int       @id @default(autoincrement())
+  installmentNumber Int
+  dueDate           DateTime
+  amount            Decimal
+  status            String    @default("pending") // pending, paid, overdue
+  paidAt            DateTime?
+  paidAmount        Decimal?
+  paymentMethod     String?   // pix, credit_card, debit_card, bank_transfer, cash, boleto
+  notes             String?
+  isSinal           Boolean   @default(false)
+
+  eventId           Int
+  event             Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  transactionId     Int?      @unique
+  transaction       Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([eventId])
+  @@index([dueDate])
   @@index([status])
 }

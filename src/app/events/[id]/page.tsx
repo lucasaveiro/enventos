@@ -20,10 +20,12 @@ import {
   MessageSquare,
   Phone,
   PartyPopper,
+  CreditCard,
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
 import { getContractSignature } from '@/app/actions/clicksign'
+import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
@@ -33,6 +35,12 @@ import { EventDetailsActions } from '@/components/events/EventDetailsActions'
 import { AddProfessionalPopover } from '@/components/events/AddProfessionalPopover'
 import { LinkTransactionModal } from '@/components/events/LinkTransactionModal'
 import { TransactionModal } from '@/components/forms/TransactionModal'
+import { FinancialSummaryCard } from '@/components/installments/FinancialSummaryCard'
+import { InstallmentTable } from '@/components/installments/InstallmentTable'
+import type { Installment } from '@/components/installments/InstallmentTable'
+import { PaymentPlanModal } from '@/components/installments/PaymentPlanModal'
+import { MarkAsPaidModal } from '@/components/installments/MarkAsPaidModal'
+import { EditInstallmentModal } from '@/components/installments/EditInstallmentModal'
 
 const statusLabels: Record<string, string> = {
   confirming: 'Confirmando',
@@ -110,6 +118,10 @@ export default function EventPage() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
   const [isLinkTransactionModalOpen, setIsLinkTransactionModalOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<any | undefined>(undefined)
+  const [isPaymentPlanModalOpen, setIsPaymentPlanModalOpen] = useState(false)
+  const [isMarkPaidModalOpen, setIsMarkPaidModalOpen] = useState(false)
+  const [isEditInstallmentModalOpen, setIsEditInstallmentModalOpen] = useState(false)
+  const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null)
 
   const fetchEvent = useCallback(async () => {
     if (!eventId || Number.isNaN(eventId)) return
@@ -131,6 +143,7 @@ export default function EventPage() {
     }
 
     const loadEvent = async () => {
+      await checkOverdueInstallments()
       const [eventRes, txRes, contractRes] = await Promise.all([
         getEventById(eventId),
         getTransactionsByEventId(eventId),
@@ -259,24 +272,7 @@ export default function EventPage() {
               <Badge variant="info">{paymentLabels[event.paymentStatus] || event.paymentStatus}</Badge>
             )}
           </div>
-          {isFinancialEvent && (
-            <div className="grid gap-3 md:grid-cols-3 text-sm">
-              <div className="rounded-lg border border-border bg-secondary/30 p-3">
-                <div className="text-xs text-muted-foreground">Valor total</div>
-                <div className="font-semibold text-foreground">{formatCurrency(event.totalValue)}</div>
-              </div>
-              <div className="rounded-lg border border-border bg-secondary/30 p-3">
-                <div className="text-xs text-muted-foreground">Sinal</div>
-                <div className="font-semibold text-foreground">{formatCurrency(event.deposit)}</div>
-              </div>
-              <div className="rounded-lg border border-border bg-secondary/30 p-3">
-                <div className="text-xs text-muted-foreground">Status</div>
-                <div className="font-semibold text-foreground">
-                  {paymentLabels[event.paymentStatus] || event.paymentStatus}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Financial details moved to dedicated FinancialSummaryCard below */}
           {event.notes && (
             <div className="rounded-lg border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
               {event.notes}
@@ -458,6 +454,60 @@ export default function EventPage() {
         </Card>
       )}
 
+      {/* Financial Summary */}
+      {isFinancialEvent && (
+        <FinancialSummaryCard
+          totalValue={event.totalValue}
+          deposit={event.deposit}
+          installments={event.installments || []}
+          paymentStatus={event.paymentStatus}
+        />
+      )}
+
+      {/* Payment Plan Section */}
+      {isFinancialEvent && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+                <CardTitle>Plano de Pagamento</CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setIsPaymentPlanModalOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  {(event.installments?.length ?? 0) > 0 ? 'Reconfigurar' : 'Configurar Parcelamento'}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <InstallmentTable
+              installments={event.installments || []}
+              onMarkPaid={(inst) => {
+                setSelectedInstallment(inst)
+                setIsMarkPaidModalOpen(true)
+              }}
+              onEdit={(inst) => {
+                setSelectedInstallment(inst)
+                setIsEditInstallmentModalOpen(true)
+              }}
+              onDelete={async (inst) => {
+                if (confirm('Excluir esta parcela?')) {
+                  await deleteInstallment(inst.id)
+                  await fetchEvent()
+                }
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Transactions Section */}
       {isFinancialEvent && (
         <Card>
@@ -465,7 +515,7 @@ export default function EventPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-muted-foreground" />
-                <CardTitle>Transacoes Vinculadas</CardTitle>
+                <CardTitle>Outras Transacoes</CardTitle>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -575,11 +625,14 @@ export default function EventPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm text-muted-foreground">Status:</span>
               <ContractStatusBadge
                 status={contractSignature?.status || event.contractStatus || 'not_sent'}
               />
+              {contractSignature?.contractNumber && (
+                <Badge variant="outline">N. {contractSignature.contractNumber}</Badge>
+              )}
             </div>
             {contractSignature?.signingUrl && (
               <div className="flex items-center gap-2">
@@ -625,6 +678,44 @@ export default function EventPage() {
         onClose={() => setIsLinkTransactionModalOpen(false)}
         eventId={eventId}
         onSuccess={handleRefreshAfterTransaction}
+      />
+
+      {/* Payment Plan Modal */}
+      <PaymentPlanModal
+        isOpen={isPaymentPlanModalOpen}
+        onClose={() => setIsPaymentPlanModalOpen(false)}
+        eventId={eventId}
+        totalValue={event?.totalValue ?? 0}
+        deposit={event?.deposit ?? 0}
+        onSuccess={async () => {
+          await fetchEvent()
+          await fetchTransactions()
+        }}
+      />
+
+      {/* Mark as Paid Modal */}
+      <MarkAsPaidModal
+        isOpen={isMarkPaidModalOpen}
+        onClose={() => {
+          setIsMarkPaidModalOpen(false)
+          setSelectedInstallment(null)
+        }}
+        installment={selectedInstallment}
+        onSuccess={async () => {
+          await fetchEvent()
+          await fetchTransactions()
+        }}
+      />
+
+      {/* Edit Installment Modal */}
+      <EditInstallmentModal
+        isOpen={isEditInstallmentModalOpen}
+        onClose={() => {
+          setIsEditInstallmentModalOpen(false)
+          setSelectedInstallment(null)
+        }}
+        installment={selectedInstallment}
+        onSuccess={fetchEvent}
       />
     </div>
   )

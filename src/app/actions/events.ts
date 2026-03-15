@@ -171,6 +171,10 @@ export async function getEventById(id: number) {
           include: {
             professional: true
           }
+        },
+        installments: {
+          orderBy: { installmentNumber: 'asc' },
+          include: { transaction: true }
         }
       }
     })
@@ -184,7 +188,16 @@ export async function getEventById(id: number) {
       data: {
         ...event,
         totalValue: event.totalValue.toNumber(),
-        deposit: event.deposit.toNumber()
+        deposit: event.deposit.toNumber(),
+        installments: event.installments.map(inst => ({
+          ...inst,
+          amount: inst.amount.toNumber(),
+          paidAmount: inst.paidAmount ? inst.paidAmount.toNumber() : null,
+          transaction: inst.transaction ? {
+            ...inst.transaction,
+            amount: inst.transaction.amount.toNumber(),
+          } : null,
+        })),
       }
     }
   } catch (error) {
@@ -258,6 +271,7 @@ export async function deleteEvent(id: number) {
   try {
     // Delete related records first
     await prisma.$transaction(async (tx) => {
+      await tx.paymentInstallment.deleteMany({ where: { eventId: id } })
       await tx.contractSignature.deleteMany({ where: { eventId: id } })
       await tx.transaction.deleteMany({ where: { eventId: id } })
       await tx.serviceTask.deleteMany({ where: { eventId: id } })

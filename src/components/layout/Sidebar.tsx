@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, CalendarDays, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText, X } from 'lucide-react'
+import { Calendar, CalendarDays, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText, X, CalendarClock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -10,6 +10,7 @@ const navigation = [
   { name: 'Eventos', href: '/events', icon: CalendarDays, description: 'Gerenciamento de eventos' },
   { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Receitas e despesas' },
   { name: 'Financeiro', href: '/financial', icon: Wallet, description: 'Planilha e previsões' },
+  { name: 'Cal. Financeiro', href: '/financeiro/calendario', icon: CalendarClock, description: 'Vencimentos e parcelas' },
   { name: 'Espaços', href: '/spaces', icon: Home, description: 'Gerencie seus espaços' },
   { name: 'Clientes', href: '/clients', icon: Users, description: 'Cadastro de clientes' },
   { name: 'Profissionais', href: '/professionals', icon: Briefcase, description: 'Equipe de trabalho' },

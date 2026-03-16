@@ -45,6 +45,8 @@ import { PaymentPlanModal } from '@/components/installments/PaymentPlanModal'
 import { MarkAsPaidModal } from '@/components/installments/MarkAsPaidModal'
 import { EditInstallmentModal } from '@/components/installments/EditInstallmentModal'
 import { UploadContractModal } from '@/components/contracts/UploadContractModal'
+import { ClientModal } from '@/components/forms/ClientModal'
+import { InterestDatesModal } from '@/components/forms/InterestDatesModal'
 
 const statusLabels: Record<string, string> = {
   confirming: 'Confirmando',
@@ -127,6 +129,8 @@ export default function EventPage() {
   const [isEditInstallmentModalOpen, setIsEditInstallmentModalOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null)
   const [isUploadContractModalOpen, setIsUploadContractModalOpen] = useState(false)
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false)
+  const [isInterestDatesModalOpen, setIsInterestDatesModalOpen] = useState(false)
 
   const fetchEvent = useCallback(async () => {
     if (!eventId || Number.isNaN(eventId)) return
@@ -288,9 +292,33 @@ export default function EventPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>Cliente Vinculado</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Cliente Vinculado</CardTitle>
+            </div>
+            {client && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setIsClientModalOpen(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar Cliente
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setIsInterestDatesModalOpen(true)}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Datas de Interesse
+                </Button>
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -797,6 +825,28 @@ export default function EventPage() {
         eventId={eventId}
         onSuccess={fetchEvent}
       />
+
+      {/* Client Edit Modal */}
+      {client && (
+        <ClientModal
+          isOpen={isClientModalOpen}
+          onClose={() => setIsClientModalOpen(false)}
+          initialClient={client}
+          onSuccess={fetchEvent}
+        />
+      )}
+
+      {/* Interest Dates Modal */}
+      {client && (
+        <InterestDatesModal
+          isOpen={isInterestDatesModalOpen}
+          onClose={() => {
+            setIsInterestDatesModalOpen(false)
+            fetchEvent()
+          }}
+          client={{ id: client.id, name: client.name }}
+        />
+      )}
     </div>
   )
 }

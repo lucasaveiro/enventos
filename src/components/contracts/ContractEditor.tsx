@@ -205,6 +205,75 @@ const EMPTY_CLAUSE_STRUCTURE: PersistedClauseStructure = {
   removedDefaultClauseIds: [],
 }
 
+// ─── Contractor (owner) data persistence ────────────────────────────────────
+
+interface ContractorOverrides {
+  ownerName?: string
+  ownerCPF?: string
+  ownerCNPJ?: string
+  ownerEmail?: string
+  ownerRG?: string
+  ownerRole?: string
+  ownerAddress?: string
+}
+
+const CONTRACTOR_FIELDS: { key: keyof ContractorOverrides; label: string; placeholder: string; colSpan?: string }[] = [
+  { key: 'ownerName', label: 'Nome do Contratado', placeholder: 'Nome completo', colSpan: 'sm:col-span-2' },
+  { key: 'ownerCPF', label: 'CPF', placeholder: '000.000.000-00' },
+  { key: 'ownerRG', label: 'RG', placeholder: '00.000.000-0' },
+  { key: 'ownerCNPJ', label: 'CNPJ', placeholder: '00.000.000/0000-00' },
+  { key: 'ownerEmail', label: 'E-mail', placeholder: 'email@exemplo.com' },
+  { key: 'ownerRole', label: 'Qualificação', placeholder: 'Proprietário / Locador' },
+  { key: 'ownerAddress', label: 'Endereço Completo', placeholder: 'Rua, nº, Bairro — Cidade/UF CEP', colSpan: 'sm:col-span-2 lg:col-span-3' },
+]
+
+function getContractorStorageKey(spaceId: string): string {
+  return `contract-contractor:${spaceId}`
+}
+
+function loadContractorOverrides(spaceId: string): ContractorOverrides {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(getContractorStorageKey(spaceId))
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const result: ContractorOverrides = {}
+    for (const { key } of CONTRACTOR_FIELDS) {
+      if (typeof parsed[key] === 'string' && parsed[key]) {
+        result[key] = parsed[key] as string
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+function saveContractorOverrides(spaceId: string, overrides: ContractorOverrides): void {
+  if (typeof window === 'undefined') return
+  // Only persist keys that differ from empty
+  const cleaned: ContractorOverrides = {}
+  for (const { key } of CONTRACTOR_FIELDS) {
+    if (overrides[key]) cleaned[key] = overrides[key]
+  }
+  window.localStorage.setItem(getContractorStorageKey(spaceId), JSON.stringify(cleaned))
+}
+
+function mergeSpaceWithOverrides(space: SpaceConfig, overrides: ContractorOverrides): SpaceConfig {
+  return {
+    ...space,
+    ownerName: overrides.ownerName || space.ownerName,
+    ownerCPF: overrides.ownerCPF || space.ownerCPF,
+    ownerCNPJ: overrides.ownerCNPJ || space.ownerCNPJ,
+    ownerEmail: overrides.ownerEmail || space.ownerEmail,
+    ownerRG: overrides.ownerRG || space.ownerRG,
+    ownerRole: overrides.ownerRole || space.ownerRole,
+    ownerAddress: overrides.ownerAddress || space.ownerAddress,
+  }
+}
+
+// ─── Clause structure persistence ────────────────────────────────────────────
+
 function getClauseStructureStorageKey(spaceId: string): string {
   return `contract-structure:${spaceId}:clauses`
 }
@@ -289,6 +358,10 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
   const [newClauseContent, setNewClauseContent] = useState('')
   const [newClauseError, setNewClauseError] = useState('')
   const [pendingRemovalClauseId, setPendingRemovalClauseId] = useState<string | null>(null)
+
+  // Contractor (owner) overrides
+  const [contractorOverrides, setContractorOverrides] = useState<ContractorOverrides>({})
+  const effectiveSpace = useMemo(() => mergeSpaceWithOverrides(space, contractorOverrides), [space, contractorOverrides])
 
   // Clicksign integration state
   const [selectedEventId, setSelectedEventId] = useState<number | null>(initialEventId ?? null)
@@ -395,6 +468,7 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
     setClausesApplied(false)
     setShowAddClauseForm(false)
     setPendingRemovalClauseId(null)
+    setContractorOverrides(loadContractorOverrides(space.id))
   }, [space.id])
 
   const persistClauseStructure = useCallback((nextStructure: PersistedClauseStructure) => {
@@ -408,11 +482,11 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
       prev.map((clause) => {
         if (clause.edited) return clause
         const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content || clause.content
-        return { ...clause, content: substituteClause(template, formData, space) }
+        return { ...clause, content: substituteClause(template, formData, effectiveSpace) }
       })
     )
     setClausesApplied(true)
-  }, [getValues, space])
+  }, [getValues, space.id, effectiveSpace])
 
   const toggleClause = (id: string) => {
     if (expandedId === id) {
@@ -437,7 +511,7 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
     const formData = getValues() as ContractFormData
     const template = buildClauseTemplates(space.id, clauseStructure).find((c) => c.id === id)?.content || ''
     if (!template) return
-    const restored = substituteClause(template, formData, space)
+    const restored = substituteClause(template, formData, effectiveSpace)
     setClauses((prev) =>
       prev.map((c) => (c.id === id ? { ...c, content: restored, edited: false } : c))
     )
@@ -450,7 +524,7 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
       buildClauseTemplates(space.id, clauseStructure).map((clause) => ({
         ...clause,
         edited: false,
-        content: substituteClause(clause.content, formData, space),
+        content: substituteClause(clause.content, formData, effectiveSpace),
       }))
     )
     setClausesApplied(false)
@@ -685,6 +759,29 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
             <Input type="date" {...register('contractDate')} />
           </Field>
         </FieldRow>
+      </SectionCard>
+
+      {/* ── SECTION: Dados do Contratado (nossos dados) ── */}
+      <SectionCard title="Dados do(a) Contratado(a) — Nossos Dados">
+        <p className="text-xs text-[var(--muted-foreground)] mb-4">
+          Estes são os dados do contratado que aparecerão no contrato. Edite se necessário — as alterações serão salvas para os próximos contratos.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {CONTRACTOR_FIELDS.map(({ key, label, placeholder, colSpan }) => (
+            <Field key={key} label={label} className={colSpan}>
+              <Input
+                value={contractorOverrides[key] ?? ''}
+                placeholder={effectiveSpace[key] || placeholder}
+                onChange={(e) => {
+                  const next = { ...contractorOverrides, [key]: e.target.value }
+                  setContractorOverrides(next)
+                  saveContractorOverrides(space.id, next)
+                  setClausesApplied(false)
+                }}
+              />
+            </Field>
+          ))}
+        </div>
       </SectionCard>
 
       {/* ── SECTION 2: Dados do Contratante ── */}
@@ -1121,13 +1218,13 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
         </div>
         <div className="flex items-center gap-3">
           <PDFGeneratorButton
-            space={space}
+            space={effectiveSpace}
             clauses={clauses}
             getFormData={getFormDataForPDF}
             isValid={isValid}
           />
           <ClicksignButton
-            space={space}
+            space={effectiveSpace}
             clauses={clauses}
             getFormData={getFormDataForPDF}
             isValid={isValid}

@@ -32,6 +32,7 @@ import {
   getDefaultClauseTemplates,
   getInitialClauses,
   substituteClause,
+  isCNPJ,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
 import { ContractStatusBadge } from './ContractStatusBadge'
@@ -445,6 +446,10 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
     },
   })
 
+  // Detect CPF vs CNPJ for dynamic labels
+  const clientCPFValue = useWatch({ control, name: 'clientCPF' })
+  const clientIsCNPJ = isCNPJ(clientCPFValue || '')
+
   // Auto-calculate remaining value when total or deposit changes
   const totalValue = useWatch({ control, name: 'totalValue' })
   const depositValue = useWatch({ control, name: 'depositValue' })
@@ -787,17 +792,19 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
       {/* ── SECTION 2: Dados do Contratante ── */}
       <SectionCard title="Dados do(a) Contratante">
         <FieldRow>
-          <Field label="Nome Completo *" error={errors.clientName?.message} className="sm:col-span-2 lg:col-span-2">
-            <Input {...register('clientName')} placeholder="João da Silva" />
+          <Field label={clientIsCNPJ ? 'Razão Social *' : 'Nome Completo *'} error={errors.clientName?.message} className="sm:col-span-2 lg:col-span-2">
+            <Input {...register('clientName')} placeholder={clientIsCNPJ ? 'Empresa Ltda' : 'João da Silva'} />
           </Field>
-          <Field label="CPF *" error={errors.clientCPF?.message}>
+          <Field label="CPF / CNPJ *" error={errors.clientCPF?.message}>
             <Input {...register('clientCPF')} placeholder="000.000.000-00" />
           </Field>
         </FieldRow>
         <FieldRow>
-          <Field label="RG" error={errors.clientRG?.message}>
-            <Input {...register('clientRG')} placeholder="00.000.000-0" />
-          </Field>
+          {!clientIsCNPJ && (
+            <Field label="RG" error={errors.clientRG?.message}>
+              <Input {...register('clientRG')} placeholder="00.000.000-0" />
+            </Field>
+          )}
           <Field label="Telefone *" error={errors.clientPhone?.message}>
             <Input {...register('clientPhone')} placeholder="(11) 99999-9999" />
           </Field>

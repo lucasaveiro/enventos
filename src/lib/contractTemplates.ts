@@ -105,6 +105,11 @@ export const SPACES: Record<string, SpaceConfig> = {
   },
 }
 
+export function isCNPJ(doc: string): boolean {
+  const digits = (doc || '').replace(/\D/g, '')
+  return digits.length >= 14 || doc.includes('/')
+}
+
 export function formatCurrency(value: string): string {
   const num = parseFloat((value || '').replace(',', '.'))
   if (isNaN(num) || !value) return ''
@@ -134,6 +139,48 @@ export function substituteClause(
   const packageType = (formData.packageType || '').toLowerCase()
   const isSimplePackage = packageType === 'simples'
   const isCompletePackage = packageType === 'completo'
+  const clientIsCNPJ = isCNPJ(formData.clientCPF || '')
+
+  // Build client qualification text (PF vs PJ)
+  let clientQualification: string
+  if (clientIsCNPJ) {
+    // Pessoa Jurídica
+    const parts = [formData.clientName || '[RAZÃO SOCIAL]']
+    parts.push(`inscrita no CNPJ nº ${formData.clientCPF || '[CNPJ]'}`)
+    if (formData.clientAddress) {
+      parts.push(`com sede em ${formData.clientAddress}`)
+      if (formData.clientCity) {
+        parts[parts.length - 1] += `, ${formData.clientCity}`
+        if (formData.clientState) parts[parts.length - 1] += ` - ${formData.clientState}`
+      }
+    }
+    clientQualification = parts.join(', ')
+  } else {
+    // Pessoa Física — Rancho style
+    if (space.id === 'rancho-aveiro') {
+      const parts = [`o(a) Sr(a): ${formData.clientName || '[NOME DO LOCATÁRIO]'}`]
+      parts.push('nacionalidade: [NACIONALIDADE], estado civil: [ESTADO CIVIL], profissão: [PROFISSÃO]')
+      if (formData.clientRG) parts.push(`portador(a) da CI/RG nº ${formData.clientRG}`)
+      parts.push(`CPF/MF nº ${formData.clientCPF || '[CPF]'}`)
+      parts.push(`residente e domiciliado(a) à ${formData.clientAddress || '[ENDEREÇO]'}`)
+      if (formData.clientCity) {
+        parts[parts.length - 1] += `, ${formData.clientCity}`
+        if (formData.clientState) parts[parts.length - 1] += ` - ${formData.clientState}`
+      }
+      clientQualification = parts.join(', ')
+    } else {
+      // Estância style
+      const parts = [formData.clientName || '[NOME DO LOCATÁRIO]']
+      if (formData.clientRG) parts.push(`RG: ${formData.clientRG}`)
+      parts.push(`CPF: ${formData.clientCPF || '[CPF]'}`)
+      parts.push(`residente e domiciliado(a) à ${formData.clientAddress || '[ENDEREÇO]'}`)
+      if (formData.clientCity) {
+        parts[parts.length - 1] += `, ${formData.clientCity}`
+        if (formData.clientState) parts[parts.length - 1] += ` - ${formData.clientState}`
+      }
+      clientQualification = parts.join(', ')
+    }
+  }
 
   return content
     .replace(/{spaceName}/g, space.displayName)
@@ -148,6 +195,7 @@ export function substituteClause(
     .replace(/{ownerRG}/g, space.ownerRG)
     .replace(/{ownerRole}/g, space.ownerRole)
     .replace(/{ownerAddress}/g, space.ownerAddress)
+    .replace(/{clientQualification}/g, clientQualification)
     .replace(/{contractNumber}/g, formData.contractNumber || '[Nº DO CONTRATO]')
     .replace(/{contractDate}/g, formatDate(formData.contractDate || '') || '[DATA DO CONTRATO]')
     .replace(/{clientName}/g, formData.clientName || '[NOME DO LOCATÁRIO]')
@@ -278,7 +326,7 @@ export const RANCHO_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'PREÂMBULO',
     title: 'QUALIFICAÇÃO DAS PARTES',
     content:
-      '{ownerName}, brasileiro, empresário, portador do CPF nº {ownerCPF} e do CNPJ nº {ownerCNPJ}, neste ato denominado LOCADOR, tem justo e contratado com o(a) Sr(a): {clientName}, nacionalidade: [NACIONALIDADE], estado civil: [ESTADO CIVIL], profissão: [PROFISSÃO], portador(a) da CI/RG nº {clientRG}, CPF/MF nº {clientCPF}, residente e domiciliado(a) à {clientAddress}, {clientCity} - {clientState}, contato: {clientPhone}, E-Mail: {clientEmail}, aqui denominado(a) LOCATÁRIO, a locação das dependências da chácara "{spaceName}", sito à {spaceFullAddress}, compreendendo, a presente locação: um hall de entrada, salão com capacidade máxima para 300 pessoas, varanda, escada, sala de suporte, cozinha, área coberta para churrasqueira, uma câmara fria, geladeiras, freezer, fogões, banheiros masculino e feminino, estacionamento para 120 veículos, área coberta para embarque e desembarque e jardim. O presente contrato de locação será regido pelas leis vigentes e mediante as cláusulas e condições abaixo, as quais as partes contratantes se obrigam mutuamente.',
+      '{ownerName}, brasileiro, empresário, portador do CPF nº {ownerCPF} e do CNPJ nº {ownerCNPJ}, neste ato denominado LOCADOR, tem justo e contratado com {clientQualification}, contato: {clientPhone}, E-Mail: {clientEmail}, aqui denominado(a) LOCATÁRIO, a locação das dependências da chácara "{spaceName}", sito à {spaceFullAddress}, compreendendo, a presente locação: um hall de entrada, salão com capacidade máxima para 300 pessoas, varanda, escada, sala de suporte, cozinha, área coberta para churrasqueira, uma câmara fria, geladeiras, freezer, fogões, banheiros masculino e feminino, estacionamento para 120 veículos, área coberta para embarque e desembarque e jardim. O presente contrato de locação será regido pelas leis vigentes e mediante as cláusulas e condições abaixo, as quais as partes contratantes se obrigam mutuamente.',
   },
   {
     id: 'primeira',
@@ -381,7 +429,7 @@ export const ESTANCIA_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'PREÂMBULO',
     title: 'IDENTIFICAÇÃO DAS PARTES',
     content:
-      'Pelo presente instrumento de contrato particular de locação de espaço de lazer, que fazem entre si, por um lado, {clientName}, RG: {clientRG}, CPF: {clientCPF}, Contato: {clientPhone}, residente e domiciliado(a) à {clientAddress}, {clientCity} - {clientState}, E-mail: {clientEmail}, doravante denominado(a) simplesmente de LOCATÁRIO, e por outro {ownerName}, RG nº {ownerRG} e CPF nº {ownerCPF}, residente e domiciliado à {ownerAddress}, doravante denominado(a) simplesmente de LOCADOR, os quais têm por justo e acordado o que segue:',
+      'Pelo presente instrumento de contrato particular de locação de espaço de lazer, que fazem entre si, por um lado, {clientQualification}, Contato: {clientPhone}, E-mail: {clientEmail}, doravante denominado(a) simplesmente de LOCATÁRIO, e por outro {ownerName}, RG nº {ownerRG} e CPF nº {ownerCPF}, residente e domiciliado à {ownerAddress}, doravante denominado(a) simplesmente de LOCADOR, os quais têm por justo e acordado o que segue:',
   },
   {
     id: 'objeto',

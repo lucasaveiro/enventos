@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     fontStyle: 'italic',
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   headerAddress: {
     fontSize: 8.5,
@@ -246,7 +246,7 @@ function RanchoContractPage({ formData, clauses, space }: Props) {
           {space.spaceFullAddress || `${space.address}, ${space.city}-${space.state}`}
         </Text>
         <Text style={styles.headerSubtitle}>Espaço para eventos</Text>
-        <Text style={styles.headerPhone}>(19) 99629-1666</Text>
+        <Text style={styles.headerPhone}>(19) 99623-1666</Text>
       </View>
 
       {/* Title */}

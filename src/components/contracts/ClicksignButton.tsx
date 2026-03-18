@@ -82,6 +82,11 @@ export default function ClicksignButton({
         clientEmail: formData.clientEmail,
         clientCPF: formData.clientCPF,
         pdfBase64: base64,
+        // Dados do contratado (proprietário/locador)
+        contractorName: space.ownerName,
+        contractorPhone: space.ownerPhone,
+        contractorEmail: space.ownerEmail,
+        contractorCPF: space.ownerCPF.replace(/\D/g, ''),
       })
 
       if (result.success) {

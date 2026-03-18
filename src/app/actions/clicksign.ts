@@ -25,6 +25,11 @@ interface SendContractParams {
   clientCPF: string
   pdfBase64: string
   deadlineDays?: number
+  // Dados do contratado (para assinatura do proprietário/locador)
+  contractorName: string
+  contractorPhone: string
+  contractorEmail: string
+  contractorCPF: string
 }
 
 export async function sendContractToClicksign(params: SendContractParams) {
@@ -90,7 +95,7 @@ export async function sendContractToClicksign(params: SendContractParams) {
       data: { signerKey, status: 'signer_added' },
     })
 
-    // Step 3: Add signer to document
+    // Step 3: Add client signer to document
     const { requestSignatureKey, url } = await clicksign.addSignerToDocument({
       documentKey,
       signerKey,
@@ -101,8 +106,25 @@ export async function sendContractToClicksign(params: SendContractParams) {
       data: { requestSignatureKey, signingUrl: url },
     })
 
-    // Step 4: Send via WhatsApp
+    // Step 4: Create contractor signer (contratado/proprietário)
+    const contractorPhoneFormatted = formatPhoneForClicksign(params.contractorPhone)
+    const contractorCPFClean = params.contractorCPF.replace(/\D/g, '')
+    const { signerKey: contractorSignerKey } = await clicksign.createSigner({
+      email: params.contractorEmail || `${contractorPhoneFormatted}@noemail.clicksign.com`,
+      phoneNumber: contractorPhoneFormatted,
+      name: params.contractorName,
+      documentation: contractorCPFClean,
+    })
+
+    // Step 5: Add contractor signer to document
+    const { requestSignatureKey: contractorReqKey } = await clicksign.addSignerToDocument({
+      documentKey,
+      signerKey: contractorSignerKey,
+    })
+
+    // Step 6: Send WhatsApp notifications to both signers
     await clicksign.notifyByWhatsapp(requestSignatureKey)
+    await clicksign.notifyByWhatsapp(contractorReqKey)
 
     // Update status
     await prisma.contractSignature.update({

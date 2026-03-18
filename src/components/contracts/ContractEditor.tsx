@@ -213,6 +213,7 @@ interface ContractorOverrides {
   ownerCPF?: string
   ownerCNPJ?: string
   ownerEmail?: string
+  ownerPhone?: string
   ownerRG?: string
   ownerRole?: string
   ownerAddress?: string
@@ -230,6 +231,7 @@ const CONTRACTOR_FIELDS: { key: keyof ContractorOverrides; label: string; placeh
   { key: 'ownerRG', label: 'RG', placeholder: '00.000.000-0' },
   { key: 'ownerCNPJ', label: 'CNPJ', placeholder: '00.000.000/0000-00' },
   { key: 'ownerEmail', label: 'E-mail', placeholder: 'email@exemplo.com' },
+  { key: 'ownerPhone', label: 'Telefone (WhatsApp)', placeholder: '19999999999' },
   { key: 'ownerRole', label: 'Qualificação', placeholder: 'Proprietário / Locador' },
   { key: 'ownerAddress', label: 'Endereço Completo', placeholder: 'Rua, nº, Bairro — Cidade/UF CEP', colSpan: 'sm:col-span-2 lg:col-span-3' },
   { key: 'bankName', label: 'Banco', placeholder: 'Santander', section: 'bank' },
@@ -279,6 +281,7 @@ function mergeSpaceWithOverrides(space: SpaceConfig, overrides: ContractorOverri
     ownerCPF: overrides.ownerCPF || space.ownerCPF,
     ownerCNPJ: overrides.ownerCNPJ || space.ownerCNPJ,
     ownerEmail: overrides.ownerEmail || space.ownerEmail,
+    ownerPhone: overrides.ownerPhone || space.ownerPhone,
     ownerRG: overrides.ownerRG || space.ownerRG,
     ownerRole: overrides.ownerRole || space.ownerRole,
     ownerAddress: overrides.ownerAddress || space.ownerAddress,

@@ -49,6 +49,7 @@ export interface SpaceConfig {
   ownerCPF: string
   ownerCNPJ: string
   ownerEmail: string
+  ownerPhone: string
   ownerRG: string
   ownerRole: string
   ownerAddress: string
@@ -77,6 +78,7 @@ export const SPACES: Record<string, SpaceConfig> = {
     ownerCPF: '068.786.648-02',
     ownerCNPJ: '',
     ownerEmail: '',
+    ownerPhone: '19996231666',
     ownerRG: '14.471.121',
     ownerRole: 'Proprietário',
     ownerAddress: 'Estrada Municipal dos Aveiros, 530, Bairro Jardim Andorinhas, Campinas - SP, CEP: 13101-499',
@@ -103,6 +105,7 @@ export const SPACES: Record<string, SpaceConfig> = {
     ownerCPF: '420.893.258-95',
     ownerCNPJ: '65.318.213/0001-01',
     ownerEmail: 'contato@ranchoaveiro.com.br',
+    ownerPhone: '19996231666',
     ownerRG: '',
     ownerRole: 'Locador',
     ownerAddress:

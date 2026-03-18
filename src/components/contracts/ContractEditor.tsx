@@ -216,9 +216,15 @@ interface ContractorOverrides {
   ownerRG?: string
   ownerRole?: string
   ownerAddress?: string
+  bankName?: string
+  bankCode?: string
+  bankAgency?: string
+  bankAccount?: string
+  bankHolder?: string
+  bankHolderDoc?: string
 }
 
-const CONTRACTOR_FIELDS: { key: keyof ContractorOverrides; label: string; placeholder: string; colSpan?: string }[] = [
+const CONTRACTOR_FIELDS: { key: keyof ContractorOverrides; label: string; placeholder: string; colSpan?: string; section?: string }[] = [
   { key: 'ownerName', label: 'Nome do Contratado', placeholder: 'Nome completo', colSpan: 'sm:col-span-2' },
   { key: 'ownerCPF', label: 'CPF', placeholder: '000.000.000-00' },
   { key: 'ownerRG', label: 'RG', placeholder: '00.000.000-0' },
@@ -226,6 +232,12 @@ const CONTRACTOR_FIELDS: { key: keyof ContractorOverrides; label: string; placeh
   { key: 'ownerEmail', label: 'E-mail', placeholder: 'email@exemplo.com' },
   { key: 'ownerRole', label: 'Qualificação', placeholder: 'Proprietário / Locador' },
   { key: 'ownerAddress', label: 'Endereço Completo', placeholder: 'Rua, nº, Bairro — Cidade/UF CEP', colSpan: 'sm:col-span-2 lg:col-span-3' },
+  { key: 'bankName', label: 'Banco', placeholder: 'Santander', section: 'bank' },
+  { key: 'bankCode', label: 'Código do Banco', placeholder: '033', section: 'bank' },
+  { key: 'bankAgency', label: 'Agência', placeholder: '0194', section: 'bank' },
+  { key: 'bankAccount', label: 'Conta Corrente', placeholder: '01003495-8', section: 'bank' },
+  { key: 'bankHolder', label: 'Nome do Titular', placeholder: 'Nome do titular', colSpan: 'sm:col-span-2', section: 'bank' },
+  { key: 'bankHolderDoc', label: 'CPF do Titular', placeholder: '000.000.000-00', section: 'bank' },
 ]
 
 function getContractorStorageKey(spaceId: string): string {
@@ -270,6 +282,12 @@ function mergeSpaceWithOverrides(space: SpaceConfig, overrides: ContractorOverri
     ownerRG: overrides.ownerRG || space.ownerRG,
     ownerRole: overrides.ownerRole || space.ownerRole,
     ownerAddress: overrides.ownerAddress || space.ownerAddress,
+    bankName: overrides.bankName || space.bankName,
+    bankCode: overrides.bankCode || space.bankCode,
+    bankAgency: overrides.bankAgency || space.bankAgency,
+    bankAccount: overrides.bankAccount || space.bankAccount,
+    bankHolder: overrides.bankHolder || space.bankHolder,
+    bankHolderDoc: overrides.bankHolderDoc || space.bankHolderDoc,
   }
 }
 
@@ -772,7 +790,24 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
           Estes são os dados do contratado que aparecerão no contrato. Edite se necessário — as alterações serão salvas para os próximos contratos.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {CONTRACTOR_FIELDS.map(({ key, label, placeholder, colSpan }) => (
+          {CONTRACTOR_FIELDS.filter(f => !f.section).map(({ key, label, placeholder, colSpan }) => (
+            <Field key={key} label={label} className={colSpan}>
+              <Input
+                value={contractorOverrides[key] ?? ''}
+                placeholder={effectiveSpace[key] || placeholder}
+                onChange={(e) => {
+                  const next = { ...contractorOverrides, [key]: e.target.value }
+                  setContractorOverrides(next)
+                  saveContractorOverrides(space.id, next)
+                  setClausesApplied(false)
+                }}
+              />
+            </Field>
+          ))}
+        </div>
+        <p className="text-xs font-semibold text-[var(--muted-foreground)] mt-5 mb-3 uppercase tracking-wide">Dados Bancários</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {CONTRACTOR_FIELDS.filter(f => f.section === 'bank').map(({ key, label, placeholder, colSpan }) => (
             <Field key={key} label={label} className={colSpan}>
               <Input
                 value={contractorOverrides[key] ?? ''}

@@ -52,6 +52,12 @@ export interface SpaceConfig {
   ownerRG: string
   ownerRole: string
   ownerAddress: string
+  bankName: string
+  bankCode: string
+  bankAgency: string
+  bankAccount: string
+  bankHolder: string
+  bankHolderDoc: string
   spaceFullAddress: string
   color: string
   bgColor: string
@@ -74,6 +80,12 @@ export const SPACES: Record<string, SpaceConfig> = {
     ownerRG: '14.471.121',
     ownerRole: 'Proprietário',
     ownerAddress: 'Estrada Municipal dos Aveiros, 530, Bairro Jardim Andorinhas, Campinas - SP, CEP: 13101-499',
+    bankName: 'Santander',
+    bankCode: '033',
+    bankAgency: '0194',
+    bankAccount: '01003495-8',
+    bankHolder: 'Edvaldo José Aveiro',
+    bankHolderDoc: '068.786.648-02',
     spaceFullAddress: 'Estrada Municipal dos Aveiros, SN, Jardim Andorinhas, Campinas - SP, CEP: 13101-499',
     color: '#1e7a4e',
     bgColor: '#e4f5ec',
@@ -95,6 +107,12 @@ export const SPACES: Record<string, SpaceConfig> = {
     ownerRole: 'Locador',
     ownerAddress:
       'Estrada Municipal dos Aveiros, 300, Jardim Andorinhas - Campinas / SP CEP: 13101-499',
+    bankName: 'Santander',
+    bankCode: '033',
+    bankAgency: '0194',
+    bankAccount: '01003495-8',
+    bankHolder: 'Lucas Nogueira Aveiro',
+    bankHolderDoc: '420.893.258-95',
     spaceFullAddress:
       'Estrada Municipal dos Aveiros, 650 - Chácaras Aveiro / Jd. Andorinhas, Campinas-SP CEP: 13101-499',
     color: '#9e6c14',
@@ -195,6 +213,12 @@ export function substituteClause(
     .replace(/{ownerRG}/g, space.ownerRG)
     .replace(/{ownerRole}/g, space.ownerRole)
     .replace(/{ownerAddress}/g, space.ownerAddress)
+    .replace(/{bankName}/g, space.bankName || '[BANCO]')
+    .replace(/{bankCode}/g, space.bankCode || '[CÓD]')
+    .replace(/{bankAgency}/g, space.bankAgency || '[AGÊNCIA]')
+    .replace(/{bankAccount}/g, space.bankAccount || '[CONTA]')
+    .replace(/{bankHolder}/g, space.bankHolder || space.ownerName)
+    .replace(/{bankHolderDoc}/g, space.bankHolderDoc || space.ownerCPF)
     .replace(/{clientQualification}/g, clientQualification)
     .replace(/{contractNumber}/g, formData.contractNumber || '[Nº DO CONTRATO]')
     .replace(/{contractDate}/g, formatDate(formData.contractDate || '') || '[DATA DO CONTRATO]')
@@ -340,7 +364,7 @@ export const RANCHO_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'SEGUNDA',
     title: 'DO VALOR E FORMA DE PAGAMENTO',
     content:
-      'O LOCATÁRIO se compromete a pagar ao LOCADOR um aluguel pelo período acima no valor de: {totalValue}. Que serão pagos da seguinte forma: Entrada/sinal de {depositValue}, com vencimento inicial em {depositDueDate}, e saldo remanescente de {remainingValue}, com vencimento em {remainingDueDate}.\n\nForma de pagamento: {paymentMethod}\n\nConta corrente no banco Santander (033) — agência 0194 — C/C 01003495-8\nNome: {ownerName}. CPF: {ownerCPF} (Pix)\n\nOs comprovantes deverão ser enviados com identificação (data do evento) no e-mail: {ownerEmail}.\n\nParágrafo primeiro: Se o LOCATÁRIO desistir da locação ou não for possível acordar a alteração prevista no parágrafo único da cláusula primeira, o valor pago como sinal será retido pelo LOCADOR. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao LOCATÁRIO se a desistência se der até 90 (noventa) dias antes da data da locação; se depois deste prazo, a devolução será pela quarta parte.\n\nParágrafo segundo: Fica acordado entre as partes que caso não seja possível a utilização do imóvel locado na data estabelecida na cláusula primeira, por motivo imputável ao LOCADOR, o LOCADOR fará a devolução do valor pago pelo LOCATÁRIO estabelecido no caput desta cláusula.\n\nParágrafo terceiro: É permitido ao LOCATÁRIO, ou preposto seu com procuração e firma reconhecida, desde a véspera até duas horas antes do início da locação, vistoriar o imóvel, para efeitos do parágrafo anterior e cláusula terceira.',
+      'O LOCATÁRIO se compromete a pagar ao LOCADOR um aluguel pelo período acima no valor de: {totalValue}. Que serão pagos da seguinte forma: Entrada/sinal de {depositValue}, com vencimento inicial em {depositDueDate}, e saldo remanescente de {remainingValue}, com vencimento em {remainingDueDate}.\n\nForma de pagamento: {paymentMethod}\n\nConta corrente no banco {bankName} ({bankCode}) — agência {bankAgency} — C/C {bankAccount}\nNome: {bankHolder}. CPF: {bankHolderDoc} (Pix)\n\nOs comprovantes deverão ser enviados com identificação (data do evento) no e-mail: {ownerEmail}.\n\nParágrafo primeiro: Se o LOCATÁRIO desistir da locação ou não for possível acordar a alteração prevista no parágrafo único da cláusula primeira, o valor pago como sinal será retido pelo LOCADOR. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao LOCATÁRIO se a desistência se der até 90 (noventa) dias antes da data da locação; se depois deste prazo, a devolução será pela quarta parte.\n\nParágrafo segundo: Fica acordado entre as partes que caso não seja possível a utilização do imóvel locado na data estabelecida na cláusula primeira, por motivo imputável ao LOCADOR, o LOCADOR fará a devolução do valor pago pelo LOCATÁRIO estabelecido no caput desta cláusula.\n\nParágrafo terceiro: É permitido ao LOCATÁRIO, ou preposto seu com procuração e firma reconhecida, desde a véspera até duas horas antes do início da locação, vistoriar o imóvel, para efeitos do parágrafo anterior e cláusula terceira.',
   },
   {
     id: 'terceira',
@@ -457,7 +481,7 @@ export const ESTANCIA_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'QUARTA',
     title: 'DO PAGAMENTO',
     content:
-      'O Locatário efetuará o pagamento das seguintes formas:\n\n50% do valor na assinatura do contrato a título de reserva, os outros 50% 10 (dez) dias antes de entrar na chácara.\n\nForma de pagamento: {paymentMethod}\n\nÀ vista: Transferência bancária, Depósito em conta, Pix ou Dinheiro.\n\nDados bancários:\nBanco Santander (033) — Agência: 0194 — C/C: 01003495-8\nNome: {ownerName} — CPF: {ownerCPF} (Pix: chave CPF)\n\nOu pessoalmente em dinheiro na Chácara {spaceName}.\n\nParágrafo Único: Se o Locatário desistir da locação ou não for possível acordar a alteração prevista neste contrato, o valor pago como sinal será retido pelo locador. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao locatário se a desistência se der até 90 (noventa) dias antes da data da locação.',
+      'O Locatário efetuará o pagamento das seguintes formas:\n\n50% do valor na assinatura do contrato a título de reserva, os outros 50% 10 (dez) dias antes de entrar na chácara.\n\nForma de pagamento: {paymentMethod}\n\nÀ vista: Transferência bancária, Depósito em conta, Pix ou Dinheiro.\n\nDados bancários:\nBanco {bankName} ({bankCode}) — Agência: {bankAgency} — C/C: {bankAccount}\nNome: {bankHolder} — CPF: {bankHolderDoc} (Pix: chave CPF)\n\nOu pessoalmente em dinheiro na Chácara {spaceName}.\n\nParágrafo Único: Se o Locatário desistir da locação ou não for possível acordar a alteração prevista neste contrato, o valor pago como sinal será retido pelo locador. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao locatário se a desistência se der até 90 (noventa) dias antes da data da locação.',
   },
   {
     id: 'caucao',

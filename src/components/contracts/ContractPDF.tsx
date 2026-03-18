@@ -24,9 +24,9 @@ const styles = StyleSheet.create({
   page: {
     fontFamily: 'Roboto',
     fontSize: 9.5,
-    paddingTop: 40,
-    paddingBottom: 50,
-    paddingHorizontal: 50,
+    paddingTop: 35,
+    paddingBottom: 40,
+    paddingHorizontal: 45,
     color: '#111',
     lineHeight: 1.5,
   },
@@ -34,14 +34,14 @@ const styles = StyleSheet.create({
   // ─── Header (Rancho) ───────────────────────────────────────────────────────
   headerCenter: {
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   brandName: {
     fontSize: 22,
     fontWeight: 700,
     fontStyle: 'italic',
     textAlign: 'center',
-    marginBottom: 2,
+    marginBottom: 6,
   },
   headerAddress: {
     fontSize: 8.5,
@@ -53,21 +53,21 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     color: '#444',
-    marginTop: 1,
+    marginTop: 2,
   },
   headerPhone: {
     fontSize: 8.5,
     textAlign: 'center',
     color: '#333',
     marginTop: 1,
-    marginBottom: 8,
+    marginBottom: 6,
   },
 
   // ─── Title ──────────────────────────────────────────────────────────────────
   contractTitle: {
     fontSize: 11,
     fontWeight: 700,
-    marginBottom: 10,
+    marginBottom: 8,
   },
 
   // ─── Body text ──────────────────────────────────────────────────────────────
@@ -75,12 +75,12 @@ const styles = StyleSheet.create({
     fontSize: 9.3,
     textAlign: 'justify',
     lineHeight: 1.55,
-    marginBottom: 6,
+    marginBottom: 4,
   },
 
   // ─── Clauses ────────────────────────────────────────────────────────────────
   clauseBlock: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   clauseTitleInline: {
     fontWeight: 700,
@@ -89,31 +89,31 @@ const styles = StyleSheet.create({
   clauseText: {
     fontSize: 9.3,
     textAlign: 'justify',
-    lineHeight: 1.55,
+    lineHeight: 1.5,
   },
 
   // ─── Event data lines ──────────────────────────────────────────────────────
   eventDataSection: {
-    marginTop: 14,
+    marginTop: 10,
   },
   eventLine: {
     fontSize: 9.2,
-    marginBottom: 5,
+    marginBottom: 4,
   },
 
   // ─── Date ───────────────────────────────────────────────────────────────────
   dateRight: {
     fontSize: 9.2,
     textAlign: 'right',
-    marginTop: 20,
-    marginBottom: 30,
+    marginTop: 16,
+    marginBottom: 24,
   },
 
   // ─── Signatures ─────────────────────────────────────────────────────────────
   signatureRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 30,
+    marginBottom: 24,
   },
   signatureBlock: {
     width: '44%',
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   witnessHeading: {
     fontSize: 9,
     fontWeight: 700,
-    marginBottom: 16,
+    marginBottom: 12,
     textAlign: 'center',
   },
   witnessText: {
@@ -151,9 +151,9 @@ const styles = StyleSheet.create({
   // ─── Footer ─────────────────────────────────────────────────────────────────
   footer: {
     position: 'absolute',
-    bottom: 25,
-    left: 50,
-    right: 50,
+    bottom: 20,
+    left: 45,
+    right: 45,
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
@@ -165,14 +165,14 @@ const styles = StyleSheet.create({
   // ─── Estância Header ───────────────────────────────────────────────────────
   estanciaHeaderCenter: {
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   estanciaBrandName: {
     fontSize: 20,
     fontWeight: 700,
     fontStyle: 'italic',
     textAlign: 'center',
-    marginBottom: 2,
+    marginBottom: 6,
   },
 
   // ─── Section title (Estância) ──────────────────────────────────────────────
@@ -180,8 +180,8 @@ const styles = StyleSheet.create({
     fontSize: 9.3,
     fontWeight: 700,
     textTransform: 'uppercase',
-    marginTop: 10,
-    marginBottom: 4,
+    marginTop: 8,
+    marginBottom: 3,
   },
   fieldRow: {
     flexDirection: 'row',

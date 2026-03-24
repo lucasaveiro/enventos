@@ -1,3 +1,10 @@
+export interface PaymentInstallment {
+  date: string
+  value: string
+}
+
+export type PaymentConditionType = 'a_vista' | 'entrada_parcelas' | 'cartao_credito'
+
 export interface ContractFormData {
   contractNumber: string
   contractDate: string
@@ -5,6 +12,9 @@ export interface ContractFormData {
   clientName: string
   clientCPF: string
   clientRG: string
+  clientNationality: string
+  clientCivilStatus: string
+  clientProfession: string
   clientAddress: string
   clientCity: string
   clientState: string
@@ -26,7 +36,11 @@ export interface ContractFormData {
   remainingValue: string
   remainingDueDate: string
   paymentMethod: string
+  paymentCondition: PaymentConditionType
+  installments: PaymentInstallment[]
   cautionValue: string
+  // Furniture (Rancho Aveiro clause 11)
+  benchCount: string
   // General
   observations: string
 }
@@ -152,6 +166,47 @@ export function generateContractNumber(space: SpaceConfig): string {
   return `${space.prefix}-${y}${m}${d}`
 }
 
+export function buildPaymentConditionText(formData: Partial<ContractFormData>): string {
+  const condition = formData.paymentCondition || ''
+  const totalFormatted = formatCurrency(formData.totalValue || '') || '[VALOR TOTAL]'
+
+  if (condition === 'a_vista') {
+    return `Pagamento à vista no valor de ${totalFormatted}, pago via Pix/Depósito bancário na data da assinatura do contrato.`
+  }
+
+  if (condition === 'entrada_parcelas') {
+    const depositFormatted = formatCurrency(formData.depositValue || '') || '[VALOR ENTRADA]'
+    const installments = formData.installments || []
+
+    let text = `Entrada de ${depositFormatted} (20% do valor total) no ato do contrato`
+    if (installments.length > 0) {
+      text += `, e o saldo restante parcelado em ${installments.length}x no Pix até 10 dias antes do evento, conforme abaixo:\n\n`
+      installments.forEach((inst, i) => {
+        const instValue = formatCurrency(inst.value) || '[VALOR]'
+        const instDate = formatDate(inst.date) || '[DATA]'
+        text += `${i + 1}ª parcela: ${instValue} — vencimento em ${instDate}\n`
+      })
+    } else {
+      text += `, e saldo restante parcelado no Pix até 10 dias antes do evento.`
+    }
+    return text
+  }
+
+  if (condition === 'cartao_credito') {
+    return `Pagamento no valor de ${totalFormatted}, parcelado no cartão de crédito com juros adicionais da maquininha.`
+  }
+
+  return '[CONDIÇÃO DE PAGAMENTO]'
+}
+
+export function buildFurnitureText(formData: Partial<ContractFormData>): { chairs: number; tables: number; benches: number } {
+  const guests = parseInt(formData.guestCount || '0', 10) || 0
+  const chairs = guests
+  const tables = guests > 0 ? Math.ceil(guests / 8) : 0
+  const benches = parseInt(formData.benchCount || '20', 10) || 20
+  return { chairs, tables, benches }
+}
+
 export function substituteClause(
   content: string,
   formData: Partial<ContractFormData>,
@@ -180,7 +235,10 @@ export function substituteClause(
     // Pessoa Física — Rancho style
     if (space.id === 'rancho-aveiro') {
       const parts = [`o(a) Sr(a): ${formData.clientName || '[NOME DO LOCATÁRIO]'}`]
-      parts.push('nacionalidade: [NACIONALIDADE], estado civil: [ESTADO CIVIL], profissão: [PROFISSÃO]')
+      const nationality = formData.clientNationality || '[NACIONALIDADE]'
+      const civilStatus = formData.clientCivilStatus || '[ESTADO CIVIL]'
+      const profession = formData.clientProfession || '[PROFISSÃO]'
+      parts.push(`nacionalidade: ${nationality}, estado civil: ${civilStatus}, profissão: ${profession}`)
       if (formData.clientRG) parts.push(`portador(a) da CI/RG nº ${formData.clientRG}`)
       parts.push(`CPF/MF nº ${formData.clientCPF || '[CPF]'}`)
       parts.push(`residente e domiciliado(a) à ${formData.clientAddress || '[ENDEREÇO]'}`)
@@ -252,7 +310,11 @@ export function substituteClause(
     .replace(/{remainingValue}/g, formatCurrency(formData.remainingValue || '') || '[VALOR RESTANTE]')
     .replace(/{remainingDueDate}/g, formatDate(formData.remainingDueDate || '') || '[DATA RESTANTE]')
     .replace(/{paymentMethod}/g, formData.paymentMethod || '[FORMA DE PAGAMENTO]')
+    .replace(/{paymentConditionText}/g, buildPaymentConditionText(formData))
     .replace(/{cautionValue}/g, formatCurrency(formData.cautionValue || '') || '[VALOR DO CAUÇÃO]')
+    .replace(/{chairCount}/g, String(buildFurnitureText(formData).chairs) || '0')
+    .replace(/{tableCount}/g, String(buildFurnitureText(formData).tables) || '0')
+    .replace(/{benchCount}/g, String(buildFurnitureText(formData).benches) || '20')
     .replace(/{observations}/g, formData.observations || '')
 }
 
@@ -285,7 +347,7 @@ export const DEFAULT_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'QUARTA',
     title: 'DAS CONDIÇÕES DE PAGAMENTO',
     content:
-      'O pagamento será realizado da seguinte forma:\n\na) Entrada/Sinal: {depositValue}, com vencimento em {depositDueDate};\nb) Valor Restante: {remainingValue}, com vencimento em {remainingDueDate};\nc) Forma de pagamento: {paymentMethod}.\n\nO não pagamento nas datas acordadas ensejará a aplicação de multa de 2% (dois por cento) sobre o valor em atraso, acrescida de juros de 1% (um por cento) ao mês.',
+      'O pagamento será realizado da seguinte forma:\n\n{paymentConditionText}\n\nO não pagamento nas datas acordadas ensejará a aplicação de multa de 2% (dois por cento) sobre o valor em atraso, acrescida de juros de 1% (um por cento) ao mês.',
   },
   {
     id: 'sinal',
@@ -367,7 +429,7 @@ export const RANCHO_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'SEGUNDA',
     title: 'DO VALOR E FORMA DE PAGAMENTO',
     content:
-      'O LOCATÁRIO se compromete a pagar ao LOCADOR um aluguel pelo período acima no valor de: {totalValue}. Que serão pagos da seguinte forma: Entrada/sinal de {depositValue}, com vencimento inicial em {depositDueDate}, e saldo remanescente de {remainingValue}, com vencimento em {remainingDueDate}.\n\nForma de pagamento: {paymentMethod}\n\nConta corrente no banco {bankName} ({bankCode}) — agência {bankAgency} — C/C {bankAccount}\nNome: {bankHolder}. CPF: {bankHolderDoc} (Pix)\n\nOs comprovantes deverão ser enviados com identificação (data do evento) no e-mail: {ownerEmail}.\n\nParágrafo primeiro: Se o LOCATÁRIO desistir da locação ou não for possível acordar a alteração prevista no parágrafo único da cláusula primeira, o valor pago como sinal será retido pelo LOCADOR. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao LOCATÁRIO se a desistência se der até 90 (noventa) dias antes da data da locação; se depois deste prazo, a devolução será pela quarta parte.\n\nParágrafo segundo: Fica acordado entre as partes que caso não seja possível a utilização do imóvel locado na data estabelecida na cláusula primeira, por motivo imputável ao LOCADOR, o LOCADOR fará a devolução do valor pago pelo LOCATÁRIO estabelecido no caput desta cláusula.\n\nParágrafo terceiro: É permitido ao LOCATÁRIO, ou preposto seu com procuração e firma reconhecida, desde a véspera até duas horas antes do início da locação, vistoriar o imóvel, para efeitos do parágrafo anterior e cláusula terceira.',
+      'O LOCATÁRIO se compromete a pagar ao LOCADOR um aluguel pelo período acima no valor de: {totalValue}.\n\n{paymentConditionText}\n\nConta corrente no banco {bankName} ({bankCode}) — agência {bankAgency} — C/C {bankAccount}\nNome: {bankHolder}. CPF: {bankHolderDoc} (Pix)\n\nOs comprovantes deverão ser enviados com identificação (data do evento) no e-mail: {ownerEmail}.\n\nParágrafo primeiro: Se o LOCATÁRIO desistir da locação ou não for possível acordar a alteração prevista no parágrafo único da cláusula primeira, o valor pago como sinal será retido pelo LOCADOR. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao LOCATÁRIO se a desistência se der até 90 (noventa) dias antes da data da locação; se depois deste prazo, a devolução será pela quarta parte.\n\nParágrafo segundo: Fica acordado entre as partes que caso não seja possível a utilização do imóvel locado na data estabelecida na cláusula primeira, por motivo imputável ao LOCADOR, o LOCADOR fará a devolução do valor pago pelo LOCATÁRIO estabelecido no caput desta cláusula.\n\nParágrafo terceiro: É permitido ao LOCATÁRIO, ou preposto seu com procuração e firma reconhecida, desde a véspera até duas horas antes do início da locação, vistoriar o imóvel, para efeitos do parágrafo anterior e cláusula terceira.',
   },
   {
     id: 'terceira',
@@ -430,7 +492,7 @@ export const RANCHO_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'DÉCIMA PRIMEIRA',
     title: 'DOS ITENS INCLUSOS E SERVIÇOS NÃO INCLUSOS',
     content:
-      'Findo o prazo convencionado, a renovação não será automática, sendo necessária para tanto a assinatura de novo contrato, sem prejuízo do previsto na cláusula primeira quanto à multa por atraso, bem como a extensão de todas as responsabilidades do LOCATÁRIO previstas neste contrato.\n\nEstão incluídos na locação:\n1. Estacionamento para 120 veículos.\n2. Hall de entrada.\n3. Salão para 300 pessoas.\n4. Varanda coberta com fechamento de toldos.\n5. Pergolado.\n6. Conjunto de bancos de madeira para lounge (2 bancos de um lugar e 1 banco de dois lugares).\n7. Banheiros masculinos com papel higiênico, sabonete líquido e papel toalha.\n8. Banheiros femininos com papel higiênico, sabonete líquido e papel toalha.\n9. Sala de suporte.\n10. Cozinha com pias, dois fogões industriais, forno e gás encanado.\n11. Área externa coberta com churrasqueira, pias, geladeiras, câmara fria e freezer.\n12. Banheiro externo com chuveiro.\n13. Limpeza pré e pós evento.\n14. Iluminação do jardim.\n15. Auxiliar de estacionamento.\n16. Bancos para cerimônia, quantidade de 0 (zero).\n17. Mesas redondas de 1,45 cm, quantidade de 38 (trinta e oito).\n18. Cadeiras almofadadas de rattan, quantidade de 280 (duzentos e oitenta).\n\nParágrafo primeiro: O presente contrato de locação de imóvel não contempla nenhum tipo de prestação de serviço; ficando a cargo e total responsabilidade do LOCATÁRIO a eventual contratação dos serviços que entender necessários, tipo: recepcionistas, manobristas, segurança, vigilância ou qualquer outro.',
+      'Findo o prazo convencionado, a renovação não será automática, sendo necessária para tanto a assinatura de novo contrato, sem prejuízo do previsto na cláusula primeira quanto à multa por atraso, bem como a extensão de todas as responsabilidades do LOCATÁRIO previstas neste contrato.\n\nEstão incluídos na locação:\n1. Estacionamento para 120 veículos.\n2. Hall de entrada.\n3. Salão para 300 pessoas.\n4. Varanda coberta com fechamento de toldos.\n5. Pergolado.\n6. Conjunto de bancos de madeira para lounge (2 bancos de um lugar e 1 banco de dois lugares).\n7. Banheiros masculinos com papel higiênico, sabonete líquido e papel toalha.\n8. Banheiros femininos com papel higiênico, sabonete líquido e papel toalha.\n9. Sala de suporte.\n10. Cozinha com pias, dois fogões industriais, forno e gás encanado.\n11. Área externa coberta com churrasqueira, pias, geladeiras, câmara fria e freezer.\n12. Banheiro externo com chuveiro.\n13. Limpeza pré e pós evento.\n14. Iluminação do jardim.\n15. Auxiliar de estacionamento.\n16. Bancos para cerimônia, quantidade de {benchCount}.\n17. Mesas redondas de 1,45 cm, quantidade de {tableCount}.\n18. Cadeiras almofadadas de rattan, quantidade de {chairCount}.\n\nParágrafo primeiro: O presente contrato de locação de imóvel não contempla nenhum tipo de prestação de serviço; ficando a cargo e total responsabilidade do LOCATÁRIO a eventual contratação dos serviços que entender necessários, tipo: recepcionistas, manobristas, segurança, vigilância ou qualquer outro.',
   },
   {
     id: 'decima-segunda',
@@ -477,14 +539,14 @@ export const ESTANCIA_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'TERCEIRA',
     title: 'DO ALUGUEL',
     content:
-      'O valor do aluguel a ser pago como remuneração pelo uso do pacote escolhido na Cláusula Primeira, fica estipulado no valor de: {totalValue}, que será pago da seguinte forma:\n\nEntrada/Sinal: {depositValue} com vencimento em {depositDueDate}.\nValor Restante: {remainingValue} com vencimento em {remainingDueDate}.\n\n{observations}',
+      'O valor do aluguel a ser pago como remuneração pelo uso do pacote escolhido na Cláusula Primeira, fica estipulado no valor de: {totalValue}, que será pago da seguinte forma:\n\n{paymentConditionText}\n\n{observations}',
   },
   {
     id: 'pagamento',
     number: 'QUARTA',
     title: 'DO PAGAMENTO',
     content:
-      'O Locatário efetuará o pagamento das seguintes formas:\n\n50% do valor na assinatura do contrato a título de reserva, os outros 50% 10 (dez) dias antes de entrar na chácara.\n\nForma de pagamento: {paymentMethod}\n\nÀ vista: Transferência bancária, Depósito em conta, Pix ou Dinheiro.\n\nDados bancários:\nBanco {bankName} ({bankCode}) — Agência: {bankAgency} — C/C: {bankAccount}\nNome: {bankHolder} — CPF: {bankHolderDoc} (Pix: chave CPF)\n\nOu pessoalmente em dinheiro na Chácara {spaceName}.\n\nParágrafo Único: Se o Locatário desistir da locação ou não for possível acordar a alteração prevista neste contrato, o valor pago como sinal será retido pelo locador. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao locatário se a desistência se der até 90 (noventa) dias antes da data da locação.',
+      'O Locatário efetuará o pagamento das seguintes formas:\n\n{paymentConditionText}\n\nDados bancários:\nBanco {bankName} ({bankCode}) — Agência: {bankAgency} — C/C: {bankAccount}\nNome: {bankHolder} — CPF: {bankHolderDoc} (Pix: chave CPF)\n\nOu pessoalmente em dinheiro na Chácara {spaceName}.\n\nParágrafo Único: Se o Locatário desistir da locação ou não for possível acordar a alteração prevista neste contrato, o valor pago como sinal será retido pelo locador. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao locatário se a desistência se der até 90 (noventa) dias antes da data da locação.',
   },
   {
     id: 'caucao',

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
-import { getContractSignature } from '@/app/actions/clicksign'
+import { getContractSignature, cancelContractSignature } from '@/app/actions/clicksign'
 import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
 import { deleteManualContract } from '@/app/actions/manualContracts'
 import { getGeneratedContracts } from '@/app/actions/generatedContracts'
@@ -712,6 +712,26 @@ export default function EventPage() {
                 </a>
               </div>
             )}
+            {contractSignature && contractSignature.status !== 'cancelled' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1 text-red-600 border-red-300 hover:bg-red-50 w-fit"
+                onClick={async () => {
+                  if (!confirm('Cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.')) return
+                  const result = await cancelContractSignature(eventId)
+                  if (result.success) {
+                    await fetchEvent()
+                    setContractSignature(null)
+                  } else {
+                    alert(result.error || 'Erro ao cancelar contrato')
+                  }
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+                Cancelar Contrato
+              </Button>
+            )}
             {(!contractSignature || contractSignature.status === 'cancelled') &&
               (!event.manualContracts || event.manualContracts.length === 0) &&
               generatedContracts.length === 0 && (
@@ -732,13 +752,13 @@ export default function EventPage() {
                     >
                       <FileText className="h-5 w-5 flex-shrink-0 text-blue-500" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
+                        <span className="truncate text-sm font-medium text-foreground flex items-center gap-1">
                           {gc.pdfFileName}
-                          <Badge variant="outline" className="ml-2">v{gc.version}</Badge>
-                          <Badge variant="outline" className="ml-1">
+                          <Badge variant="outline" className="ml-1">v{gc.version}</Badge>
+                          <Badge variant="outline">
                             {gc.generatedVia === 'clicksign' ? 'Clicksign' : 'Download'}
                           </Badge>
-                        </p>
+                        </span>
                         <p className="text-xs text-muted-foreground">
                           {format(new Date(gc.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </p>

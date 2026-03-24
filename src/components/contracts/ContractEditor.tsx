@@ -19,6 +19,7 @@ import {
   Plus,
   Calendar,
   Search,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -28,6 +29,8 @@ import {
   ContractClause,
   ContractFormData,
   SpaceConfig,
+  PaymentConditionType,
+  PaymentInstallment,
   generateContractNumber,
   getDefaultClauseTemplates,
   getInitialClauses,
@@ -64,6 +67,9 @@ const baseSchema = z.object({
   clientName: z.string().min(2, 'Mínimo 2 caracteres'),
   clientCPF: z.string().min(11, 'CPF inválido'),
   clientRG: z.string().optional(),
+  clientNationality: z.string().optional(),
+  clientCivilStatus: z.string().optional(),
+  clientProfession: z.string().optional(),
   clientAddress: z.string().min(5, 'Endereço obrigatório'),
   clientCity: z.string().min(1, 'Obrigatório'),
   clientState: z.string().min(2, 'UF obrigatória'),
@@ -78,12 +84,14 @@ const baseSchema = z.object({
   packageType: z.string().optional(),
   eventCheckoutDate: z.string().optional(),
   totalValue: z.string().min(1, 'Obrigatório'),
-  depositValue: z.string().min(1, 'Obrigatório'),
-  depositDueDate: z.string().min(1, 'Obrigatório'),
+  depositValue: z.string().optional(),
+  depositDueDate: z.string().optional(),
   remainingValue: z.string().optional(),
-  remainingDueDate: z.string().min(1, 'Obrigatório'),
-  paymentMethod: z.string().min(1, 'Obrigatório'),
+  remainingDueDate: z.string().optional(),
+  paymentMethod: z.string().optional(),
+  paymentCondition: z.string().min(1, 'Obrigatório'),
   cautionValue: z.string().optional(),
+  benchCount: z.string().optional(),
   observations: z.string().optional(),
 })
 
@@ -132,13 +140,18 @@ const EVENT_TYPES = [
   'Outro',
 ]
 
-const PAYMENT_METHODS = [
-  'PIX',
-  'Dinheiro',
-  'Transferência bancária',
-  'Cartão de crédito',
-  'Cartão de débito',
-  'Boleto bancário',
+const PAYMENT_CONDITIONS: { value: PaymentConditionType; label: string; description: string }[] = [
+  { value: 'a_vista', label: 'À Vista', description: 'Pago via Pix/Depósito bancário na data da assinatura do contrato' },
+  { value: 'entrada_parcelas', label: 'Entrada + Parcelas', description: '20% no ato do contrato e restante parcelado no Pix até 10 dias antes do evento' },
+  { value: 'cartao_credito', label: 'Cartão de Crédito', description: 'Parcelado no cartão de crédito com juros adicionais da maquininha' },
+]
+
+const CIVIL_STATUS_OPTIONS = [
+  'Solteiro(a)',
+  'Casado(a)',
+  'Divorciado(a)',
+  'Viúvo(a)',
+  'União Estável',
 ]
 
 const PACKAGE_TYPES = [
@@ -443,6 +456,9 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
       clientName: '',
       clientCPF: '',
       clientRG: '',
+      clientNationality: 'Brasileira',
+      clientCivilStatus: '',
+      clientProfession: '',
       clientAddress: '',
       clientCity: '',
       clientState: '',
@@ -462,7 +478,9 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
       remainingValue: '',
       remainingDueDate: '',
       paymentMethod: '',
+      paymentCondition: '',
       cautionValue: '',
+      benchCount: '20',
       observations: '',
     },
   })
@@ -471,9 +489,28 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
   const clientCPFValue = useWatch({ control, name: 'clientCPF' })
   const clientIsCNPJ = isCNPJ(clientCPFValue || '')
 
+  // Payment installments state
+  const [installments, setInstallments] = useState<PaymentInstallment[]>([])
+
   // Auto-calculate remaining value when total or deposit changes
   const totalValue = useWatch({ control, name: 'totalValue' })
   const depositValue = useWatch({ control, name: 'depositValue' })
+  const paymentCondition = useWatch({ control, name: 'paymentCondition' }) as PaymentConditionType
+
+  // Auto-calculate 20% deposit when condition is entrada_parcelas
+  useEffect(() => {
+    if (paymentCondition === 'entrada_parcelas' && totalValue) {
+      const total = parseFloat((totalValue || '').replace(',', '.'))
+      if (!isNaN(total) && total > 0) {
+        const deposit20 = (total * 0.2).toFixed(2).replace('.', ',')
+        setValue('depositValue', deposit20)
+      }
+    }
+    if (paymentCondition === 'a_vista') {
+      setValue('depositValue', totalValue || '')
+      setValue('remainingValue', '0,00')
+    }
+  }, [paymentCondition, totalValue, setValue])
 
   useEffect(() => {
     const total = parseFloat((totalValue || '').replace(',', '.'))
@@ -483,6 +520,9 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
       setValue('remainingValue', remaining.toFixed(2).replace('.', ','))
     }
   }, [totalValue, depositValue, setValue])
+
+  // Auto-calculate bench/chairs/tables from guest count
+  const guestCountValue = useWatch({ control, name: 'guestCount' })
 
   useEffect(() => {
     const loadedStructure = loadClauseStructure(space.id)
@@ -503,7 +543,28 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
   }, [space.id])
 
   const applyFormDataToClauses = useCallback(() => {
-    const formData = getValues() as ContractFormData
+    const v = getValues()
+    const formData: ContractFormData = {
+      ...v,
+      clientRG: v.clientRG ?? '',
+      clientNationality: v.clientNationality ?? '',
+      clientCivilStatus: v.clientCivilStatus ?? '',
+      clientProfession: v.clientProfession ?? '',
+      clientEmail: v.clientEmail ?? '',
+      remainingValue: v.remainingValue ?? '',
+      remainingDueDate: v.remainingDueDate ?? '',
+      depositValue: v.depositValue ?? '',
+      depositDueDate: v.depositDueDate ?? '',
+      paymentMethod: v.paymentMethod ?? '',
+      paymentCondition: (v.paymentCondition || '') as PaymentConditionType,
+      installments,
+      dailyCount: v.dailyCount ?? '',
+      packageType: v.packageType ?? '',
+      eventCheckoutDate: v.eventCheckoutDate ?? '',
+      cautionValue: v.cautionValue ?? '',
+      benchCount: v.benchCount ?? '20',
+      observations: v.observations ?? '',
+    }
     setClauses((prev) =>
       prev.map((clause) => {
         if (clause.edited) return clause
@@ -512,7 +573,7 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
       })
     )
     setClausesApplied(true)
-  }, [getValues, space.id, effectiveSpace])
+  }, [getValues, space.id, effectiveSpace, installments])
 
   const toggleClause = (id: string) => {
     if (expandedId === id) {
@@ -659,12 +720,22 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
     return {
       ...v,
       clientRG: v.clientRG ?? '',
+      clientNationality: v.clientNationality ?? '',
+      clientCivilStatus: v.clientCivilStatus ?? '',
+      clientProfession: v.clientProfession ?? '',
       clientEmail: v.clientEmail ?? '',
       remainingValue: v.remainingValue ?? '',
+      remainingDueDate: v.remainingDueDate ?? '',
+      depositValue: v.depositValue ?? '',
+      depositDueDate: v.depositDueDate ?? '',
+      paymentMethod: v.paymentMethod ?? '',
+      paymentCondition: (v.paymentCondition || '') as PaymentConditionType,
+      installments,
       dailyCount: v.dailyCount ?? '',
       packageType: v.packageType ?? '',
       eventCheckoutDate: v.eventCheckoutDate ?? '',
       cautionValue: v.cautionValue ?? '',
+      benchCount: v.benchCount ?? '20',
       observations: v.observations ?? '',
     }
   }
@@ -850,6 +921,24 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
             <Input {...register('clientEmail')} placeholder="email@exemplo.com" />
           </Field>
         </FieldRow>
+        {!clientIsCNPJ && (
+          <FieldRow>
+            <Field label="Nacionalidade" error={errors.clientNationality?.message}>
+              <Input {...register('clientNationality')} placeholder="Brasileira" />
+            </Field>
+            <Field label="Estado Civil" error={errors.clientCivilStatus?.message}>
+              <select {...register('clientCivilStatus')} className={selectClass}>
+                <option value="">Selecione...</option>
+                {CIVIL_STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Profissão" error={errors.clientProfession?.message}>
+              <Input {...register('clientProfession')} placeholder="Engenheiro, Professor..." />
+            </Field>
+          </FieldRow>
+        )}
         <FieldRow>
           <Field label="Endereço Completo *" error={errors.clientAddress?.message} className="sm:col-span-2">
             <Input {...register('clientAddress')} placeholder="Rua Exemplo, 123 — Bairro" />
@@ -892,11 +981,26 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
           </Field>
         </FieldRow>
         {space.id === 'rancho-aveiro' && (
-          <FieldRow>
-            <Field label="Data de Saída *" error={errors.eventCheckoutDate?.message}>
-              <Input type="date" {...register('eventCheckoutDate')} />
-            </Field>
-          </FieldRow>
+          <>
+            <FieldRow>
+              <Field label="Data de Saída *" error={errors.eventCheckoutDate?.message}>
+                <Input type="date" {...register('eventCheckoutDate')} />
+              </Field>
+              <Field label="Bancos p/ Cerimônia">
+                <Input type="number" {...register('benchCount')} placeholder="20" min="0" />
+              </Field>
+            </FieldRow>
+            {guestCountValue && parseInt(guestCountValue) > 0 && (
+              <div className="mt-2 p-3 bg-[var(--secondary)] rounded-lg">
+                <p className="text-xs font-medium text-[var(--muted-foreground)] mb-1">Itens calculados automaticamente (Cláusula 11ª):</p>
+                <div className="flex gap-4 text-xs text-[var(--foreground)]">
+                  <span>Cadeiras: <strong>{parseInt(guestCountValue)}</strong></span>
+                  <span>Mesas: <strong>{Math.ceil(parseInt(guestCountValue) / 8)}</strong></span>
+                  <span>Bancos cerimônia: <strong>{parseInt(getValues().benchCount || '20') || 20}</strong></span>
+                </div>
+              </div>
+            )}
+          </>
         )}
         {requiresExtendedEventData && (
           <FieldRow>
@@ -931,43 +1035,7 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
               }}
             />
           </Field>
-          <Field label="Valor da Entrada (R$) *" error={errors.depositValue?.message}>
-            <Input
-              {...register('depositValue')}
-              placeholder="2000,00"
-              onBlur={(e) => {
-                const v = parseFloat(e.target.value.replace(',', '.'))
-                if (!isNaN(v)) setValue('depositValue', v.toFixed(2).replace('.', ','))
-              }}
-            />
-          </Field>
-          <Field label="Valor Restante (R$)" error={errors.remainingValue?.message}>
-            <Input
-              {...register('remainingValue')}
-              placeholder="auto-calculado"
-              readOnly
-              className="bg-[var(--secondary)] text-[var(--muted-foreground)] cursor-default"
-            />
-          </Field>
-        </FieldRow>
-        <FieldRow>
-          <Field label="Vencimento da Entrada *" error={errors.depositDueDate?.message}>
-            <Input type="date" {...register('depositDueDate')} />
-          </Field>
-          <Field label="Vencimento do Restante *" error={errors.remainingDueDate?.message}>
-            <Input type="date" {...register('remainingDueDate')} />
-          </Field>
-          <Field label="Forma de Pagamento *" error={errors.paymentMethod?.message}>
-            <select {...register('paymentMethod')} className={selectClass}>
-              <option value="">Selecione...</option>
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </Field>
-        </FieldRow>
-        {requiresExtendedEventData && (
-          <FieldRow>
+          {requiresExtendedEventData && (
             <Field label="Valor do Caução (R$) *" error={errors.cautionValue?.message}>
               <Input
                 {...register('cautionValue')}
@@ -978,7 +1046,165 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
                 }}
               />
             </Field>
-          </FieldRow>
+          )}
+        </FieldRow>
+
+        {/* Payment Condition Selector */}
+        <div className="mt-4">
+          <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-2 block">Condição de Pagamento *</Label>
+          {errors.paymentCondition && (
+            <p className="text-xs text-[var(--destructive)] mb-2 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {errors.paymentCondition.message}
+            </p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {PAYMENT_CONDITIONS.map((pc) => (
+              <button
+                key={pc.value}
+                type="button"
+                onClick={() => {
+                  setValue('paymentCondition', pc.value, { shouldValidate: true })
+                  if (pc.value !== 'entrada_parcelas') {
+                    setInstallments([])
+                  }
+                  setClausesApplied(false)
+                }}
+                className={`text-left p-3 rounded-lg border-2 transition-all ${
+                  paymentCondition === pc.value
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/5'
+                    : 'border-[var(--border)] hover:border-[var(--muted-foreground)]/30'
+                }`}
+              >
+                <p className="text-sm font-medium text-[var(--foreground)]">{pc.label}</p>
+                <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{pc.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Condition-specific fields */}
+        {paymentCondition === 'a_vista' && (
+          <div className="mt-4 p-4 bg-[var(--secondary)] rounded-lg">
+            <p className="text-xs text-[var(--muted-foreground)] mb-3">Pagamento integral via Pix/Depósito na assinatura do contrato.</p>
+            <FieldRow>
+              <Field label="Data do Pagamento">
+                <Input type="date" {...register('depositDueDate')} />
+              </Field>
+            </FieldRow>
+          </div>
+        )}
+
+        {paymentCondition === 'entrada_parcelas' && (
+          <div className="mt-4 p-4 bg-[var(--secondary)] rounded-lg space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Entrada (20%) (R$)">
+                <Input
+                  {...register('depositValue')}
+                  placeholder="auto-calculado"
+                  readOnly
+                  className="bg-[var(--input-bg)] text-[var(--muted-foreground)] cursor-default"
+                />
+              </Field>
+              <Field label="Data da Entrada">
+                <Input type="date" {...register('depositDueDate')} />
+              </Field>
+              <Field label="Saldo Restante (R$)">
+                <Input
+                  {...register('remainingValue')}
+                  placeholder="auto-calculado"
+                  readOnly
+                  className="bg-[var(--input-bg)] text-[var(--muted-foreground)] cursor-default"
+                />
+              </Field>
+            </div>
+
+            {/* Installments */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs font-medium text-[var(--muted-foreground)]">Parcelas do Saldo Restante</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setInstallments((prev) => [...prev, { date: '', value: '' }])
+                    setClausesApplied(false)
+                  }}
+                  className="gap-1 text-xs h-7"
+                >
+                  <Plus className="h-3 w-3" />
+                  Adicionar parcela
+                </Button>
+              </div>
+
+              {installments.length === 0 && (
+                <p className="text-xs text-[var(--muted-foreground)] italic py-2">
+                  Nenhuma parcela adicionada. Clique em &ldquo;Adicionar parcela&rdquo; para definir as parcelas.
+                </p>
+              )}
+
+              {installments.map((inst, i) => (
+                <div key={i} className="flex items-end gap-3 mb-2">
+                  <div className="flex-shrink-0 w-8 h-9 flex items-center justify-center">
+                    <span className="text-xs font-bold text-[var(--muted-foreground)]">{i + 1}ª</span>
+                  </div>
+                  <Field label={i === 0 ? 'Valor (R$)' : ''} className="flex-1">
+                    <Input
+                      value={inst.value}
+                      placeholder="1000,00"
+                      onChange={(e) => {
+                        const next = [...installments]
+                        next[i] = { ...next[i], value: e.target.value }
+                        setInstallments(next)
+                        setClausesApplied(false)
+                      }}
+                      onBlur={(e) => {
+                        const v = parseFloat(e.target.value.replace(',', '.'))
+                        if (!isNaN(v)) {
+                          const next = [...installments]
+                          next[i] = { ...next[i], value: v.toFixed(2).replace('.', ',') }
+                          setInstallments(next)
+                        }
+                      }}
+                    />
+                  </Field>
+                  <Field label={i === 0 ? 'Vencimento' : ''} className="flex-1">
+                    <Input
+                      type="date"
+                      value={inst.date}
+                      onChange={(e) => {
+                        const next = [...installments]
+                        next[i] = { ...next[i], date: e.target.value }
+                        setInstallments(next)
+                        setClausesApplied(false)
+                      }}
+                    />
+                  </Field>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setInstallments((prev) => prev.filter((_, idx) => idx !== i))
+                      setClausesApplied(false)
+                    }}
+                    className="h-9 w-9 p-0 text-[var(--destructive)] flex-shrink-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {paymentCondition === 'cartao_credito' && (
+          <div className="mt-4 p-4 bg-[var(--secondary)] rounded-lg">
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Pagamento parcelado no cartão de crédito com juros adicionais da maquininha.
+            </p>
+          </div>
         )}
       </SectionCard>
 

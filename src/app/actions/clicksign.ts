@@ -159,6 +159,57 @@ export async function sendContractToClicksign(params: SendContractParams) {
   }
 }
 
+// ── Cancelar contrato no Clicksign ──────────────────────────────────────────
+
+export async function cancelContractSignature(eventId: number) {
+  try {
+    const signature = await prisma.contractSignature.findFirst({
+      where: {
+        eventId,
+        status: { notIn: ['cancelled'] },
+      },
+    })
+
+    if (!signature) {
+      return { success: false, error: 'Nenhum contrato ativo encontrado para este evento' }
+    }
+
+    // Só tenta cancelar no Clicksign se o documento ainda não foi assinado/fechado
+    if (!['signed', 'closed'].includes(signature.status)) {
+      try {
+        await clicksign.cancelDocument(signature.documentKey)
+      } catch (err) {
+        console.error('Erro ao cancelar no Clicksign (continuando cancelamento local):', err)
+      }
+    }
+
+    // Atualiza status local
+    await prisma.$transaction([
+      prisma.contractSignature.update({
+        where: { id: signature.id },
+        data: { status: 'cancelled' },
+      }),
+      prisma.event.update({
+        where: { id: eventId },
+        data: { contractStatus: 'not_sent' },
+      }),
+    ])
+
+    revalidatePath('/')
+    revalidatePath('/events')
+    revalidatePath(`/events/${eventId}`)
+    revalidatePath('/contracts')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Erro ao cancelar contrato:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro ao cancelar contrato',
+    }
+  }
+}
+
 // ── Buscar assinatura do contrato ───────────────────────────────────────────
 
 export async function getContractSignature(eventId: number) {

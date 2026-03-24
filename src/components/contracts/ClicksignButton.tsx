@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { pdf } from '@react-pdf/renderer'
-import { Send, Loader2, CheckCircle2, ExternalLink, AlertCircle } from 'lucide-react'
+import { Send, Loader2, CheckCircle2, ExternalLink, AlertCircle, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import {
   ContractClause,
@@ -12,7 +12,7 @@ import {
 } from '@/lib/contractTemplates'
 import { ContractPDFDocument } from './ContractPDF'
 import { ContractStatusBadge } from './ContractStatusBadge'
-import { sendContractToClicksign } from '@/app/actions/clicksign'
+import { sendContractToClicksign, cancelContractSignature } from '@/app/actions/clicksign'
 
 interface ExistingSignature {
   status: string
@@ -46,7 +46,32 @@ export default function ClicksignButton({
 
   const isAlreadySent =
     existingSignature &&
-    ['sent_whatsapp', 'signed', 'closed'].includes(existingSignature.status)
+    ['sent_whatsapp', 'signed', 'closed', 'uploaded', 'signer_added'].includes(existingSignature.status)
+  const [cancelling, setCancelling] = useState(false)
+
+  const handleCancel = async () => {
+    if (!eventId) return
+    if (!confirm('Tem certeza que deseja cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.')) return
+    setCancelling(true)
+    try {
+      const result = await cancelContractSignature(eventId)
+      if (result.success) {
+        setState('idle')
+        setError(null)
+        setSigningUrl(null)
+        // Force page reload to refresh existingSignature
+        window.location.reload()
+      } else {
+        setError(result.error || 'Erro ao cancelar contrato')
+        setState('error')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar')
+      setState('error')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   const handleSend = async () => {
     if (!eventId) return
@@ -109,19 +134,36 @@ export default function ClicksignButton({
   // Se já foi enviado, mostra status
   if (isAlreadySent) {
     return (
-      <div className="flex items-center gap-3">
-        <ContractStatusBadge status={existingSignature!.status} />
-        {existingSignature!.signingUrl && (
-          <a
-            href={existingSignature!.signingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Link de assinatura
-          </a>
-        )}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          <ContractStatusBadge status={existingSignature!.status} />
+          {existingSignature!.signingUrl && (
+            <a
+              href={existingSignature!.signingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Link de assinatura
+            </a>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleCancel}
+          disabled={cancelling}
+          className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-50 w-fit"
+        >
+          {cancelling ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <XCircle className="h-3 w-3" />
+          )}
+          {cancelling ? 'Cancelando...' : 'Cancelar e Reenviar'}
+        </Button>
       </div>
     )
   }

@@ -113,6 +113,21 @@ export async function addSignerToDocument(
   }
 }
 
+// ── Cancel Document ─────────────────────────────────────────────────────────
+
+export async function cancelDocument(documentKey: string): Promise<void> {
+  const url = `${getBaseUrl()}/documents/${documentKey}/cancel?access_token=${getToken()}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { Accept: 'application/json' },
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Clicksign cancel error (${res.status}): ${text}`)
+  }
+}
+
 // ── Notify by WhatsApp ──────────────────────────────────────────────────────
 
 export async function notifyByWhatsapp(requestSignatureKey: string): Promise<void> {

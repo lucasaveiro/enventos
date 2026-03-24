@@ -23,12 +23,15 @@ import {
   CreditCard,
   Upload,
   ExternalLink,
+  Edit3,
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
 import { getContractSignature } from '@/app/actions/clicksign'
 import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
 import { deleteManualContract } from '@/app/actions/manualContracts'
+import { getGeneratedContracts } from '@/app/actions/generatedContracts'
+import { getContractSpaceSlug } from '@/lib/contractTemplates'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
@@ -128,6 +131,7 @@ export default function EventPage() {
   const [isMarkPaidModalOpen, setIsMarkPaidModalOpen] = useState(false)
   const [isEditInstallmentModalOpen, setIsEditInstallmentModalOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null)
+  const [generatedContracts, setGeneratedContracts] = useState<any[]>([])
   const [isUploadContractModalOpen, setIsUploadContractModalOpen] = useState(false)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
   const [isInterestDatesModalOpen, setIsInterestDatesModalOpen] = useState(false)
@@ -153,10 +157,11 @@ export default function EventPage() {
 
     const loadEvent = async () => {
       await checkOverdueInstallments()
-      const [eventRes, txRes, contractRes] = await Promise.all([
+      const [eventRes, txRes, contractRes, genContractRes] = await Promise.all([
         getEventById(eventId),
         getTransactionsByEventId(eventId),
         getContractSignature(eventId),
+        getGeneratedContracts(eventId),
       ])
       if (!eventRes.success || !eventRes.data) {
         setErrorMessage('Esse evento nao esta mais disponivel.')
@@ -165,6 +170,7 @@ export default function EventPage() {
       }
       if (txRes.success && txRes.data) setTransactions(txRes.data)
       if (contractRes.success && contractRes.data) setContractSignature(contractRes.data)
+      if (genContractRes.success && genContractRes.data) setGeneratedContracts(genContractRes.data)
       setIsLoading(false)
     }
 
@@ -657,15 +663,25 @@ export default function EventPage() {
                 <FileText className="h-5 w-5 text-muted-foreground" />
                 <CardTitle>Contrato</CardTitle>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1"
-                onClick={() => setIsUploadContractModalOpen(true)}
-              >
-                <Upload className="h-4 w-4" />
-                Upload PDF
-              </Button>
+              <div className="flex items-center gap-2">
+                {event.spaceId && (
+                  <Link href={`/contracts/${getContractSpaceSlug(event.spaceId)}?eventId=${eventId}`}>
+                    <Button size="sm" variant="outline" className="gap-1">
+                      <FileText className="h-4 w-4" />
+                      Gerar Contrato
+                    </Button>
+                  </Link>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => setIsUploadContractModalOpen(true)}
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload PDF
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -697,14 +713,56 @@ export default function EventPage() {
               </div>
             )}
             {(!contractSignature || contractSignature.status === 'cancelled') &&
-              (!event.manualContracts || event.manualContracts.length === 0) && (
+              (!event.manualContracts || event.manualContracts.length === 0) &&
+              generatedContracts.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                Use a pagina de{' '}
-                <Link href="/contracts" className="text-blue-600 hover:underline">
-                  Contratos
-                </Link>{' '}
-                para gerar e enviar o contrato, ou faca upload de um PDF manualmente.
+                Use o botão &ldquo;Gerar Contrato&rdquo; acima ou faça upload de um PDF manualmente.
               </p>
+            )}
+
+            {/* Generated contracts list */}
+            {generatedContracts.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-foreground">Contratos Gerados</h4>
+                <div className="space-y-2">
+                  {generatedContracts.map((gc: any) => (
+                    <div
+                      key={gc.id}
+                      className="flex items-center gap-3 rounded-lg border border-border bg-secondary/20 p-3"
+                    >
+                      <FileText className="h-5 w-5 flex-shrink-0 text-blue-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {gc.pdfFileName}
+                          <Badge variant="outline" className="ml-2">v{gc.version}</Badge>
+                          <Badge variant="outline" className="ml-1">
+                            {gc.generatedVia === 'clicksign' ? 'Clicksign' : 'Download'}
+                          </Badge>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(gc.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={gc.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+                          title="Visualizar PDF"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <Link href={`/contracts/${gc.spaceId}?eventId=${eventId}&contractId=${gc.id}`}>
+                          <Button variant="ghost" size="icon" title="Editar contrato">
+                            <Edit3 className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* Manual contracts list */}

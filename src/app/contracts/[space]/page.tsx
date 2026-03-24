@@ -4,7 +4,7 @@ import { ContractEditor } from '@/components/contracts/ContractEditor'
 
 interface Props {
   params: Promise<{ space: string }>
-  searchParams: Promise<{ eventId?: string }>
+  searchParams: Promise<{ eventId?: string; contractId?: string }>
 }
 
 export async function generateStaticParams() {
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function ContractSpacePage({ params, searchParams }: Props) {
   const { space: spaceId } = await params
-  const { eventId } = await searchParams
+  const { eventId, contractId } = await searchParams
   const space = SPACES[spaceId]
 
   if (!space) notFound()
@@ -29,6 +29,7 @@ export default async function ContractSpacePage({ params, searchParams }: Props)
     <ContractEditor
       space={space}
       eventId={eventId ? Number(eventId) : undefined}
+      loadContractId={contractId ? Number(contractId) : undefined}
     />
   )
 }

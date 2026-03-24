@@ -66,6 +66,7 @@ model Event {
   contractSignatures  ContractSignature[]
   installments        PaymentInstallment[]
   manualContracts     ManualContract[]
+  generatedContracts  GeneratedContract[]
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -210,6 +211,31 @@ model PaymentInstallment {
   @@index([eventId])
   @@index([dueDate])
   @@index([status])
+}
+
+model GeneratedContract {
+  id                  Int      @id @default(autoincrement())
+  version             Int      @default(1)
+  contractNumber      String
+  spaceId             String
+
+  formData            Json
+  clauses             Json
+  contractorOverrides Json?
+
+  pdfUrl              String
+  pdfFileName         String
+
+  generatedVia        String   @default("download") // "download" or "clicksign"
+
+  eventId             Int
+  event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([contractNumber])
 }
 
 model ManualContract {

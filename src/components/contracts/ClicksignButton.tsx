@@ -26,6 +26,7 @@ interface Props {
   isValid?: boolean
   eventId: number | null
   existingSignature?: ExistingSignature | null
+  onAfterGenerate?: (pdfBlob: Blob, formData: ContractFormData, finalClauses: ContractClause[]) => void
 }
 
 type SendState = 'idle' | 'generating' | 'sending' | 'success' | 'error'
@@ -37,6 +38,7 @@ export default function ClicksignButton({
   isValid,
   eventId,
   existingSignature,
+  onAfterGenerate,
 }: Props) {
   const [state, setState] = useState<SendState>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -92,6 +94,7 @@ export default function ClicksignButton({
       if (result.success) {
         setState('success')
         setSigningUrl(result.data?.signingUrl || null)
+        if (onAfterGenerate) onAfterGenerate(blob, formData, finalClauses)
       } else {
         setState('error')
         setError(result.error || 'Erro ao enviar contrato')

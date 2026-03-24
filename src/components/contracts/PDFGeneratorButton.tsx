@@ -12,9 +12,10 @@ interface Props {
   clauses: ContractClause[]
   getFormData: () => ContractFormData
   isValid?: boolean
+  onAfterGenerate?: (pdfBlob: Blob, formData: ContractFormData, finalClauses: ContractClause[]) => void
 }
 
-export default function PDFGeneratorButton({ space, clauses, getFormData, isValid }: Props) {
+export default function PDFGeneratorButton({ space, clauses, getFormData, isValid, onAfterGenerate }: Props) {
   const [loading, setLoading] = useState(false)
 
   const handleGenerate = async () => {
@@ -39,6 +40,8 @@ export default function PDFGeneratorButton({ space, clauses, getFormData, isVali
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+
+      if (onAfterGenerate) onAfterGenerate(blob, formData, finalClauses)
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
       alert('Ocorreu um erro ao gerar o PDF. Verifique os dados e tente novamente.')

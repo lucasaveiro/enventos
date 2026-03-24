@@ -140,6 +140,16 @@ export const SPACES: Record<string, SpaceConfig> = {
   },
 }
 
+// Map database Space.id (int) to contract template space slug
+const SPACE_DB_TO_SLUG: Record<number, string> = {
+  1: 'rancho-aveiro',   // "Salão de Festas" in DB
+  2: 'estancia-aveiro', // "Chácara" in DB
+}
+
+export function getContractSpaceSlug(dbSpaceId: number): string {
+  return SPACE_DB_TO_SLUG[dbSpaceId] || 'rancho-aveiro'
+}
+
 export function isCNPJ(doc: string): boolean {
   const digits = (doc || '').replace(/\D/g, '')
   return digits.length >= 14 || doc.includes('/')

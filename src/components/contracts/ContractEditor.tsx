@@ -38,6 +38,7 @@ import {
   isCNPJ,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
+import { saveGeneratedContract, getGeneratedContractById } from '@/app/actions/generatedContracts'
 import { ContractStatusBadge } from './ContractStatusBadge'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
@@ -126,6 +127,7 @@ type FormValues = z.infer<typeof baseSchema>
 interface Props {
   space: SpaceConfig
   eventId?: number
+  loadContractId?: number
 }
 
 const EVENT_TYPES = [
@@ -373,7 +375,7 @@ interface EventOption {
   deposit: number
 }
 
-export function ContractEditor({ space, eventId: initialEventId }: Props) {
+export function ContractEditor({ space, eventId: initialEventId, loadContractId }: Props) {
   const requiresExtendedEventData = space.id === 'estancia-aveiro'
   const requiresCheckoutDate = requiresExtendedEventData || space.id === 'rancho-aveiro'
   const schema = useMemo(
@@ -536,6 +538,106 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
     setPendingRemovalClauseId(null)
     setContractorOverrides(loadContractorOverrides(space.id))
   }, [space.id])
+
+  // ─── Load existing generated contract for editing ─────────────────────
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!loadContractId) return
+    let cancelled = false
+    getGeneratedContractById(loadContractId).then((result) => {
+      if (cancelled || !result.success || !result.data) return
+      const saved = result.data
+      const savedFormData = saved.formData as Record<string, unknown>
+      const savedClauses = saved.clauses as unknown as ContractClause[]
+      const savedOverrides = saved.contractorOverrides as unknown as ContractorOverrides | null
+
+      // Restore form fields
+      const formKeys = [
+        'contractNumber', 'contractDate',
+        'clientName', 'clientCPF', 'clientRG', 'clientNationality', 'clientCivilStatus', 'clientProfession',
+        'clientAddress', 'clientCity', 'clientState', 'clientPhone', 'clientEmail',
+        'eventDate', 'eventStartTime', 'eventEndTime', 'eventType', 'guestCount',
+        'dailyCount', 'packageType', 'eventCheckoutDate',
+        'totalValue', 'depositValue', 'depositDueDate', 'remainingValue', 'remainingDueDate',
+        'paymentMethod', 'paymentCondition', 'cautionValue', 'benchCount', 'observations',
+      ]
+      for (const key of formKeys) {
+        if (savedFormData[key] !== undefined && savedFormData[key] !== null) {
+          setValue(key as keyof FormValues, savedFormData[key] as string, { shouldValidate: true })
+        }
+      }
+
+      // Restore installments
+      if (Array.isArray(savedFormData.installments)) {
+        setInstallments(savedFormData.installments as PaymentInstallment[])
+      }
+
+      // Restore clauses
+      if (Array.isArray(savedClauses) && savedClauses.length > 0) {
+        setClauses(savedClauses)
+        setClausesApplied(true)
+      }
+
+      // Restore contractor overrides
+      if (savedOverrides) {
+        setContractorOverrides(savedOverrides)
+      }
+
+      // Select the linked event
+      setSelectedEventId(saved.eventId)
+    })
+    return () => { cancelled = true }
+  }, [loadContractId, setValue])
+
+  // ─── Save handler for after PDF generation ────────────────────────────
+  const handleSaveContract = useCallback(async (
+    pdfBlob: Blob,
+    formData: ContractFormData,
+    finalClauses: ContractClause[],
+    generatedVia: 'download' | 'clicksign'
+  ) => {
+    if (!selectedEventId) return
+    setIsSaving(true)
+    setSaveMessage(null)
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(pdfBlob)
+      })
+
+      const result = await saveGeneratedContract({
+        eventId: selectedEventId,
+        spaceId: space.id,
+        contractNumber: formData.contractNumber,
+        formData: formData as unknown as Record<string, unknown>,
+        clauses: finalClauses as unknown as Array<Record<string, unknown>>,
+        contractorOverrides: Object.keys(contractorOverrides).length > 0 ? contractorOverrides as unknown as Record<string, unknown> : undefined,
+        pdfBase64: base64,
+        generatedVia,
+      })
+
+      if (result.success) {
+        setSaveMessage(`Contrato v${result.data?.version} salvo no evento`)
+        setTimeout(() => setSaveMessage(null), 5000)
+      }
+    } catch (err) {
+      console.error('Erro ao salvar contrato:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [selectedEventId, space.id, contractorOverrides])
+
+  const handleAfterDownload = useCallback((blob: Blob, formData: ContractFormData, clauses: ContractClause[]) => {
+    handleSaveContract(blob, formData, clauses, 'download')
+  }, [handleSaveContract])
+
+  const handleAfterClicksign = useCallback((blob: Blob, formData: ContractFormData, clauses: ContractClause[]) => {
+    handleSaveContract(blob, formData, clauses, 'clicksign')
+  }, [handleSaveContract])
 
   const persistClauseStructure = useCallback((nextStructure: PersistedClauseStructure) => {
     setClauseStructure(nextStructure)
@@ -1493,6 +1595,7 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
             clauses={clauses}
             getFormData={getFormDataForPDF}
             isValid={isValid}
+            onAfterGenerate={handleAfterDownload}
           />
           <ClicksignButton
             space={effectiveSpace}
@@ -1501,8 +1604,25 @@ export function ContractEditor({ space, eventId: initialEventId }: Props) {
             isValid={isValid}
             eventId={selectedEventId}
             existingSignature={existingSignature}
+            onAfterGenerate={handleAfterClicksign}
           />
         </div>
+        {(isSaving || saveMessage) && (
+          <div className="flex items-center gap-2 mt-2">
+            {isSaving && (
+              <span className="text-xs text-[var(--muted-foreground)] flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Salvando contrato no evento...
+              </span>
+            )}
+            {saveMessage && (
+              <span className="text-xs text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                {saveMessage}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

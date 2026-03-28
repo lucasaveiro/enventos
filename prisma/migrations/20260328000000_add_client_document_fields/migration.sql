@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Client" ADD COLUMN "cpf" TEXT;
+ALTER TABLE "Client" ADD COLUMN "rg" TEXT;
+ALTER TABLE "Client" ADD COLUMN "address" TEXT;
+ALTER TABLE "Client" ADD COLUMN "city" TEXT;
+ALTER TABLE "Client" ADD COLUMN "state" TEXT;

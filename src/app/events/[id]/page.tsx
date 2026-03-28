@@ -807,7 +807,7 @@ export default function EventPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <a
-                          href={mc.fileUrl}
+                          href={`/api/contracts/${mc.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={buttonVariants({ variant: 'ghost', size: 'icon' })}

@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
+import { createEventSchema, updateEventSchema } from '@/lib/validations'
 
 type EventCategory = 'event' | 'visit' | 'proposal'
 
@@ -70,7 +71,12 @@ export async function createEvent(data: {
   professionalIds?: number[]
 }) {
   try {
-    const { professionalIds, category, ...eventData } = data
+    const parsed = createEventSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
+    const { professionalIds, category, ...eventData } = parsed.data
 
     const event = await prisma.event.create({
       data: {
@@ -115,7 +121,12 @@ export async function updateEvent(id: number, data: Partial<{
     professionalIds?: number[]
 }>) {
     try {
-        const { professionalIds, ...eventData } = data
+        const parsed = updateEventSchema.safeParse(data)
+        if (!parsed.success) {
+            return { success: false, error: 'Dados invalidos' }
+        }
+
+        const { professionalIds, ...eventData } = parsed.data
         const updateData: typeof eventData & {
             professionals?: {
                 deleteMany: Record<string, never>

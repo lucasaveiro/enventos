@@ -14,6 +14,8 @@ function LoginForm() {
       ? "Senha incorreta."
       : error === "config"
       ? "Servidor não configurado. Contate o administrador."
+      : error === "ratelimit"
+      ? "Muitas tentativas. Tente novamente em 15 minutos."
       : null;
 
   return (

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, CalendarDays, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText, X, CalendarClock } from 'lucide-react'
+import { Calendar, CalendarDays, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText, X, CalendarClock, LogOut, FilePlus2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -75,6 +75,18 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </button>
         </div>
 
+        {/* New Contract Button */}
+        <div className="px-3 pt-4">
+          <Link
+            href="/contracts/new"
+            onClick={handleLinkClick}
+            className="flex items-center justify-center gap-2 w-full rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md"
+          >
+            <FilePlus2 className="h-5 w-5" />
+            Novo Contrato Fechado
+          </Link>
+        </div>
+
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto">
           <p className="px-3 mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--sidebar-text-muted)' }}>
@@ -136,6 +148,17 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
               <p className="text-sm font-medium text-white truncate">Gestão de Espaços</p>
               <p className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>v1.0.0</p>
             </div>
+            <button
+              onClick={async () => {
+                await fetch('/api/auth/login', { method: 'DELETE' })
+                window.location.href = '/login'
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+              title="Sair"
+              aria-label="Sair do sistema"
+            >
+              <LogOut className="h-4 w-4 text-white/60" />
+            </button>
           </div>
         </div>
       </div>

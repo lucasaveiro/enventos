@@ -14,22 +14,28 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text()
 
-    // Validação HMAC (se configurado)
+    // Validação HMAC (obrigatória)
     const hmacKey = process.env.CLICKSIGN_WEBHOOK_HMAC_KEY
-    if (hmacKey) {
-      const signature =
-        request.headers.get('content-hmac') ||
-        request.headers.get('x-clicksign-signature') ||
-        ''
+    if (!hmacKey) {
+      console.error('Webhook Clicksign: CLICKSIGN_WEBHOOK_HMAC_KEY não configurado')
+      return NextResponse.json(
+        { error: 'Webhook verification not configured' },
+        { status: 500 }
+      )
+    }
 
-      // O header vem como "sha256=<hex>" — extrai só o hex
-      const hexSignature = signature.replace(/^sha256=/, '')
+    const signatureHeader =
+      request.headers.get('content-hmac') ||
+      request.headers.get('x-clicksign-signature') ||
+      ''
 
-      const isValid = await verifyWebhookSignature(rawBody, hexSignature, hmacKey)
-      if (!isValid) {
-        console.error('Webhook Clicksign: assinatura HMAC inválida')
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-      }
+    // O header vem como "sha256=<hex>" — extrai só o hex
+    const hexSignature = signatureHeader.replace(/^sha256=/, '')
+
+    const isValid = await verifyWebhookSignature(rawBody, hexSignature, hmacKey)
+    if (!isValid) {
+      console.error('Webhook Clicksign: assinatura HMAC inválida')
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
     const payload: ClicksignWebhookPayload = JSON.parse(rawBody)

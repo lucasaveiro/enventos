@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type { Prisma } from '@prisma/client'
 import { addDays, endOfDay, startOfDay } from 'date-fns'
+import { createTransactionSchema, updateTransactionSchema } from '@/lib/validations'
 
 const SERVICE_PENDING_CATEGORIES = new Set([
   'service_cost',
@@ -651,12 +652,18 @@ export async function createTransaction(data: {
   serviceTaskId?: number | null
 }) {
   try {
-    const status = data.status ?? 'paid'
-    const paidAt = status === 'paid' ? data.paidAt ?? new Date(data.date) : null
+    const parsed = createTransactionSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
+    const validData = parsed.data
+    const status = validData.status ?? 'paid'
+    const paidAt = status === 'paid' ? validData.paidAt ?? new Date(validData.date) : null
 
     const transaction = await prisma.transaction.create({
       data: {
-        ...data,
+        ...validData,
         status,
         paidAt,
       },
@@ -699,12 +706,17 @@ export async function updateTransaction(
   }>
 ) {
   try {
+    const parsed = updateTransactionSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const existingTransaction = await prisma.transaction.findUnique({
       where: { id },
       select: { eventId: true, type: true },
     })
 
-    const updateData: Prisma.TransactionUpdateInput = { ...data }
+    const updateData: Prisma.TransactionUpdateInput = { ...parsed.data }
     if (data.status === 'paid' && !data.paidAt) {
       updateData.paidAt = new Date()
     }

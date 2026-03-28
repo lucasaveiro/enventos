@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { createServiceTaskSchema, updateServiceTaskSchema } from '@/lib/validations'
 
 export async function getServiceTypes() {
   try {
@@ -77,8 +78,13 @@ export async function createServiceTask(data: {
   eventId?: number | null
 }) {
   try {
+    const parsed = createServiceTaskSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const task = await prisma.serviceTask.create({
-      data,
+      data: parsed.data,
     })
     revalidatePath('/')
     revalidatePath('/services')
@@ -103,9 +109,14 @@ export async function updateServiceTask(
   }
 ) {
   try {
+    const parsed = updateServiceTaskSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const task = await prisma.serviceTask.update({
       where: { id },
-      data,
+      data: parsed.data,
     })
     revalidatePath('/')
     revalidatePath('/services')

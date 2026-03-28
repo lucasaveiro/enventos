@@ -78,14 +78,14 @@ export function DashboardCalendar() {
     if (eventsResult.success && eventsResult.data) {
         eventsResult.data.forEach((e: any) => {
             const category = e.category || 'event'
-            const prefix = category === 'visit'
-              ? 'Visita'
+            const title = category === 'visit'
+              ? `Visita - ${e.space.name}`
               : category === 'proposal'
-                ? 'Enviar Proposta'
-                : e.space.name
+                ? `Enviar Proposta - ${e.space.name}`
+                : `${e.space.name} - ${e.title}`
             calendarEvents.push({
                 id: e.id,
-                title: `${prefix} - ${e.title}`,
+                title,
                 start: new Date(e.start),
                 end: new Date(e.end),
                 type: 'event',

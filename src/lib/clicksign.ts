@@ -14,6 +14,9 @@ function getToken(): string {
   return token
 }
 
+// NOTE: Clicksign API v1 only supports access_token as a query parameter.
+// This is not ideal (tokens in URLs can appear in server logs), but it is
+// the only auth method the API supports. No Authorization header option available.
 async function request<T>(path: string, body: unknown): Promise<T> {
   const url = `${getBaseUrl()}${path}?access_token=${getToken()}`
   const res = await fetch(url, {
@@ -142,11 +145,15 @@ export async function verifyWebhookSignature(
     encoder.encode(hmacKey),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['sign', 'verify']
   )
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(payload))
-  const computed = Buffer.from(sig).toString('hex')
-  return computed === signature
+
+  // Convert hex signature to Uint8Array for timing-safe comparison via crypto.subtle.verify
+  const sigBytes = new Uint8Array(
+    (signature.match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16))
+  )
+
+  return crypto.subtle.verify('HMAC', key, sigBytes, encoder.encode(payload))
 }
 
 // ── Webhook Event Types ─────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { createClientSchema, updateClientSchema } from '@/lib/validations'
 
 export async function getClients() {
   try {
@@ -28,11 +29,21 @@ export async function createClient(data: {
   name: string
   phone?: string | null
   email?: string | null
+  cpf?: string | null
+  rg?: string | null
+  address?: string | null
+  city?: string | null
+  state?: string | null
   notes?: string | null
 }) {
   try {
+    const parsed = createClientSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const client = await prisma.client.create({
-      data
+      data: parsed.data
     })
     revalidatePath('/clients')
     return { success: true, data: client }
@@ -46,12 +57,22 @@ export async function updateClient(id: number, data: {
   name?: string
   phone?: string | null
   email?: string | null
+  cpf?: string | null
+  rg?: string | null
+  address?: string | null
+  city?: string | null
+  state?: string | null
   notes?: string | null
 }) {
   try {
+    const parsed = updateClientSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const client = await prisma.client.update({
       where: { id },
-      data
+      data: parsed.data
     })
     revalidatePath('/clients')
     return { success: true, data: client }

@@ -42,6 +42,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate PDF magic bytes (server-side, not spoofable)
+    const fileBuffer = await file.arrayBuffer()
+    const header = new Uint8Array(fileBuffer.slice(0, 5))
+    const magic = new TextDecoder().decode(header)
+    if (!magic.startsWith('%PDF-')) {
+      return NextResponse.json(
+        { success: false, error: 'Arquivo invalido. Envie um PDF valido.' },
+        { status: 400 }
+      )
+    }
+
     // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -58,9 +69,11 @@ export async function POST(request: NextRequest) {
     // Upload to Vercel Blob
     const timestamp = Date.now()
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const blob = await put(`contracts/manual/${eventId}/${timestamp}-${safeName}`, file, {
-      access: 'public',
-    })
+    const blob = await put(
+      `contracts/manual/${eventId}/${timestamp}-${safeName}`,
+      new Blob([fileBuffer], { type: 'application/pdf' }),
+      { access: 'public' }
+    )
 
     // Create database record
     const manualContract = await prisma.manualContract.create({

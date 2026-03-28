@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { createSpaceSchema, updateSpaceSchema } from '@/lib/validations'
 
 export async function getSpaces() {
   try {
@@ -17,11 +18,16 @@ export async function getSpaces() {
 
 export async function createSpace(data: { name: string; address?: string; active?: boolean }) {
   try {
+    const parsed = createSpaceSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const space = await prisma.space.create({
       data: {
-        name: data.name,
-        address: data.address,
-        active: data.active ?? true,
+        name: parsed.data.name,
+        address: parsed.data.address,
+        active: parsed.data.active ?? true,
       }
     })
     revalidatePath('/spaces')
@@ -34,9 +40,14 @@ export async function createSpace(data: { name: string; address?: string; active
 
 export async function updateSpace(id: number, data: { name?: string; address?: string; active?: boolean }) {
   try {
+    const parsed = updateSpaceSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const space = await prisma.space.update({
       where: { id },
-      data
+      data: parsed.data
     })
     revalidatePath('/spaces')
     return { success: true, data: space }

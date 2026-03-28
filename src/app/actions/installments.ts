@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { recalculateEventPaymentStatus } from './transactions'
 import { addMonths, startOfMonth, endOfMonth, addDays } from 'date-fns'
+import { createPaymentPlanSchema } from '@/lib/validations'
 
 function toNumber(value: { toNumber: () => number }) {
   return value.toNumber()
@@ -51,8 +52,13 @@ export async function createPaymentPlan(data: {
   paymentMethod?: string
 }) {
   try {
+    const parsed = createPaymentPlanSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const event = await prisma.event.findUnique({
-      where: { id: data.eventId },
+      where: { id: parsed.data.eventId },
       select: { id: true, category: true, totalValue: true },
     })
 

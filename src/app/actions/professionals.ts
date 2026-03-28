@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { createProfessionalSchema, updateProfessionalSchema } from '@/lib/validations'
 
 export async function getProfessionals() {
   try {
@@ -24,8 +25,13 @@ export async function createProfessional(data: {
   notes?: string | null
 }) {
   try {
+    const parsed = createProfessionalSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const professional = await prisma.professional.create({
-      data
+      data: parsed.data
     })
     revalidatePath('/professionals')
     return { success: true, data: professional }
@@ -42,9 +48,14 @@ export async function updateProfessional(id: number, data: {
   notes?: string | null
 }) {
   try {
+    const parsed = updateProfessionalSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const professional = await prisma.professional.update({
       where: { id },
-      data
+      data: parsed.data
     })
     revalidatePath('/professionals')
     return { success: true, data: professional }

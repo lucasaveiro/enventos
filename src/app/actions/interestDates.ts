@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { createInterestDateSchema, updateInterestDateSchema } from '@/lib/validations'
 
 export async function getInterestDates(filters?: {
   clientId?: number
@@ -71,15 +72,20 @@ export async function createInterestDate(data: {
   eventType?: string
 }) {
   try {
+    const parsed = createInterestDateSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const interestDate = await prisma.clientInterestDate.create({
       data: {
-        clientId: data.clientId,
-        spaceId: data.spaceId,
-        date: data.date,
-        status: data.status || 'interest',
-        notes: data.notes,
-        numberOfPeople: data.numberOfPeople,
-        eventType: data.eventType,
+        clientId: parsed.data.clientId,
+        spaceId: parsed.data.spaceId,
+        date: parsed.data.date,
+        status: parsed.data.status || 'interest',
+        notes: parsed.data.notes,
+        numberOfPeople: parsed.data.numberOfPeople,
+        eventType: parsed.data.eventType,
       },
     })
     revalidatePath('/')
@@ -129,9 +135,14 @@ export async function updateInterestDate(id: number, data: {
   eventType?: string
 }) {
   try {
+    const parsed = updateInterestDateSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: 'Dados invalidos' }
+    }
+
     const interestDate = await prisma.clientInterestDate.update({
       where: { id },
-      data,
+      data: parsed.data,
     })
     revalidatePath('/')
     revalidatePath('/clients')

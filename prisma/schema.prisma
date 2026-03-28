@@ -25,6 +25,11 @@ model Client {
   name        String
   phone       String?
   email       String?
+  cpf         String?
+  rg          String?
+  address     String?
+  city        String?
+  state       String?
   notes       String?
   events        Event[]
   interestDates ClientInterestDate[]
@@ -226,4 +231,19 @@ model ManualContract {
   updatedAt DateTime @updatedAt
 
   @@index([eventId])
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model LoginAttempt {
+  id        Int      @id @default(autoincrement())
+  ip        String
+  createdAt DateTime @default(now())
+
+  @@index([ip, createdAt])
 }

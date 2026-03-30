@@ -58,6 +58,8 @@ model Event {
   totalValue      Decimal             @default(0)
   deposit         Decimal             @default(0)
   notes           String?
+  eventType       String?
+  guestCount      Int?
 
   spaceId         Int
   space           Space               @relation(fields: [spaceId], references: [id])

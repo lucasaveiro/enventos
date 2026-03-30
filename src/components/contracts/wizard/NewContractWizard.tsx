@@ -9,7 +9,7 @@ import { PaymentStep, type PaymentData } from './PaymentStep'
 import { ContractStep, type ContractData } from './ContractStep'
 import { ReviewStep } from './ReviewStep'
 import { createClosedContract } from '@/app/actions/contractWizard'
-import { ContractClause, SPACES, generateContractNumber, getInitialClauses } from '@/lib/contractTemplates'
+import { ContractClause, SPACES, generateContractNumber, getInitialClauses, getContractSpaceSlug } from '@/lib/contractTemplates'
 
 const STEPS = [
   { id: 1, title: 'Cliente & Evento', icon: User },
@@ -181,8 +181,9 @@ export function NewContractWizard() {
         return
       }
 
-      // Redirect to event detail page to generate contract PDF
-      router.push(`/events/${result.data!.eventId}`)
+      // Redirect directly to contract editor with event data pre-filled
+      const spaceSlug = getContractSpaceSlug(clientEventData.spaceId!)
+      router.push(`/contracts/${spaceSlug}?eventId=${result.data!.eventId}`)
     } catch (error) {
       console.error(error)
       setSubmitError('Erro ao criar contrato. Tente novamente.')

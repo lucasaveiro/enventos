@@ -38,7 +38,7 @@ import {
   isCNPJ,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
-import { saveGeneratedContract, getGeneratedContractById } from '@/app/actions/generatedContracts'
+import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract } from '@/app/actions/generatedContracts'
 import { ContractStatusBadge } from './ContractStatusBadge'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
@@ -590,6 +590,83 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     })
     return () => { cancelled = true }
   }, [loadContractId, setValue])
+
+  // ─── Pre-fill from event data when eventId is provided ────────────────
+  useEffect(() => {
+    if (!initialEventId || loadContractId) return
+    let cancelled = false
+
+    getEventDataForContract(initialEventId).then((result) => {
+      if (cancelled || !result.success || !result.data) return
+      const event = result.data
+      const client = event.client
+      const installmentsList = event.installments || []
+
+      // Client data
+      if (client) {
+        if (client.name) setValue('clientName', client.name, { shouldValidate: true })
+        if (client.cpf) setValue('clientCPF', client.cpf, { shouldValidate: true })
+        if (client.rg) setValue('clientRG', client.rg, { shouldValidate: true })
+        if (client.phone) setValue('clientPhone', client.phone, { shouldValidate: true })
+        if (client.email) setValue('clientEmail', client.email, { shouldValidate: true })
+        if (client.address) setValue('clientAddress', client.address, { shouldValidate: true })
+        if (client.city) setValue('clientCity', client.city, { shouldValidate: true })
+        if (client.state) setValue('clientState', client.state, { shouldValidate: true })
+      }
+
+      // Event dates
+      const startDate = new Date(event.start)
+      const endDate = new Date(event.end)
+      setValue('eventDate', startDate.toISOString().split('T')[0], { shouldValidate: true })
+      const startHours = startDate.getHours().toString().padStart(2, '0')
+      const startMinutes = startDate.getMinutes().toString().padStart(2, '0')
+      setValue('eventStartTime', `${startHours}:${startMinutes}`, { shouldValidate: true })
+      const endHours = endDate.getHours().toString().padStart(2, '0')
+      const endMinutes = endDate.getMinutes().toString().padStart(2, '0')
+      setValue('eventEndTime', `${endHours}:${endMinutes}`, { shouldValidate: true })
+
+      // Event type & guest count
+      if (event.eventType) setValue('eventType', event.eventType, { shouldValidate: true })
+      if (event.guestCount) setValue('guestCount', String(event.guestCount), { shouldValidate: true })
+
+      // Financial data
+      const totalVal = Number(event.totalValue)
+      const depositVal = Number(event.deposit)
+      if (totalVal > 0) {
+        setValue('totalValue', totalVal.toFixed(2).replace('.', ','), { shouldValidate: true })
+      }
+      if (depositVal > 0) {
+        setValue('depositValue', depositVal.toFixed(2).replace('.', ','), { shouldValidate: true })
+      }
+
+      // Notes → observations
+      if (event.notes) setValue('observations', event.notes, { shouldValidate: true })
+
+      // Payment data from installments
+      const sinal = installmentsList.find((i) => i.isSinal)
+      const regularInstallments = installmentsList.filter((i) => !i.isSinal)
+
+      if (sinal) {
+        const sinalDate = new Date(sinal.dueDate)
+        setValue('depositDueDate', sinalDate.toISOString().split('T')[0], { shouldValidate: true })
+        if (sinal.paymentMethod) setValue('paymentMethod', sinal.paymentMethod, { shouldValidate: true })
+      }
+
+      // Infer payment condition and set installments
+      if (totalVal > 0 && depositVal >= totalVal) {
+        setValue('paymentCondition', 'a_vista', { shouldValidate: true })
+      } else if (regularInstallments.length > 0) {
+        setValue('paymentCondition', 'entrada_parcelas', { shouldValidate: true })
+        const mappedInstallments: PaymentInstallment[] = regularInstallments.map((inst) => ({
+          date: new Date(inst.dueDate).toISOString().split('T')[0],
+          value: Number(inst.amount).toFixed(2).replace('.', ','),
+        }))
+        setInstallments(mappedInstallments)
+      }
+    })
+
+    return () => { cancelled = true }
+  }, [initialEventId, loadContractId, setValue])
 
   // ─── Save handler for after PDF generation ────────────────────────────
   const handleSaveContract = useCallback(async (

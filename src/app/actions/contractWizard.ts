@@ -24,6 +24,7 @@ export interface ClosedContractData {
   eventEnd: Date
   eventType: string
   guestCount: number
+  cautionValue?: string | null
   professionalIds?: number[]
   eventNotes?: string | null
 
@@ -96,6 +97,8 @@ export async function createClosedContract(data: ClosedContractData) {
           totalValue: data.totalValue,
           deposit: data.depositAmount,
           notes: data.eventNotes?.trim() || null,
+          eventType: data.eventType || null,
+          guestCount: data.guestCount || null,
           spaceId: data.spaceId,
           clientId: client.id,
           professionals: data.professionalIds?.length

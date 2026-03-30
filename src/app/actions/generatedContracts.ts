@@ -119,6 +119,28 @@ export async function getGeneratedContracts(eventId: number) {
   }
 }
 
+export async function getEventDataForContract(eventId: number) {
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        client: true,
+        space: true,
+        installments: { orderBy: { installmentNumber: 'asc' } },
+      },
+    })
+
+    if (!event) {
+      return { success: false, error: 'Evento não encontrado' }
+    }
+
+    return { success: true, data: event }
+  } catch (error) {
+    console.error('Error fetching event data for contract:', error)
+    return { success: false, error: 'Erro ao buscar dados do evento' }
+  }
+}
+
 export async function getGeneratedContractById(id: number) {
   try {
     const contract = await prisma.generatedContract.findUnique({

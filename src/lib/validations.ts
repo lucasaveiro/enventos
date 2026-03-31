@@ -13,7 +13,11 @@ export const createEventSchema = z.object({
   start: z.coerce.date(),
   end: z.coerce.date(),
   category: z.enum(['event', 'visit', 'proposal']).default('event'),
-  status: z.enum(['available', 'confirming', 'reserved']),
+  status: z.enum([
+    'available', 'confirming', 'reserved',
+    'visit_scheduled', 'visit_done', 'visit_cancelled',
+    'proposal_pending', 'proposal_sent', 'proposal_cancelled',
+  ]),
   paymentStatus: z.enum(['unpaid', 'partial', 'paid']),
   contractStatus: z.enum(['not_sent', 'sent', 'signed']),
   totalValue: nonNegativeNumber,

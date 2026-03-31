@@ -344,9 +344,17 @@ export function EventModal({
       }
 
       if (initialEvent) {
-        await updateEvent(initialEvent.id, payload)
+        const result = await updateEvent(initialEvent.id, payload)
+        if (!result.success) {
+          alert(result.error || 'Erro ao atualizar marcação')
+          return
+        }
       } else {
-        await createEvent(payload)
+        const result = await createEvent(payload)
+        if (!result.success) {
+          alert(result.error || 'Erro ao criar marcação')
+          return
+        }
       }
 
       if (

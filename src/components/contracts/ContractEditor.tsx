@@ -38,7 +38,7 @@ import {
   isCNPJ,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
-import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract } from '@/app/actions/generatedContracts'
+import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract, getLatestGeneratedContractForEvent } from '@/app/actions/generatedContracts'
 import { ContractStatusBadge } from './ContractStatusBadge'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
@@ -592,77 +592,124 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   }, [loadContractId, setValue])
 
   // ─── Pre-fill from event data when eventId is provided ────────────────
+  // If a contract was previously generated for this event, load it instead
+  // so all form fields (including contract-only fields) are restored.
   useEffect(() => {
     if (!initialEventId || loadContractId) return
     let cancelled = false
 
-    getEventDataForContract(initialEventId).then((result) => {
-      if (cancelled || !result.success || !result.data) return
-      const event = result.data
-      const client = event.client
-      const installmentsList = event.installments || []
+    // First check if there's a previously generated contract for this event
+    getLatestGeneratedContractForEvent(initialEventId).then((contractResult) => {
+      if (cancelled) return
 
-      // Client data
-      if (client) {
-        if (client.name) setValue('clientName', client.name, { shouldValidate: true })
-        if (client.cpf) setValue('clientCPF', client.cpf, { shouldValidate: true })
-        if (client.rg) setValue('clientRG', client.rg, { shouldValidate: true })
-        if (client.phone) setValue('clientPhone', client.phone, { shouldValidate: true })
-        if (client.email) setValue('clientEmail', client.email, { shouldValidate: true })
-        if (client.address) setValue('clientAddress', client.address, { shouldValidate: true })
-        if (client.city) setValue('clientCity', client.city, { shouldValidate: true })
-        if (client.state) setValue('clientState', client.state, { shouldValidate: true })
+      if (contractResult.success && contractResult.data) {
+        // Restore from saved contract (same logic as loadContractId)
+        const saved = contractResult.data
+        const savedFormData = saved.formData as Record<string, unknown>
+        const savedClauses = saved.clauses as unknown as ContractClause[]
+        const savedOverrides = saved.contractorOverrides as unknown as ContractorOverrides | null
+
+        const formKeys = [
+          'contractNumber', 'contractDate',
+          'clientName', 'clientCPF', 'clientRG', 'clientNationality', 'clientCivilStatus', 'clientProfession',
+          'clientAddress', 'clientCity', 'clientState', 'clientPhone', 'clientEmail',
+          'eventDate', 'eventStartTime', 'eventEndTime', 'eventType', 'guestCount',
+          'dailyCount', 'packageType', 'eventCheckoutDate',
+          'totalValue', 'depositValue', 'depositDueDate', 'remainingValue', 'remainingDueDate',
+          'paymentMethod', 'paymentCondition', 'cautionValue', 'benchCount', 'observations',
+        ]
+        for (const key of formKeys) {
+          if (savedFormData[key] !== undefined && savedFormData[key] !== null) {
+            setValue(key as keyof FormValues, savedFormData[key] as string, { shouldValidate: true })
+          }
+        }
+
+        if (Array.isArray(savedFormData.installments)) {
+          setInstallments(savedFormData.installments as PaymentInstallment[])
+        }
+
+        if (Array.isArray(savedClauses) && savedClauses.length > 0) {
+          setClauses(savedClauses)
+          setClausesApplied(true)
+        }
+
+        if (savedOverrides) {
+          setContractorOverrides(savedOverrides)
+        }
+
+        setSelectedEventId(saved.eventId)
+        return
       }
 
-      // Event dates
-      const startDate = new Date(event.start)
-      const endDate = new Date(event.end)
-      setValue('eventDate', startDate.toISOString().split('T')[0], { shouldValidate: true })
-      const startHours = startDate.getHours().toString().padStart(2, '0')
-      const startMinutes = startDate.getMinutes().toString().padStart(2, '0')
-      setValue('eventStartTime', `${startHours}:${startMinutes}`, { shouldValidate: true })
-      const endHours = endDate.getHours().toString().padStart(2, '0')
-      const endMinutes = endDate.getMinutes().toString().padStart(2, '0')
-      setValue('eventEndTime', `${endHours}:${endMinutes}`, { shouldValidate: true })
+      // No previous contract — fall back to pre-filling from event data
+      getEventDataForContract(initialEventId).then((result) => {
+        if (cancelled || !result.success || !result.data) return
+        const event = result.data
+        const client = event.client
+        const installmentsList = event.installments || []
 
-      // Event type & guest count
-      if (event.eventType) setValue('eventType', event.eventType, { shouldValidate: true })
-      if (event.guestCount) setValue('guestCount', String(event.guestCount), { shouldValidate: true })
+        // Client data
+        if (client) {
+          if (client.name) setValue('clientName', client.name, { shouldValidate: true })
+          if (client.cpf) setValue('clientCPF', client.cpf, { shouldValidate: true })
+          if (client.rg) setValue('clientRG', client.rg, { shouldValidate: true })
+          if (client.phone) setValue('clientPhone', client.phone, { shouldValidate: true })
+          if (client.email) setValue('clientEmail', client.email, { shouldValidate: true })
+          if (client.address) setValue('clientAddress', client.address, { shouldValidate: true })
+          if (client.city) setValue('clientCity', client.city, { shouldValidate: true })
+          if (client.state) setValue('clientState', client.state, { shouldValidate: true })
+        }
 
-      // Financial data
-      const totalVal = Number(event.totalValue)
-      const depositVal = Number(event.deposit)
-      if (totalVal > 0) {
-        setValue('totalValue', totalVal.toFixed(2).replace('.', ','), { shouldValidate: true })
-      }
-      if (depositVal > 0) {
-        setValue('depositValue', depositVal.toFixed(2).replace('.', ','), { shouldValidate: true })
-      }
+        // Event dates
+        const startDate = new Date(event.start)
+        const endDate = new Date(event.end)
+        setValue('eventDate', startDate.toISOString().split('T')[0], { shouldValidate: true })
+        const startHours = startDate.getHours().toString().padStart(2, '0')
+        const startMinutes = startDate.getMinutes().toString().padStart(2, '0')
+        setValue('eventStartTime', `${startHours}:${startMinutes}`, { shouldValidate: true })
+        const endHours = endDate.getHours().toString().padStart(2, '0')
+        const endMinutes = endDate.getMinutes().toString().padStart(2, '0')
+        setValue('eventEndTime', `${endHours}:${endMinutes}`, { shouldValidate: true })
 
-      // Notes → observations
-      if (event.notes) setValue('observations', event.notes, { shouldValidate: true })
+        // Event type & guest count
+        if (event.eventType) setValue('eventType', event.eventType, { shouldValidate: true })
+        if (event.guestCount) setValue('guestCount', String(event.guestCount), { shouldValidate: true })
 
-      // Payment data from installments
-      const sinal = installmentsList.find((i) => i.isSinal)
-      const regularInstallments = installmentsList.filter((i) => !i.isSinal)
+        // Financial data
+        const totalVal = Number(event.totalValue)
+        const depositVal = Number(event.deposit)
+        if (totalVal > 0) {
+          setValue('totalValue', totalVal.toFixed(2).replace('.', ','), { shouldValidate: true })
+        }
+        if (depositVal > 0) {
+          setValue('depositValue', depositVal.toFixed(2).replace('.', ','), { shouldValidate: true })
+        }
 
-      if (sinal) {
-        const sinalDate = new Date(sinal.dueDate)
-        setValue('depositDueDate', sinalDate.toISOString().split('T')[0], { shouldValidate: true })
-        if (sinal.paymentMethod) setValue('paymentMethod', sinal.paymentMethod, { shouldValidate: true })
-      }
+        // Notes → observations
+        if (event.notes) setValue('observations', event.notes, { shouldValidate: true })
 
-      // Infer payment condition and set installments
-      if (totalVal > 0 && depositVal >= totalVal) {
-        setValue('paymentCondition', 'a_vista', { shouldValidate: true })
-      } else if (regularInstallments.length > 0) {
-        setValue('paymentCondition', 'entrada_parcelas', { shouldValidate: true })
-        const mappedInstallments: PaymentInstallment[] = regularInstallments.map((inst) => ({
-          date: new Date(inst.dueDate).toISOString().split('T')[0],
-          value: Number(inst.amount).toFixed(2).replace('.', ','),
-        }))
-        setInstallments(mappedInstallments)
-      }
+        // Payment data from installments
+        const sinal = installmentsList.find((i) => i.isSinal)
+        const regularInstallments = installmentsList.filter((i) => !i.isSinal)
+
+        if (sinal) {
+          const sinalDate = new Date(sinal.dueDate)
+          setValue('depositDueDate', sinalDate.toISOString().split('T')[0], { shouldValidate: true })
+          if (sinal.paymentMethod) setValue('paymentMethod', sinal.paymentMethod, { shouldValidate: true })
+        }
+
+        // Infer payment condition and set installments
+        if (totalVal > 0 && depositVal >= totalVal) {
+          setValue('paymentCondition', 'a_vista', { shouldValidate: true })
+        } else if (regularInstallments.length > 0) {
+          setValue('paymentCondition', 'entrada_parcelas', { shouldValidate: true })
+          const mappedInstallments: PaymentInstallment[] = regularInstallments.map((inst) => ({
+            date: new Date(inst.dueDate).toISOString().split('T')[0],
+            value: Number(inst.amount).toFixed(2).replace('.', ','),
+          }))
+          setInstallments(mappedInstallments)
+        }
+      })
     })
 
     return () => { cancelled = true }

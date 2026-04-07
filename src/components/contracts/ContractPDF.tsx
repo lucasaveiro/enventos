@@ -480,9 +480,25 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
       <View style={[styles.fieldRow, { marginBottom: 1 }]}>
         <Text style={styles.fieldLabel}>Valor Restante: </Text>
         <Text style={styles.fieldValue}>{toCurrency(formData.remainingValue)}</Text>
-        <Text style={styles.fieldLabel}>   Vencimento: </Text>
-        <Text style={styles.fieldValue}>{formatDate(formData.remainingDueDate)}</Text>
+        {formData.paymentCondition !== 'entrada_parcelas' && formData.remainingDueDate ? (
+          <>
+            <Text style={styles.fieldLabel}>   Vencimento: </Text>
+            <Text style={styles.fieldValue}>{formatDate(formData.remainingDueDate)}</Text>
+          </>
+        ) : null}
       </View>
+      {formData.paymentCondition === 'entrada_parcelas' && formData.installments && formData.installments.length > 0 ? (
+        <View style={{ marginTop: 4, marginBottom: 4 }}>
+          <Text style={[styles.fieldLabel, { marginBottom: 2 }]}>Parcelas do Saldo Restante:</Text>
+          {formData.installments.map((inst, i) => (
+            <View key={i} style={[styles.fieldRow, { marginBottom: 1, paddingLeft: 8 }]}>
+              <Text style={styles.fieldValue}>
+                {i + 1}ª parcela: {toCurrency(inst.value)} — vencimento em {formatDate(inst.date)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {formData.cautionValue ? (
         <View style={[styles.fieldRow, { marginBottom: 6 }]}>
           <Text style={styles.fieldLabel}>Cheque Caução: </Text>

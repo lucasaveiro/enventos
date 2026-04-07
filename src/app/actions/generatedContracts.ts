@@ -141,6 +141,24 @@ export async function getEventDataForContract(eventId: number) {
   }
 }
 
+export async function getLatestGeneratedContractForEvent(eventId: number) {
+  try {
+    const contract = await prisma.generatedContract.findFirst({
+      where: { eventId },
+      orderBy: { version: 'desc' },
+    })
+
+    if (!contract) {
+      return { success: false, error: 'Nenhum contrato gerado encontrado' }
+    }
+
+    return { success: true, data: contract }
+  } catch (error) {
+    console.error('Error fetching latest generated contract:', error)
+    return { success: false, error: 'Erro ao buscar último contrato gerado' }
+  }
+}
+
 export async function getGeneratedContractById(id: number) {
   try {
     const contract = await prisma.generatedContract.findUnique({

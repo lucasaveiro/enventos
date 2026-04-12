@@ -1,7 +1,7 @@
 import { prisma } from './prisma'
 
-const WINDOW_MS = 1 * 1000 // 1 second (temporarily reduced to allow login)
-const MAX_ATTEMPTS = 999
+const WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const MAX_ATTEMPTS = 5
 
 export async function checkLoginRateLimit(
   ip: string

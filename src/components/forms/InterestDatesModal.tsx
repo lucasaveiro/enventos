@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/Label'
 import { Badge } from '@/components/ui/Badge'
 import { CalendarDays, Plus, Trash2, Users } from 'lucide-react'
 import { getInterestDatesByClient, createInterestDate, updateInterestDate, deleteInterestDate } from '@/app/actions/interestDates'
+import { parseLocalDate } from '@/lib/utils'
 import { getSpaces } from '@/app/actions/spaces'
 
 interface InterestDatesModalProps {
@@ -82,7 +83,7 @@ export function InterestDatesModal({ client, isOpen, onClose }: InterestDatesMod
     await createInterestDate({
       clientId: client.id,
       spaceId: parseInt(newSpaceId, 10),
-      date: new Date(newDate),
+      date: parseLocalDate(newDate),
       notes: newNotes || undefined,
       numberOfPeople: newNumberOfPeople ? parseInt(newNumberOfPeople, 10) : undefined,
       eventType: newEventType || undefined,

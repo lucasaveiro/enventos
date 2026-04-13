@@ -13,6 +13,7 @@ import { createTransaction, updateTransaction } from '@/app/actions/transactions
 import { getEvents } from '@/app/actions/events'
 import { EventCombobox, type EventOption } from '@/components/forms/EventCombobox'
 import { DollarSign, FileText, Calendar, Tag } from 'lucide-react'
+import { parseLocalDate, toDateInputValue } from '@/lib/utils'
 
 const transactionSchema = z.object({
   type: z.enum(['income', 'expense']),
@@ -99,9 +100,9 @@ export function TransactionModal({
       category: defaultEventId ? 'event_payment' : '',
       description: '',
       amount: 0,
-      date: new Date().toISOString().split('T')[0],
+      date: toDateInputValue(new Date()),
       status: 'paid',
-      paidAt: new Date().toISOString().split('T')[0],
+      paidAt: toDateInputValue(new Date()),
       eventId: defaultEventId ? String(defaultEventId) : '',
       notes: '',
     },
@@ -111,15 +112,10 @@ export function TransactionModal({
           category: initialTransaction.category,
           description: initialTransaction.description,
           amount: initialTransaction.amount,
-          date:
-            typeof initialTransaction.date === 'string'
-              ? initialTransaction.date.split('T')[0]
-              : new Date(initialTransaction.date).toISOString().split('T')[0],
+          date: toDateInputValue(initialTransaction.date),
           status: initialTransaction.status || 'paid',
           paidAt: initialTransaction.paidAt
-            ? typeof initialTransaction.paidAt === 'string'
-              ? initialTransaction.paidAt.split('T')[0]
-              : new Date(initialTransaction.paidAt).toISOString().split('T')[0]
+            ? toDateInputValue(initialTransaction.paidAt)
             : '',
           eventId: initialTransaction.eventId ? String(initialTransaction.eventId) : '',
           notes: initialTransaction.notes || '',
@@ -157,9 +153,9 @@ export function TransactionModal({
     try {
       const submitData = {
         ...data,
-        date: new Date(data.date),
+        date: parseLocalDate(data.date),
         status: data.status,
-        paidAt: data.status === 'paid' && data.paidAt ? new Date(data.paidAt) : null,
+        paidAt: data.status === 'paid' && data.paidAt ? parseLocalDate(data.paidAt) : null,
         eventId: data.category === 'event_payment' && data.eventId ? parseInt(data.eventId, 10) : null,
         notes: data.notes || null,
       }

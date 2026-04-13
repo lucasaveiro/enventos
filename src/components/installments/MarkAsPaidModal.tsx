@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Badge } from '@/components/ui/Badge'
 import { markInstallmentAsPaid } from '@/app/actions/installments'
+import { parseLocalDate, toDateInputValue } from '@/lib/utils'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -59,7 +60,7 @@ export function MarkAsPaidModal({
     if (installment) {
       setPaidAmount(installment.amount)
       setPaymentMethod(installment.paymentMethod ?? '')
-      setPaidAt(new Date().toISOString().split('T')[0])
+      setPaidAt(toDateInputValue(new Date()))
     }
   }
 
@@ -85,7 +86,7 @@ export function MarkAsPaidModal({
       const result = await markInstallmentAsPaid(installment.id, {
         paidAmount,
         paymentMethod: paymentMethod || undefined,
-        paidAt: paidAt ? new Date(paidAt) : undefined,
+        paidAt: paidAt ? parseLocalDate(paidAt) : undefined,
       })
 
       if (result.success) {

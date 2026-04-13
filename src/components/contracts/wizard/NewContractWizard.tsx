@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronLeft, ChevronRight, Loader2, User, DollarSign, FileText, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { toDateInputValue } from '@/lib/utils'
 import { ClientEventStep, type ClientEventData } from './ClientEventStep'
 import { PaymentStep, type PaymentData } from './PaymentStep'
 import { ContractStep, type ContractData } from './ContractStep'
@@ -65,7 +66,7 @@ export function NewContractWizard() {
   // Step 3: Contract
   const [contractData, setContractData] = useState<ContractData>({
     contractNumber: generateContractNumber(defaultSpaceConfig),
-    contractDate: new Date().toISOString().split('T')[0],
+    contractDate: toDateInputValue(new Date()),
     observations: '',
     spaceConfigId: defaultSpaceConfig.id,
     dailyCount: '',

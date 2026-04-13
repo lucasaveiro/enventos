@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { updateInstallment } from '@/app/actions/installments'
+import { parseLocalDate, toDateInputValue } from '@/lib/utils'
 
 const paymentMethods = [
   { value: '', label: 'Selecione...' },
@@ -53,7 +54,7 @@ export function EditInstallmentModal({
 
   useEffect(() => {
     if (installment && isOpen) {
-      setDueDate(new Date(installment.dueDate).toISOString().split('T')[0])
+      setDueDate(toDateInputValue(installment.dueDate))
       setAmount(installment.amount)
       setPaymentMethod(installment.paymentMethod ?? '')
       setNotes(installment.notes ?? '')
@@ -67,7 +68,7 @@ export function EditInstallmentModal({
     setIsSubmitting(true)
     try {
       const result = await updateInstallment(installment.id, {
-        dueDate: new Date(dueDate),
+        dueDate: parseLocalDate(dueDate),
         amount,
         paymentMethod: paymentMethod || undefined,
         notes: notes || undefined,

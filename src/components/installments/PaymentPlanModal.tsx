@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Badge } from '@/components/ui/Badge'
 import { createPaymentPlan } from '@/app/actions/installments'
+import { parseLocalDate, toDateInputValue } from '@/lib/utils'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -71,9 +72,9 @@ export function PaymentPlanModal({
     resolver: zodResolver(schema),
     defaultValues: {
       depositAmount: deposit,
-      depositDueDate: new Date().toISOString().split('T')[0],
+      depositDueDate: toDateInputValue(new Date()),
       numberOfInstallments: 1,
-      startDate: addMonths(new Date(), 1).toISOString().split('T')[0],
+      startDate: toDateInputValue(addMonths(new Date(), 1)),
       paymentMethod: '',
     },
   })
@@ -101,10 +102,10 @@ export function PaymentPlanModal({
     const baseAmount = Math.floor((remaining / watchInstallments) * 100) / 100
     const lastAmount = remaining - baseAmount * (watchInstallments - 1)
     for (let i = 0; i < watchInstallments; i++) {
-      const date = addMonths(new Date(watchStartDate), i)
+      const date = addMonths(parseLocalDate(watchStartDate), i)
       previewItems.push({
         number: (watchDeposit > 0 ? 2 : 1) + i,
-        date: date.toISOString().split('T')[0],
+        date: toDateInputValue(date),
         amount: i === watchInstallments - 1
           ? Math.round(lastAmount * 100) / 100
           : baseAmount,
@@ -120,9 +121,9 @@ export function PaymentPlanModal({
         eventId,
         totalValue,
         numberOfInstallments: data.numberOfInstallments,
-        startDate: new Date(data.startDate),
+        startDate: parseLocalDate(data.startDate),
         depositAmount: data.depositAmount,
-        depositDueDate: new Date(data.depositDueDate),
+        depositDueDate: parseLocalDate(data.depositDueDate),
         paymentMethod: data.paymentMethod || undefined,
       })
 
@@ -250,7 +251,7 @@ export function PaymentPlanModal({
                         </Badge>
                       )}
                       <span className="text-muted-foreground">
-                        {format(new Date(item.date), 'dd/MM/yyyy', { locale: ptBR })}
+                        {format(parseLocalDate(item.date), 'dd/MM/yyyy', { locale: ptBR })}
                       </span>
                     </div>
                     <span className="font-medium">{formatCurrency(item.amount)}</span>

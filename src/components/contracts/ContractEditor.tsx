@@ -40,6 +40,7 @@ import {
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
 import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract, getLatestGeneratedContractForEvent } from '@/app/actions/generatedContracts'
 import { ContractStatusBadge } from './ContractStatusBadge'
+import { toDateInputValue } from '@/lib/utils'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
 const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
@@ -454,7 +455,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     mode: 'onChange',
     defaultValues: {
       contractNumber: generateContractNumber(space),
-      contractDate: new Date().toISOString().split('T')[0],
+      contractDate: toDateInputValue(new Date()),
       clientName: '',
       clientCPF: '',
       clientRG: '',
@@ -704,7 +705,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         } else if (regularInstallments.length > 0) {
           setValue('paymentCondition', 'entrada_parcelas', { shouldValidate: true })
           const mappedInstallments: PaymentInstallment[] = regularInstallments.map((inst) => ({
-            date: new Date(inst.dueDate).toISOString().split('T')[0],
+            date: toDateInputValue(inst.dueDate),
             value: Number(inst.amount).toFixed(2).replace('.', ','),
           }))
           setInstallments(mappedInstallments)

@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { recalculateEventPaymentStatus } from './transactions'
-import { addMonths, startOfMonth, endOfMonth, addDays } from 'date-fns'
+import { addMonths, startOfMonth, endOfMonth, addDays, startOfDay } from 'date-fns'
 import { createPaymentPlanSchema } from '@/lib/validations'
 
 function toNumber(value: { toNumber: () => number }) {
@@ -381,10 +381,9 @@ export async function getInstallmentsForCalendar(filters?: {
       isTransaction: false,
     }))
 
-    // Also fetch pending transactions NOT linked to any installment
+    // Also fetch standalone transactions NOT linked to any installment
     const txWhere: any = {
-      status: 'pending',
-      installment: { is: null }, // no linked installment (standalone transactions)
+      installment: { is: null }, // standalone transactions only
     }
 
     if (filters?.start || filters?.end) {
@@ -393,67 +392,76 @@ export async function getInstallmentsForCalendar(filters?: {
       if (filters.end) txWhere.date.lte = filters.end
     }
 
-    // Map status filter: 'paid' transactions won't be pending so skip them
-    if (filters?.status === 'paid') {
-      // Don't fetch transactions when filtering for paid — they are pending by definition
-    } else {
-      if (filters?.spaceId) {
-        txWhere.event = { spaceId: filters.spaceId }
-      }
+    if (filters?.spaceId) {
+      txWhere.event = { spaceId: filters.spaceId }
+    }
 
-      const transactions = await prisma.transaction.findMany({
-        where: txWhere,
-        include: {
-          event: {
-            include: {
-              client: { select: { id: true, name: true, phone: true } },
-              space: { select: { id: true, name: true } },
-            },
+    // Determine which transaction statuses to fetch based on filter
+    if (filters?.status === 'paid') {
+      txWhere.status = 'paid'
+    } else if (filters?.status === 'overdue') {
+      txWhere.status = 'pending'
+    } else if (filters?.status === 'pending') {
+      txWhere.status = 'pending'
+    } else {
+      // 'all' or undefined: fetch both pending and paid
+      txWhere.status = { in: ['pending', 'paid'] }
+    }
+
+    const transactions = await prisma.transaction.findMany({
+      where: txWhere,
+      include: {
+        event: {
+          include: {
+            client: { select: { id: true, name: true, phone: true } },
+            space: { select: { id: true, name: true } },
           },
         },
-        orderBy: { date: 'asc' },
-      })
+      },
+      orderBy: { date: 'asc' },
+    })
 
-      for (const tx of transactions) {
-        // Skip transactions without an event (standalone expense transactions etc.)
-        if (!tx.event || !tx.event.space) continue
+    const todayStart = startOfDay(new Date())
 
-        const amount = toNumber(tx.amount)
-        const prefix = tx.type === 'income' ? 'Receber' : 'Pagar'
+    for (const tx of transactions) {
+      // Skip transactions without an event
+      if (!tx.event || !tx.event.space) continue
 
-        // Determine status: pending transactions past due date are overdue
-        let txStatus = 'pending'
-        if (tx.date < new Date()) {
-          txStatus = 'overdue'
-        }
+      const amount = toNumber(tx.amount)
+      const prefix = tx.type === 'income' ? 'Receber' : 'Pagar'
 
-        // Apply status filter for overdue
-        if (filters?.status === 'overdue' && txStatus !== 'overdue') continue
-        if (filters?.status === 'pending' && txStatus !== 'pending') continue
-
-        items.push({
-          id: tx.id + 1_000_000, // offset to avoid id collision with installments
-          installmentNumber: 0,
-          title: `${prefix}: ${tx.description}`,
-          amount,
-          paidAmount: null,
-          dueDate: tx.date,
-          status: txStatus,
-          paymentMethod: null,
-          isSinal: false,
-          paidAt: null,
-          notes: tx.notes ?? null,
-          eventId: tx.eventId,
-          eventTitle: tx.event.title,
-          clientName: tx.event.client?.name ?? null,
-          clientPhone: tx.event.client?.phone ?? null,
-          spaceName: tx.event.space.name,
-          spaceId: tx.event.space.id,
-          isTransaction: true,
-          transactionId: tx.id,
-          transactionType: tx.type,
-        })
+      // Determine display status
+      let txStatus = tx.status // 'paid' or 'pending'
+      if (tx.status === 'pending' && tx.date < todayStart) {
+        txStatus = 'overdue'
       }
+
+      // Apply status filter for computed statuses
+      if (filters?.status === 'overdue' && txStatus !== 'overdue') continue
+      if (filters?.status === 'pending' && txStatus !== 'pending') continue
+
+      items.push({
+        id: tx.id + 1_000_000, // offset to avoid id collision with installments
+        installmentNumber: 0,
+        title: `${prefix}: ${tx.description}`,
+        amount,
+        paidAmount: null,
+        dueDate: tx.date,
+        status: txStatus,
+        paymentMethod: null,
+        isSinal: false,
+        paidAt: tx.paidAt,
+        notes: tx.notes ?? null,
+        eventId: tx.eventId,
+        eventTitle: tx.event.title,
+        clientName: tx.event.client?.name ?? null,
+        clientPhone: tx.event.client?.phone ?? null,
+        spaceName: tx.event.space.name,
+        spaceId: tx.event.space.id,
+        isTransaction: true,
+        transactionId: tx.id,
+        transactionType: tx.type,
+      })
     }
 
     // Sort all items by dueDate
@@ -472,6 +480,7 @@ export async function getFinancialCalendarSummary(filters?: {
 }) {
   try {
     const now = new Date()
+    const todayStart = startOfDay(now)
     const monthStart = filters?.start ?? startOfMonth(now)
     const monthEnd = filters?.end ?? endOfMonth(now)
     const sevenDaysFromNow = addDays(now, 7)
@@ -494,7 +503,7 @@ export async function getFinancialCalendarSummary(filters?: {
 
     const upcoming = await prisma.paymentInstallment.aggregate({
       where: {
-        dueDate: { gte: now, lte: sevenDaysFromNow },
+        dueDate: { gte: todayStart, lte: sevenDaysFromNow },
         status: 'pending',
       },
       _sum: { amount: true },
@@ -525,7 +534,7 @@ export async function getFinancialCalendarSummary(filters?: {
       where: {
         status: 'pending',
         installment: { is: null },
-        date: { lt: now },
+        date: { lt: todayStart },
       },
       _sum: { amount: true },
       _count: true,
@@ -535,7 +544,7 @@ export async function getFinancialCalendarSummary(filters?: {
       where: {
         status: 'pending',
         installment: { is: null },
-        date: { gte: now, lte: sevenDaysFromNow },
+        date: { gte: todayStart, lte: sevenDaysFromNow },
       },
       _sum: { amount: true },
       _count: true,
@@ -593,20 +602,66 @@ export async function getFinancialCalendarSummary(filters?: {
 
 export async function checkOverdueInstallments() {
   try {
-    const now = new Date()
+    const todayStart = startOfDay(new Date())
+
+    // Step 1: Mark overdue installments (due before today, not just before current time)
     const result = await prisma.paymentInstallment.updateMany({
       where: {
         status: 'pending',
-        dueDate: { lt: now },
+        dueDate: { lt: todayStart },
       },
       data: { status: 'overdue' },
     })
 
-    if (result.count > 0) {
+    // Step 2: Clean up orphaned standalone transactions
+    // Find pending standalone income transactions that match a paid installment
+    const orphanCandidates = await prisma.transaction.findMany({
+      where: {
+        status: 'pending',
+        installment: { is: null },
+        type: 'income',
+        eventId: { not: null },
+      },
+      select: { id: true, eventId: true, description: true },
+    })
+
+    let orphansCleaned = 0
+    if (orphanCandidates.length > 0) {
+      const eventIds = [...new Set(orphanCandidates.map((t) => t.eventId!).filter(Boolean))]
+      const paidInstallments = await prisma.paymentInstallment.findMany({
+        where: {
+          eventId: { in: eventIds },
+          status: 'paid',
+        },
+        select: { eventId: true, installmentNumber: true, isSinal: true, paidAt: true },
+      })
+
+      const orphanIds: number[] = []
+      for (const tx of orphanCandidates) {
+        for (const inst of paidInstallments) {
+          if (inst.eventId !== tx.eventId) continue
+          const label = inst.isSinal ? 'Sinal' : `Parcela ${inst.installmentNumber}`
+          if (tx.description.includes(label)) {
+            orphanIds.push(tx.id)
+            break
+          }
+        }
+      }
+
+      if (orphanIds.length > 0) {
+        await prisma.transaction.updateMany({
+          where: { id: { in: orphanIds } },
+          data: { status: 'paid', paidAt: new Date() },
+        })
+        orphansCleaned = orphanIds.length
+      }
+    }
+
+    if (result.count > 0 || orphansCleaned > 0) {
       revalidateAll()
     }
 
-    return { success: true, updatedCount: result.count }
+    return { success: true, updatedCount: result.count, orphansCleaned }
   } catch (error) {
     console.error('Error checking overdue installments:', error)
     return { success: false, error: 'Failed to check overdue installments' }

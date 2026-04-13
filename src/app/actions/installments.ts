@@ -167,19 +167,47 @@ export async function markInstallmentAsPaid(
     const paidAt = data.paidAt ?? new Date()
 
     await prisma.$transaction(async (tx) => {
-      // Create transaction for this payment
-      const transaction = await tx.transaction.create({
-        data: {
-          type: 'income',
-          category: 'installment_payment',
-          description: `Parcela ${installment.installmentNumber}${installment.isSinal ? ' (Sinal)' : ''} - ${installment.event.title}`,
-          amount: paidAmount,
-          date: paidAt,
-          status: 'paid',
-          paidAt,
+      // Look for an existing pending standalone transaction that matches this installment
+      const installmentLabel = installment.isSinal
+        ? 'Sinal'
+        : `Parcela ${installment.installmentNumber}`
+      const existingTransaction = await tx.transaction.findFirst({
+        where: {
           eventId: installment.eventId,
+          status: 'pending',
+          installment: { is: null },
+          type: 'income',
+          description: { contains: installmentLabel },
         },
       })
+
+      let transaction
+      if (existingTransaction) {
+        // Update the existing standalone transaction instead of creating a new one
+        transaction = await tx.transaction.update({
+          where: { id: existingTransaction.id },
+          data: {
+            status: 'paid',
+            paidAt,
+            amount: paidAmount,
+            category: 'installment_payment',
+          },
+        })
+      } else {
+        // Create a new transaction for this payment
+        transaction = await tx.transaction.create({
+          data: {
+            type: 'income',
+            category: 'installment_payment',
+            description: `Parcela ${installment.installmentNumber}${installment.isSinal ? ' (Sinal)' : ''} - ${installment.event.title}`,
+            amount: paidAmount,
+            date: paidAt,
+            status: 'paid',
+            paidAt,
+            eventId: installment.eventId,
+          },
+        })
+      }
 
       // Update installment
       await tx.paymentInstallment.update({

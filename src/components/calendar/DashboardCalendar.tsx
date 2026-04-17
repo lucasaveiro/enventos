@@ -29,6 +29,11 @@ const localizer = dateFnsLocalizer({
   locales,
 })
 
+const weekdayShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+const calendarFormats = {
+  weekdayFormat: (date: Date) => weekdayShort[date.getDay()],
+}
+
 interface CalendarEvent {
   id: number | string
   title: string
@@ -344,6 +349,7 @@ export function DashboardCalendar() {
             eventPropGetter={eventStyleGetter}
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectEvent}
+            formats={calendarFormats}
             selectable
           />
         )}

@@ -34,6 +34,11 @@ import {
 const locales = { 'pt-BR': ptBR }
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales })
 
+const weekdayShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+const calendarFormats = {
+  weekdayFormat: (date: Date) => weekdayShort[date.getDay()],
+}
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
@@ -326,6 +331,7 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
               eventPropGetter={eventStyleGetter}
               onSelectEvent={handleSelectEvent}
               messages={messages}
+              formats={calendarFormats}
               culture="pt-BR"
               popup
             />

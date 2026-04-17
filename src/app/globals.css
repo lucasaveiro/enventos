@@ -93,6 +93,8 @@
   --calendar-header-foreground: #8a9bb0;
   --calendar-toolbar-bg: #141c2e;
   --calendar-toolbar-foreground: #bdc8d8;
+  --calendar-grid-line: #eef1f6;
+  --calendar-outer-border: #e2e7ef;
 }
 
 @theme inline {
@@ -162,6 +164,8 @@
     --calendar-header-foreground: #7a8c9e;
     --calendar-toolbar-bg: #0d1117;
     --calendar-toolbar-foreground: #b5c0d0;
+    --calendar-grid-line: #1a2030;
+    --calendar-outer-border: #1f2838;
   }
 }
 
@@ -346,18 +350,39 @@ body {
 .rbc-header {
   padding: 0.75rem 0.5rem;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.7rem !important;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em !important;
   color: var(--calendar-header-foreground);
   background: var(--calendar-header-bg);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--calendar-outer-border) !important;
+}
+
+.rbc-header + .rbc-header {
+  border-left: 1px solid var(--calendar-grid-line) !important;
 }
 
 .rbc-month-view {
-  border: 1px solid var(--border);
+  border: 1px solid var(--calendar-outer-border) !important;
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+
+.rbc-month-row + .rbc-month-row {
+  border-top: 1px solid var(--calendar-grid-line) !important;
+}
+
+.rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid var(--calendar-grid-line) !important;
+}
+
+.rbc-day-bg {
+  border-color: var(--calendar-grid-line) !important;
+}
+
+.rbc-month-row {
+  overflow: visible;
+  border-color: var(--calendar-grid-line) !important;
 }
 
 .rbc-day-bg {
@@ -365,11 +390,11 @@ body {
 }
 
 .rbc-day-bg:hover {
-  background: var(--muted);
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
 }
 
 .rbc-off-range-bg {
-  background: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 50%, transparent);
 }
 
 .rbc-today {
@@ -394,37 +419,44 @@ body {
 }
 
 .rbc-event {
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.4rem !important;
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
+  font-size: 0.7rem !important;
   font-weight: 500;
+  line-height: 1.25;
   border: none !important;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none !important;
+  margin: 1px 2px !important;
 }
 
 .rbc-event:focus {
   outline: 2px solid var(--ring);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
 .rbc-show-more {
   color: var(--primary);
   font-weight: 500;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  background: transparent;
+  padding: 0 0.25rem;
 }
 
 .rbc-date-cell {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
+  padding: 0.375rem 0.5rem !important;
+  font-size: 0.8125rem !important;
+  text-align: right;
 }
 
 .rbc-date-cell > a {
   color: var(--foreground);
   font-weight: 500;
+  opacity: 0.85;
 }
 
 .rbc-off-range {
   color: var(--muted-foreground);
+  opacity: 0.55;
 }
 
 .rbc-current > a {
@@ -440,34 +472,56 @@ body {
 
 /* Time view styles */
 .rbc-time-view {
-  border: 1px solid var(--border);
+  border: 1px solid var(--calendar-outer-border) !important;
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
+.rbc-time-view .rbc-time-gutter,
+.rbc-time-view .rbc-day-slot {
+  border-color: var(--calendar-grid-line);
+}
+
 .rbc-time-header {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--calendar-outer-border);
+}
+
+.rbc-time-header-content {
+  border-left: 1px solid var(--calendar-grid-line);
+}
+
+.rbc-time-header.rbc-overflowing {
+  border-right: 1px solid var(--calendar-grid-line);
+}
+
+.rbc-time-header-cell .rbc-header + .rbc-header {
+  border-left: 1px solid var(--calendar-grid-line);
 }
 
 .rbc-time-content {
-  border-top: none;
+  border-top: 1px solid var(--calendar-outer-border);
+}
+
+.rbc-time-content > * + * > * {
+  border-left: 1px solid var(--calendar-grid-line);
 }
 
 .rbc-timeslot-group {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--calendar-grid-line) !important;
 }
 
 .rbc-time-slot {
   font-size: 0.75rem;
   color: var(--muted-foreground);
+  border-top: none !important;
 }
 
 .rbc-day-slot .rbc-time-slot {
-  border-top: 1px solid var(--border);
+  border-top: 1px dashed color-mix(in srgb, var(--calendar-grid-line) 60%, transparent);
 }
 
 .rbc-agenda-view table.rbc-agenda-table {
-  border: 1px solid var(--border);
+  border: 1px solid var(--calendar-outer-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -475,17 +529,21 @@ body {
 .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
   padding: 0.75rem 1rem;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--muted-foreground);
   background: var(--secondary);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--calendar-outer-border);
 }
 
 .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--calendar-grid-line);
+}
+
+.rbc-agenda-view table.rbc-agenda-table tbody > tr > td + td {
+  border-left: 1px solid var(--calendar-grid-line);
 }
 
 .rbc-agenda-view table.rbc-agenda-table tbody > tr:last-child > td {
@@ -588,6 +646,30 @@ select option {
   /* Agenda view: linhas mais compactas */
   .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
     padding: 0.5rem 0.375rem;
+  }
+
+  /* Header e células do mês: mais compactos em telas estreitas */
+  .rbc-calendar .rbc-header {
+    padding: 0.5rem 0.125rem !important;
+    font-size: 0.625rem !important;
+    letter-spacing: 0.02em !important;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .rbc-calendar .rbc-date-cell {
+    padding: 0.25rem 0.25rem !important;
+    font-size: 0.75rem !important;
+  }
+  .rbc-calendar .rbc-event {
+    padding: 0.125rem 0.25rem !important;
+    font-size: 0.625rem !important;
+    margin: 1px !important;
+  }
+  .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+    padding: 0.5rem 0.375rem;
+    font-size: 0.625rem;
+    letter-spacing: 0.04em;
   }
 }
 

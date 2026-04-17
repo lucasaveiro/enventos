@@ -95,6 +95,8 @@
   --calendar-toolbar-foreground: #bdc8d8;
   --calendar-grid-line: #eef1f6;
   --calendar-outer-border: #e2e7ef;
+  --calendar-off-range-bg: #eef1f6;
+  --calendar-off-range-fg: #9aa5b5;
 }
 
 @theme inline {
@@ -166,6 +168,8 @@
     --calendar-toolbar-foreground: #b5c0d0;
     --calendar-grid-line: #1a2030;
     --calendar-outer-border: #1f2838;
+    --calendar-off-range-bg: #0b1018;
+    --calendar-off-range-fg: #4d5a70;
   }
 }
 
@@ -394,7 +398,12 @@ body {
 }
 
 .rbc-off-range-bg {
-  background: color-mix(in srgb, var(--secondary) 50%, transparent);
+  background: var(--calendar-off-range-bg) !important;
+}
+
+.rbc-off-range {
+  color: var(--calendar-off-range-fg) !important;
+  opacity: 1;
 }
 
 .rbc-today {
@@ -454,10 +463,6 @@ body {
   opacity: 0.85;
 }
 
-.rbc-off-range {
-  color: var(--muted-foreground);
-  opacity: 0.55;
-}
 
 .rbc-current > a {
   background: var(--primary);

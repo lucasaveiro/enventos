@@ -36,6 +36,7 @@ import {
   getInitialClauses,
   substituteClause,
   isCNPJ,
+  isValidCPFOrCNPJ,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
 import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract, getLatestGeneratedContractForEvent } from '@/app/actions/generatedContracts'
@@ -67,7 +68,10 @@ const baseSchema = z.object({
   contractNumber: z.string().min(1, 'Obrigatório'),
   contractDate: z.string().min(1, 'Obrigatório'),
   clientName: z.string().min(2, 'Mínimo 2 caracteres'),
-  clientCPF: z.string().min(11, 'CPF inválido'),
+  clientCPF: z
+    .string()
+    .min(11, 'CPF inválido')
+    .refine(isValidCPFOrCNPJ, 'CPF/CNPJ inválido — verifique os dígitos'),
   clientRG: z.string().optional(),
   clientNationality: z.string().optional(),
   clientCivilStatus: z.string().optional(),

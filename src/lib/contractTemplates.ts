@@ -155,6 +155,42 @@ export function isCNPJ(doc: string): boolean {
   return digits.length >= 14 || doc.includes('/')
 }
 
+export function isValidCPF(doc: string): boolean {
+  const cpf = (doc || '').replace(/\D/g, '')
+  if (cpf.length !== 11) return false
+  if (/^(\d)\1{10}$/.test(cpf)) return false
+  let sum = 0
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i)
+  let d1 = (sum * 10) % 11
+  if (d1 === 10) d1 = 0
+  if (d1 !== parseInt(cpf[9], 10)) return false
+  sum = 0
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i)
+  let d2 = (sum * 10) % 11
+  if (d2 === 10) d2 = 0
+  return d2 === parseInt(cpf[10], 10)
+}
+
+export function isValidCNPJ(doc: string): boolean {
+  const cnpj = (doc || '').replace(/\D/g, '')
+  if (cnpj.length !== 14) return false
+  if (/^(\d)\1{13}$/.test(cnpj)) return false
+  const calc = (slice: string, weights: number[]): number => {
+    let sum = 0
+    for (let i = 0; i < slice.length; i++) sum += parseInt(slice[i], 10) * weights[i]
+    const mod = sum % 11
+    return mod < 2 ? 0 : 11 - mod
+  }
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+  if (calc(cnpj.slice(0, 12), w1) !== parseInt(cnpj[12], 10)) return false
+  return calc(cnpj.slice(0, 13), w2) === parseInt(cnpj[13], 10)
+}
+
+export function isValidCPFOrCNPJ(doc: string): boolean {
+  return isCNPJ(doc) ? isValidCNPJ(doc) : isValidCPF(doc)
+}
+
 export function formatCurrency(value: string): string {
   const num = parseFloat((value || '').replace(',', '.'))
   if (isNaN(num) || !value) return ''

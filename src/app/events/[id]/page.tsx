@@ -31,7 +31,7 @@ import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/trans
 import { getContractSignature, cancelContractSignature } from '@/app/actions/clicksign'
 import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
 import { deleteManualContract } from '@/app/actions/manualContracts'
-import { getGeneratedContracts } from '@/app/actions/generatedContracts'
+import { getGeneratedContracts, deleteGeneratedContract } from '@/app/actions/generatedContracts'
 import { getContractSpaceSlug } from '@/lib/contractTemplates'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -796,6 +796,25 @@ export default function EventPage() {
                             <Edit3 className="h-4 w-4" />
                           </Button>
                         </Link>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Excluir contrato gerado"
+                          onClick={async () => {
+                            const msg = `Excluir o contrato gerado v${gc.version} (${gc.pdfFileName})?\n\nEsta ação não pode ser desfeita. O PDF também será removido.`
+                            if (!confirm(msg)) return
+                            const result = await deleteGeneratedContract(gc.id)
+                            if (result.success) {
+                              await fetchEvent()
+                              const refreshed = await getGeneratedContracts(eventId)
+                              if (refreshed.success && refreshed.data) setGeneratedContracts(refreshed.data)
+                            } else {
+                              alert(result.error || 'Erro ao excluir contrato')
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
                     </div>
                   ))}

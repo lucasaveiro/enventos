@@ -26,7 +26,7 @@ interface Props {
   isValid?: boolean
   eventId: number | null
   existingSignature?: ExistingSignature | null
-  onBeforeGenerate?: () => void
+  onBeforeGenerate?: () => void | Promise<void>
   onAfterGenerate?: (pdfBlob: Blob, formData: ContractFormData, finalClauses: ContractClause[]) => void
 }
 
@@ -109,7 +109,7 @@ export default function ClicksignButton({
       // Step 1: Generate PDF
       setState('generating')
       // Aplica dados do formulário nas cláusulas automaticamente antes de gerar
-      if (onBeforeGenerate) onBeforeGenerate()
+      if (onBeforeGenerate) await onBeforeGenerate()
       const formData = getFormData()
       const computedClauses = getClauses()
 

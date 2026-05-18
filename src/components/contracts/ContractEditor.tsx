@@ -812,10 +812,51 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     })
   }, [clauses, space.id, effectiveSpace, buildFormDataFromValues])
 
-  const applyFormDataToClauses = useCallback(() => {
+  const [isRefreshingClient, setIsRefreshingClient] = useState(false)
+
+  // Lista de campos que vêm direto do cadastro do cliente — só esses são
+  // sobrescritos pelo refresh, preservando edições manuais nos demais.
+  const CLIENT_FIELDS_TO_REFRESH: (keyof FormValues)[] = [
+    'clientName', 'clientCPF', 'clientRG',
+    'clientPhone', 'clientEmail',
+    'clientAddress', 'clientCity', 'clientState',
+  ]
+
+  const applyFormDataToClauses = useCallback(async () => {
+    // Se um evento está vinculado, puxa dados frescos do cliente do banco antes
+    // de aplicar nas cláusulas. Isso evita usar dados desatualizados quando o
+    // cadastro do cliente foi corrigido após o contrato ter sido salvo.
+    if (selectedEventId) {
+      setIsRefreshingClient(true)
+      try {
+        const result = await getEventDataForContract(selectedEventId)
+        if (result.success && result.data?.client) {
+          const c = result.data.client
+          const freshValues: Partial<Record<keyof FormValues, string>> = {
+            clientName: c.name || '',
+            clientCPF: c.cpf || '',
+            clientRG: c.rg || '',
+            clientPhone: c.phone || '',
+            clientEmail: c.email || '',
+            clientAddress: c.address || '',
+            clientCity: c.city || '',
+            clientState: c.state || '',
+          }
+          for (const key of CLIENT_FIELDS_TO_REFRESH) {
+            const value = freshValues[key]
+            if (value !== undefined) setValue(key, value, { shouldValidate: true })
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao atualizar dados do cliente:', err)
+      } finally {
+        setIsRefreshingClient(false)
+      }
+    }
     setClauses(computeClausesWithFormData())
     setClausesApplied(true)
-  }, [computeClausesWithFormData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computeClausesWithFormData, selectedEventId, setValue])
 
   const toggleClause = (id: string) => {
     if (expandedId === id) {
@@ -1449,19 +1490,28 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               variant={clausesApplied ? 'outline' : 'default'}
               size="sm"
               onClick={applyFormDataToClauses}
+              disabled={isRefreshingClient}
               className={`gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center font-semibold ${
                 clausesApplied
                   ? ''
                   : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-200 animate-pulse-slow'
               }`}
               title={clausesApplied
-                ? 'Reaplica os dados atuais do formulário às cláusulas'
-                : 'Recomendado: aplica os dados do formulário às cláusulas antes de gerar o contrato'}
+                ? 'Atualiza os dados do cliente do cadastro e reaplica nas cláusulas'
+                : 'Recomendado: atualiza dados do cliente do cadastro e aplica nas cláusulas antes de gerar o contrato'}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span className="sm:hidden">{clausesApplied ? 'Reatualizar' : 'Aplicar dados'}</span>
+              {isRefreshingClient ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              <span className="sm:hidden">
+                {isRefreshingClient ? 'Atualizando...' : (clausesApplied ? 'Reatualizar' : 'Aplicar dados')}
+              </span>
               <span className="hidden sm:inline">
-                {clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário'}
+                {isRefreshingClient
+                  ? 'Atualizando do cadastro...'
+                  : (clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário')}
               </span>
             </Button>
             <Button

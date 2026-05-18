@@ -12,7 +12,7 @@ interface Props {
   getClauses: () => ContractClause[]
   getFormData: () => ContractFormData
   isValid?: boolean
-  onBeforeGenerate?: () => void
+  onBeforeGenerate?: () => void | Promise<void>
   onAfterGenerate?: (pdfBlob: Blob, formData: ContractFormData, finalClauses: ContractClause[]) => void
 }
 
@@ -25,7 +25,7 @@ export default function PDFGeneratorButton({ space, getClauses, getFormData, isV
       // Aplica dados do formulário nas cláusulas automaticamente antes de gerar,
       // garantindo que o PDF sempre reflita os valores atuais — mesmo se o usuário
       // não clicou em "Aplicar dados do formulário".
-      if (onBeforeGenerate) onBeforeGenerate()
+      if (onBeforeGenerate) await onBeforeGenerate()
       const formData = getFormData()
       const computedClauses = getClauses()
 

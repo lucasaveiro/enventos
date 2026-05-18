@@ -21,55 +21,71 @@ interface ExistingSignature {
 
 interface Props {
   space: SpaceConfig
-  clauses: ContractClause[]
+  getClauses: () => ContractClause[]
   getFormData: () => ContractFormData
   isValid?: boolean
   eventId: number | null
   existingSignature?: ExistingSignature | null
+  onBeforeGenerate?: () => void
   onAfterGenerate?: (pdfBlob: Blob, formData: ContractFormData, finalClauses: ContractClause[]) => void
 }
 
 type SendState = 'idle' | 'generating' | 'sending' | 'success' | 'error'
 
+// Estados parciais: o envio começou mas não chegou a notificar o WhatsApp.
+// Pode indicar falha silenciosa (telefone inválido, indisponibilidade do Clicksign,
+// etc) — mostrar aviso e oferecer cancelar/reenviar.
+const PARTIAL_STATUSES = ['uploaded', 'signer_added']
+const FINAL_SENT_STATUSES = ['sent_whatsapp', 'signed', 'closed']
+
 export default function ClicksignButton({
   space,
-  clauses,
+  getClauses,
   getFormData,
   isValid,
   eventId,
   existingSignature,
+  onBeforeGenerate,
   onAfterGenerate,
 }: Props) {
   const [state, setState] = useState<SendState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [signingUrl, setSigningUrl] = useState<string | null>(null)
 
-  const isAlreadySent =
-    existingSignature &&
-    ['sent_whatsapp', 'signed', 'closed', 'uploaded', 'signer_added'].includes(existingSignature.status)
+  const isPartial = existingSignature && PARTIAL_STATUSES.includes(existingSignature.status)
+  const isFullySent = existingSignature && FINAL_SENT_STATUSES.includes(existingSignature.status)
   const [cancelling, setCancelling] = useState(false)
 
-  const handleCancel = async () => {
-    if (!eventId) return
-    if (!confirm('Tem certeza que deseja cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.')) return
+  const cancelExistingSignature = async (): Promise<boolean> => {
+    if (!eventId) return false
     setCancelling(true)
     try {
       const result = await cancelContractSignature(eventId)
-      if (result.success) {
-        setState('idle')
-        setError(null)
-        setSigningUrl(null)
-        // Force page reload to refresh existingSignature
-        window.location.reload()
-      } else {
-        setError(result.error || 'Erro ao cancelar contrato')
-        setState('error')
-      }
+      if (result.success) return true
+      setError(result.error || 'Erro ao cancelar contrato')
+      setState('error')
+      return false
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao cancelar')
       setState('error')
+      return false
     } finally {
       setCancelling(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!eventId) return
+    const message = isPartial
+      ? 'O envio anterior ficou incompleto (cliente pode não ter recebido). Cancelar o registro para permitir um novo envio?'
+      : 'Tem certeza que deseja cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.'
+    if (!confirm(message)) return
+    const ok = await cancelExistingSignature()
+    if (ok) {
+      setState('idle')
+      setError(null)
+      setSigningUrl(null)
+      window.location.reload()
     }
   }
 
@@ -77,12 +93,27 @@ export default function ClicksignButton({
     if (!eventId) return
     setError(null)
 
+    // Se já há um signature ativo (parcial ou completo), pede confirmação para
+    // cancelar antes de gerar o novo. Evita que o usuário crie registros conflitantes
+    // ou envie duas vezes sem perceber.
+    if (existingSignature && existingSignature.status !== 'cancelled') {
+      const confirmMsg = isPartial
+        ? 'Já existe um envio anterior incompleto para este evento (o cliente pode não ter recebido).\n\nDeseja cancelar o envio anterior e enviar este novo contrato?'
+        : 'Já existe um contrato ativo para este evento no Clicksign.\n\nDeseja cancelar o contrato anterior e enviar este novo contrato?'
+      if (!confirm(confirmMsg)) return
+      const ok = await cancelExistingSignature()
+      if (!ok) return
+    }
+
     try {
       // Step 1: Generate PDF
       setState('generating')
+      // Aplica dados do formulário nas cláusulas automaticamente antes de gerar
+      if (onBeforeGenerate) onBeforeGenerate()
       const formData = getFormData()
+      const computedClauses = getClauses()
 
-      const finalClauses = clauses.map((clause) => ({
+      const finalClauses = computedClauses.map((clause) => ({
         ...clause,
         content: substituteClause(clause.content, formData, space),
       }))
@@ -131,8 +162,40 @@ export default function ClicksignButton({
     }
   }
 
-  // Se já foi enviado, mostra status
-  if (isAlreadySent) {
+  // Envio parcial: começou mas não completou (cliente provavelmente não recebeu)
+  if (isPartial) {
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 max-w-md">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+          <ContractStatusBadge status={existingSignature!.status} />
+          <span className="text-xs font-medium text-amber-700">Envio incompleto</span>
+        </div>
+        <p className="text-xs text-amber-700 leading-relaxed">
+          O envio anterior não foi concluído — o cliente provavelmente não recebeu o link no WhatsApp.
+          Cancele o registro abaixo e clique em &ldquo;Enviar para Clicksign&rdquo; novamente.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleCancel}
+          disabled={cancelling}
+          className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-50 w-fit"
+        >
+          {cancelling ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <XCircle className="h-3 w-3" />
+          )}
+          {cancelling ? 'Cancelando...' : 'Cancelar envio parcial'}
+        </Button>
+      </div>
+    )
+  }
+
+  // Já foi enviado com sucesso (sent_whatsapp / signed / closed)
+  if (isFullySent) {
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3">

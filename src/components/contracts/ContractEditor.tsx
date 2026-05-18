@@ -769,9 +769,9 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     saveClauseStructure(space.id, nextStructure)
   }, [space.id])
 
-  const applyFormDataToClauses = useCallback(() => {
+  const buildFormDataFromValues = useCallback((): ContractFormData => {
     const v = getValues()
-    const formData: ContractFormData = {
+    return {
       ...v,
       clientRG: v.clientRG ?? '',
       clientNationality: v.clientNationality ?? '',
@@ -792,15 +792,26 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       benchCount: v.benchCount ?? '20',
       observations: v.observations ?? '',
     }
-    setClauses((prev) =>
-      prev.map((clause) => {
-        if (clause.edited) return clause
-        const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content || clause.content
-        return { ...clause, content: substituteClause(template, formData, effectiveSpace) }
-      })
-    )
+  }, [getValues, installments])
+
+  // Calcula as cláusulas com os dados atuais do formulário aplicados, preservando
+  // cláusulas que o usuário editou manualmente (clause.edited === true).
+  // Função pura — não atualiza state. Usada tanto pelo botão "Aplicar dados" quanto
+  // pelos botões de gerar/enviar contrato, para garantir que o PDF sempre reflete
+  // os campos atuais do formulário, sem depender de o usuário ter clicado em "Aplicar".
+  const computeClausesWithFormData = useCallback((): ContractClause[] => {
+    const formData = buildFormDataFromValues()
+    return clauses.map((clause) => {
+      if (clause.edited) return clause
+      const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content || clause.content
+      return { ...clause, content: substituteClause(template, formData, effectiveSpace) }
+    })
+  }, [clauses, space.id, effectiveSpace, buildFormDataFromValues])
+
+  const applyFormDataToClauses = useCallback(() => {
+    setClauses(computeClausesWithFormData())
     setClausesApplied(true)
-  }, [getValues, space.id, effectiveSpace, installments])
+  }, [computeClausesWithFormData])
 
   const toggleClause = (id: string) => {
     if (expandedId === id) {
@@ -942,30 +953,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     }
   }
 
-  const getFormDataForPDF = (): ContractFormData => {
-    const v = getValues()
-    return {
-      ...v,
-      clientRG: v.clientRG ?? '',
-      clientNationality: v.clientNationality ?? '',
-      clientCivilStatus: v.clientCivilStatus ?? '',
-      clientProfession: v.clientProfession ?? '',
-      clientEmail: v.clientEmail ?? '',
-      remainingValue: v.remainingValue ?? '',
-      remainingDueDate: v.remainingDueDate ?? '',
-      depositValue: v.depositValue ?? '',
-      depositDueDate: v.depositDueDate ?? '',
-      paymentMethod: v.paymentMethod ?? '',
-      paymentCondition: (v.paymentCondition || '') as PaymentConditionType,
-      installments,
-      dailyCount: v.dailyCount ?? '',
-      packageType: v.packageType ?? '',
-      eventCheckoutDate: v.eventCheckoutDate ?? '',
-      cautionValue: v.cautionValue ?? '',
-      benchCount: v.benchCount ?? '20',
-      observations: v.observations ?? '',
-    }
-  }
+  const getFormDataForPDF = buildFormDataFromValues
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
@@ -1454,10 +1442,17 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:flex-wrap sm:items-center">
             <Button
               type="button"
-              variant="outline"
+              variant={clausesApplied ? 'outline' : 'default'}
               size="sm"
               onClick={applyFormDataToClauses}
-              className="gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center"
+              className={`gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center font-semibold ${
+                clausesApplied
+                  ? ''
+                  : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-200 animate-pulse-slow'
+              }`}
+              title={clausesApplied
+                ? 'Reaplica os dados atuais do formulário às cláusulas'
+                : 'Recomendado: aplica os dados do formulário às cláusulas antes de gerar o contrato'}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
               <span className="sm:hidden">{clausesApplied ? 'Reatualizar' : 'Aplicar dados'}</span>
@@ -1499,12 +1494,23 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
           </div>
         </div>
 
-        {clausesApplied && (
+        {clausesApplied ? (
           <div className="px-5 py-2.5 bg-[var(--success-light)] border-b border-[var(--border)] flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-[var(--success)] flex-shrink-0" />
             <p className="text-xs text-[var(--success)]">
               Dados do formulário aplicados nas cláusulas. Clique em qualquer cláusula para revisar e editar.
             </p>
+          </div>
+        ) : (
+          <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-200 flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-800 leading-relaxed">
+              <strong>Antes de gerar o contrato:</strong> clique em &ldquo;Aplicar dados do formulário&rdquo; acima
+              para revisar as cláusulas com os dados preenchidos.
+              <span className="block text-amber-700 mt-0.5">
+                (Se você não clicar, os dados serão aplicados automaticamente ao gerar o PDF / enviar via Clicksign.)
+              </span>
+            </div>
           </div>
         )}
 
@@ -1702,9 +1708,10 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             </p>
           )}
           {isValid && !clausesApplied && (
-            <p className="text-xs text-[var(--muted-foreground)] mt-1 flex items-center gap-1">
+            <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              Clique em &ldquo;Aplicar dados do formulário&rdquo; para atualizar as cláusulas.
+              Recomendado: clique em &ldquo;Aplicar dados do formulário&rdquo; acima para revisar as cláusulas antes
+              de gerar (ou serão aplicados automaticamente ao gerar).
             </p>
           )}
           {isValid && !selectedEventId && (
@@ -1717,18 +1724,20 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         <div className="flex items-center gap-3">
           <PDFGeneratorButton
             space={effectiveSpace}
-            clauses={clauses}
+            getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
             isValid={isValid}
+            onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterDownload}
           />
           <ClicksignButton
             space={effectiveSpace}
-            clauses={clauses}
+            getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
             isValid={isValid}
             eventId={selectedEventId}
             existingSignature={existingSignature}
+            onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterClicksign}
           />
         </div>

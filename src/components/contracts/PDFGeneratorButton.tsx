@@ -9,23 +9,29 @@ import { ContractPDFDocument } from './ContractPDF'
 
 interface Props {
   space: SpaceConfig
-  clauses: ContractClause[]
+  getClauses: () => ContractClause[]
   getFormData: () => ContractFormData
   isValid?: boolean
+  onBeforeGenerate?: () => void
   onAfterGenerate?: (pdfBlob: Blob, formData: ContractFormData, finalClauses: ContractClause[]) => void
 }
 
-export default function PDFGeneratorButton({ space, clauses, getFormData, isValid, onAfterGenerate }: Props) {
+export default function PDFGeneratorButton({ space, getClauses, getFormData, isValid, onBeforeGenerate, onAfterGenerate }: Props) {
   const [loading, setLoading] = useState(false)
 
   const handleGenerate = async () => {
     setLoading(true)
     try {
+      // Aplica dados do formulário nas cláusulas automaticamente antes de gerar,
+      // garantindo que o PDF sempre reflita os valores atuais — mesmo se o usuário
+      // não clicou em "Aplicar dados do formulário".
+      if (onBeforeGenerate) onBeforeGenerate()
       const formData = getFormData()
+      const computedClauses = getClauses()
 
-      // Garante que todos os placeholders {token} das cláusulas são substituídos,
-      // mesmo que o usuário não tenha clicado em "Aplicar dados do formulário"
-      const finalClauses = clauses.map((clause) => ({
+      // Segurança extra: substitui qualquer placeholder residual (cláusulas editadas
+      // pelo usuário não passam por getClauses; substituteClause aqui é idempotente).
+      const finalClauses = computedClauses.map((clause) => ({
         ...clause,
         content: substituteClause(clause.content, formData, space),
       }))

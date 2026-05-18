@@ -13,6 +13,11 @@ function formatPhoneForClicksign(phone: string): string {
   return digits
 }
 
+// Clicksign valida CPF/CNPJ por dígitos; máscaras (000.000.000-00) são rejeitadas como inválido.
+function cleanDocument(doc: string): string {
+  return (doc || '').replace(/\D/g, '')
+}
+
 // ── Enviar contrato para Clicksign ──────────────────────────────────────────
 
 interface SendContractParams {
@@ -95,11 +100,12 @@ export async function sendContractToClicksign(params: SendContractParams) {
   try {
     // Step 2: Create signer
     const phoneFormatted = formatPhoneForClicksign(params.clientPhone)
+    const clientCPFClean = cleanDocument(params.clientCPF)
     const { signerKey } = await clicksign.createSigner({
       email: params.clientEmail || `${phoneFormatted}@noemail.clicksign.com`,
       phoneNumber: phoneFormatted,
       name: params.clientName,
-      documentation: params.clientCPF,
+      documentation: clientCPFClean,
     })
 
     await prisma.contractSignature.update({
@@ -120,7 +126,7 @@ export async function sendContractToClicksign(params: SendContractParams) {
 
     // Step 4: Create contractor signer (contratado/proprietário)
     const contractorPhoneFormatted = formatPhoneForClicksign(params.contractorPhone)
-    const contractorCPFClean = params.contractorCPF.replace(/\D/g, '')
+    const contractorCPFClean = cleanDocument(params.contractorCPF)
     const { signerKey: contractorSignerKey } = await clicksign.createSigner({
       email: params.contractorEmail || `${contractorPhoneFormatted}@noemail.clicksign.com`,
       phoneNumber: contractorPhoneFormatted,

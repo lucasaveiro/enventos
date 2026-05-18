@@ -8,11 +8,18 @@ import {
 
 const SESSION_MAX_AGE_DAYS = 30;
 
+// 303 See Other força o navegador a fazer GET no destino do redirect.
+// O default 307 do NextResponse.redirect preservaria o método POST,
+// fazendo o navegador refazer POST em /login (página) → 405 Method Not Allowed.
+function redirectAfterPost(url: URL): NextResponse {
+  return NextResponse.redirect(url, { status: 303 });
+}
+
 export async function POST(request: NextRequest) {
   const adminPassword = process.env.ADMIN_PASSWORD;
 
   if (!adminPassword) {
-    return NextResponse.redirect(new URL("/login?error=config", request.url));
+    return redirectAfterPost(new URL("/login?error=config", request.url));
   }
 
   // Extract IP for rate limiting
@@ -22,7 +29,7 @@ export async function POST(request: NextRequest) {
   // Check rate limit
   const { allowed, retryAfter } = await checkLoginRateLimit(ip);
   if (!allowed) {
-    return NextResponse.redirect(
+    return redirectAfterPost(
       new URL(`/login?error=ratelimit&retry=${retryAfter}`, request.url)
     );
   }
@@ -42,7 +49,7 @@ export async function POST(request: NextRequest) {
   if (!password || password !== adminPassword) {
     await recordLoginAttempt(ip);
     await new Promise((r) => setTimeout(r, 800));
-    return NextResponse.redirect(new URL("/login?error=wrong", request.url));
+    return redirectAfterPost(new URL("/login?error=wrong", request.url));
   }
 
   // Successful login — clear rate limit and create session
@@ -61,7 +68,7 @@ export async function POST(request: NextRequest) {
     data: { token, expiresAt },
   });
 
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = redirectAfterPost(new URL("/", request.url));
   response.cookies.set("auth_session", token, {
     httpOnly: true,
     secure: true,

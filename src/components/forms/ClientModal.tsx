@@ -10,11 +10,23 @@ import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { createClient, updateClient } from '@/app/actions/clients'
 import { User, Phone, Mail } from 'lucide-react'
+import { isValidCPFOrCNPJ } from '@/lib/contractTemplates'
 
 const clientSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   phone: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
+  cpf: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || isValidCPFOrCNPJ(v),
+      'CPF/CNPJ inválido — verifique os dígitos'
+    ),
+  rg: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
   notes: z.string().optional(),
 })
 
@@ -39,12 +51,22 @@ export function ClientModal({ isOpen, onClose, initialClient, onSuccess }: Clien
       name: '',
       phone: '',
       email: '',
+      cpf: '',
+      rg: '',
+      address: '',
+      city: '',
+      state: '',
       notes: '',
     },
     values: initialClient ? {
       name: initialClient.name,
       phone: initialClient.phone || '',
       email: initialClient.email || '',
+      cpf: initialClient.cpf || '',
+      rg: initialClient.rg || '',
+      address: initialClient.address || '',
+      city: initialClient.city || '',
+      state: initialClient.state || '',
       notes: initialClient.notes || '',
     } : undefined
   })
@@ -114,6 +136,62 @@ export function ClientModal({ isOpen, onClose, initialClient, onSuccess }: Clien
               {errors.email && (
                 <p className="text-sm text-destructive">{errors.email.message}</p>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="cpf">CPF / CNPJ</Label>
+              <Input
+                id="cpf"
+                placeholder="000.000.000-00"
+                {...register('cpf')}
+              />
+              {errors.cpf && (
+                <p className="text-sm text-destructive">{errors.cpf.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="rg">RG</Label>
+              <Input
+                id="rg"
+                placeholder="00.000.000-0"
+                {...register('rg')}
+              />
+              {errors.rg && (
+                <p className="text-sm text-destructive">{errors.rg.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="address">Endereço</Label>
+            <Input
+              id="address"
+              placeholder="Rua, número, bairro"
+              {...register('address')}
+            />
+          </div>
+
+          <div className="grid grid-cols-[1fr_auto] gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="city">Cidade</Label>
+              <Input
+                id="city"
+                placeholder="São Paulo"
+                {...register('city')}
+              />
+            </div>
+            <div className="space-y-2 w-20">
+              <Label htmlFor="state">UF</Label>
+              <Input
+                id="state"
+                placeholder="SP"
+                maxLength={2}
+                className="uppercase"
+                {...register('state')}
+              />
             </div>
           </div>
 

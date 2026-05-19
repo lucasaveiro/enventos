@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { put } from '@vercel/blob'
+import { put, del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
 
 function revalidateAll(eventId?: number) {
@@ -173,5 +173,32 @@ export async function getGeneratedContractById(id: number) {
   } catch (error) {
     console.error('Error fetching generated contract:', error)
     return { success: false, error: 'Erro ao buscar contrato' }
+  }
+}
+
+export async function deleteGeneratedContract(id: number) {
+  try {
+    const contract = await prisma.generatedContract.findUnique({
+      where: { id },
+      select: { id: true, eventId: true, pdfUrl: true },
+    })
+    if (!contract) {
+      return { success: false, error: 'Contrato não encontrado' }
+    }
+
+    // Remove o PDF do Vercel Blob (não-fatal — se falhar, ainda apaga o registro)
+    try {
+      await del(contract.pdfUrl)
+    } catch (blobErr) {
+      console.error('Erro ao remover blob do contrato gerado (continuando):', blobErr)
+    }
+
+    await prisma.generatedContract.delete({ where: { id } })
+
+    revalidateAll(contract.eventId)
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting generated contract:', error)
+    return { success: false, error: 'Erro ao excluir contrato' }
   }
 }

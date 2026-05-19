@@ -36,6 +36,7 @@ import {
   getInitialClauses,
   substituteClause,
   isCNPJ,
+  isValidCPFOrCNPJ,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
 import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract, getLatestGeneratedContractForEvent } from '@/app/actions/generatedContracts'
@@ -67,7 +68,10 @@ const baseSchema = z.object({
   contractNumber: z.string().min(1, 'Obrigatório'),
   contractDate: z.string().min(1, 'Obrigatório'),
   clientName: z.string().min(2, 'Mínimo 2 caracteres'),
-  clientCPF: z.string().min(11, 'CPF inválido'),
+  clientCPF: z
+    .string()
+    .min(11, 'CPF inválido')
+    .refine(isValidCPFOrCNPJ, 'CPF/CNPJ inválido — verifique os dígitos'),
   clientRG: z.string().optional(),
   clientNationality: z.string().optional(),
   clientCivilStatus: z.string().optional(),
@@ -769,9 +773,9 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     saveClauseStructure(space.id, nextStructure)
   }, [space.id])
 
-  const applyFormDataToClauses = useCallback(() => {
+  const buildFormDataFromValues = useCallback((): ContractFormData => {
     const v = getValues()
-    const formData: ContractFormData = {
+    return {
       ...v,
       clientRG: v.clientRG ?? '',
       clientNationality: v.clientNationality ?? '',
@@ -792,15 +796,67 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       benchCount: v.benchCount ?? '20',
       observations: v.observations ?? '',
     }
-    setClauses((prev) =>
-      prev.map((clause) => {
-        if (clause.edited) return clause
-        const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content || clause.content
-        return { ...clause, content: substituteClause(template, formData, effectiveSpace) }
-      })
-    )
+  }, [getValues, installments])
+
+  // Calcula as cláusulas com os dados atuais do formulário aplicados, preservando
+  // cláusulas que o usuário editou manualmente (clause.edited === true).
+  // Função pura — não atualiza state. Usada tanto pelo botão "Aplicar dados" quanto
+  // pelos botões de gerar/enviar contrato, para garantir que o PDF sempre reflete
+  // os campos atuais do formulário, sem depender de o usuário ter clicado em "Aplicar".
+  const computeClausesWithFormData = useCallback((): ContractClause[] => {
+    const formData = buildFormDataFromValues()
+    return clauses.map((clause) => {
+      if (clause.edited) return clause
+      const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content || clause.content
+      return { ...clause, content: substituteClause(template, formData, effectiveSpace) }
+    })
+  }, [clauses, space.id, effectiveSpace, buildFormDataFromValues])
+
+  const [isRefreshingClient, setIsRefreshingClient] = useState(false)
+
+  // Lista de campos que vêm direto do cadastro do cliente — só esses são
+  // sobrescritos pelo refresh, preservando edições manuais nos demais.
+  const CLIENT_FIELDS_TO_REFRESH: (keyof FormValues)[] = [
+    'clientName', 'clientCPF', 'clientRG',
+    'clientPhone', 'clientEmail',
+    'clientAddress', 'clientCity', 'clientState',
+  ]
+
+  const applyFormDataToClauses = useCallback(async () => {
+    // Se um evento está vinculado, puxa dados frescos do cliente do banco antes
+    // de aplicar nas cláusulas. Isso evita usar dados desatualizados quando o
+    // cadastro do cliente foi corrigido após o contrato ter sido salvo.
+    if (selectedEventId) {
+      setIsRefreshingClient(true)
+      try {
+        const result = await getEventDataForContract(selectedEventId)
+        if (result.success && result.data?.client) {
+          const c = result.data.client
+          const freshValues: Partial<Record<keyof FormValues, string>> = {
+            clientName: c.name || '',
+            clientCPF: c.cpf || '',
+            clientRG: c.rg || '',
+            clientPhone: c.phone || '',
+            clientEmail: c.email || '',
+            clientAddress: c.address || '',
+            clientCity: c.city || '',
+            clientState: c.state || '',
+          }
+          for (const key of CLIENT_FIELDS_TO_REFRESH) {
+            const value = freshValues[key]
+            if (value !== undefined) setValue(key, value, { shouldValidate: true })
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao atualizar dados do cliente:', err)
+      } finally {
+        setIsRefreshingClient(false)
+      }
+    }
+    setClauses(computeClausesWithFormData())
     setClausesApplied(true)
-  }, [getValues, space.id, effectiveSpace, installments])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computeClausesWithFormData, selectedEventId, setValue])
 
   const toggleClause = (id: string) => {
     if (expandedId === id) {
@@ -942,30 +998,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     }
   }
 
-  const getFormDataForPDF = (): ContractFormData => {
-    const v = getValues()
-    return {
-      ...v,
-      clientRG: v.clientRG ?? '',
-      clientNationality: v.clientNationality ?? '',
-      clientCivilStatus: v.clientCivilStatus ?? '',
-      clientProfession: v.clientProfession ?? '',
-      clientEmail: v.clientEmail ?? '',
-      remainingValue: v.remainingValue ?? '',
-      remainingDueDate: v.remainingDueDate ?? '',
-      depositValue: v.depositValue ?? '',
-      depositDueDate: v.depositDueDate ?? '',
-      paymentMethod: v.paymentMethod ?? '',
-      paymentCondition: (v.paymentCondition || '') as PaymentConditionType,
-      installments,
-      dailyCount: v.dailyCount ?? '',
-      packageType: v.packageType ?? '',
-      eventCheckoutDate: v.eventCheckoutDate ?? '',
-      cautionValue: v.cautionValue ?? '',
-      benchCount: v.benchCount ?? '20',
-      observations: v.observations ?? '',
-    }
-  }
+  const getFormDataForPDF = buildFormDataFromValues
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
@@ -1454,15 +1487,31 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:flex-wrap sm:items-center">
             <Button
               type="button"
-              variant="outline"
+              variant={clausesApplied ? 'outline' : 'default'}
               size="sm"
               onClick={applyFormDataToClauses}
-              className="gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center"
+              disabled={isRefreshingClient}
+              className={`gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center font-semibold ${
+                clausesApplied
+                  ? ''
+                  : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-200 animate-pulse-slow'
+              }`}
+              title={clausesApplied
+                ? 'Atualiza os dados do cliente do cadastro e reaplica nas cláusulas'
+                : 'Recomendado: atualiza dados do cliente do cadastro e aplica nas cláusulas antes de gerar o contrato'}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span className="sm:hidden">{clausesApplied ? 'Reatualizar' : 'Aplicar dados'}</span>
+              {isRefreshingClient ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              <span className="sm:hidden">
+                {isRefreshingClient ? 'Atualizando...' : (clausesApplied ? 'Reatualizar' : 'Aplicar dados')}
+              </span>
               <span className="hidden sm:inline">
-                {clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário'}
+                {isRefreshingClient
+                  ? 'Atualizando do cadastro...'
+                  : (clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário')}
               </span>
             </Button>
             <Button
@@ -1499,12 +1548,23 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
           </div>
         </div>
 
-        {clausesApplied && (
+        {clausesApplied ? (
           <div className="px-5 py-2.5 bg-[var(--success-light)] border-b border-[var(--border)] flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-[var(--success)] flex-shrink-0" />
             <p className="text-xs text-[var(--success)]">
               Dados do formulário aplicados nas cláusulas. Clique em qualquer cláusula para revisar e editar.
             </p>
+          </div>
+        ) : (
+          <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-200 flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-800 leading-relaxed">
+              <strong>Antes de gerar o contrato:</strong> clique em &ldquo;Aplicar dados do formulário&rdquo; acima
+              para revisar as cláusulas com os dados preenchidos.
+              <span className="block text-amber-700 mt-0.5">
+                (Se você não clicar, os dados serão aplicados automaticamente ao gerar o PDF / enviar via Clicksign.)
+              </span>
+            </div>
           </div>
         )}
 
@@ -1702,9 +1762,10 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             </p>
           )}
           {isValid && !clausesApplied && (
-            <p className="text-xs text-[var(--muted-foreground)] mt-1 flex items-center gap-1">
+            <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              Clique em &ldquo;Aplicar dados do formulário&rdquo; para atualizar as cláusulas.
+              Recomendado: clique em &ldquo;Aplicar dados do formulário&rdquo; acima para revisar as cláusulas antes
+              de gerar (ou serão aplicados automaticamente ao gerar).
             </p>
           )}
           {isValid && !selectedEventId && (
@@ -1717,18 +1778,20 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         <div className="flex items-center gap-3">
           <PDFGeneratorButton
             space={effectiveSpace}
-            clauses={clauses}
+            getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
             isValid={isValid}
+            onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterDownload}
           />
           <ClicksignButton
             space={effectiveSpace}
-            clauses={clauses}
+            getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
             isValid={isValid}
             eventId={selectedEventId}
             existingSignature={existingSignature}
+            onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterClicksign}
           />
         </div>

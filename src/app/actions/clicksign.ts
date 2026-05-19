@@ -13,6 +13,11 @@ function formatPhoneForClicksign(phone: string): string {
   return digits
 }
 
+// Clicksign valida CPF/CNPJ por dígitos; máscaras (000.000.000-00) são rejeitadas como inválido.
+function cleanDocument(doc: string): string {
+  return (doc || '').replace(/\D/g, '')
+}
+
 // ── Enviar contrato para Clicksign ──────────────────────────────────────────
 
 interface SendContractParams {
@@ -33,61 +38,74 @@ interface SendContractParams {
 }
 
 export async function sendContractToClicksign(params: SendContractParams) {
+  // Verifica se o evento existe
+  const event = await prisma.event.findUnique({ where: { id: params.eventId } })
+  if (!event) return { success: false, error: 'Evento não encontrado' }
+
+  // Verifica se já existe assinatura ativa
+  const existing = await prisma.contractSignature.findFirst({
+    where: {
+      eventId: params.eventId,
+      status: { notIn: ['cancelled'] },
+    },
+  })
+  if (existing) {
+    return { success: false, error: 'Já existe um contrato enviado para este evento' }
+  }
+
+  // Calcula deadline
+  const deadline = new Date()
+  deadline.setDate(deadline.getDate() + (params.deadlineDays || 30))
+  const deadlineAt = deadline.toISOString()
+
+  // Garante formato correto do base64
+  const contentBase64 = params.pdfBase64.startsWith('data:')
+    ? params.pdfBase64
+    : `data:application/pdf;base64,${params.pdfBase64}`
+
+  // Step 1: Upload document (antes de qualquer registro local — falha aqui não suja o banco)
+  let documentKey: string
   try {
-    // Verifica se o evento existe
-    const event = await prisma.event.findUnique({ where: { id: params.eventId } })
-    if (!event) return { success: false, error: 'Evento não encontrado' }
-
-    // Verifica se já existe assinatura ativa
-    const existing = await prisma.contractSignature.findFirst({
-      where: {
-        eventId: params.eventId,
-        status: { notIn: ['cancelled'] },
-      },
-    })
-    if (existing) {
-      return { success: false, error: 'Já existe um contrato enviado para este evento' }
-    }
-
-    // Calcula deadline
-    const deadline = new Date()
-    deadline.setDate(deadline.getDate() + (params.deadlineDays || 30))
-    const deadlineAt = deadline.toISOString()
-
-    // Garante formato correto do base64
-    const contentBase64 = params.pdfBase64.startsWith('data:')
-      ? params.pdfBase64
-      : `data:application/pdf;base64,${params.pdfBase64}`
-
-    // Step 1: Upload document
-    const { documentKey } = await clicksign.uploadDocument({
+    const uploaded = await clicksign.uploadDocument({
       path: `/contratos/${params.contractNumber}.pdf`,
       contentBase64,
       deadlineAt,
     })
+    documentKey = uploaded.documentKey
+  } catch (error) {
+    console.error('Erro ao enviar contrato para Clicksign (upload):', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro ao fazer upload do documento',
+    }
+  }
 
-    // Cria registro parcial (para recuperação em caso de falha)
-    const signature = await prisma.contractSignature.create({
-      data: {
-        documentKey,
-        contractNumber: params.contractNumber,
-        spaceId: params.spaceId,
-        clientName: params.clientName,
-        clientPhone: params.clientPhone,
-        clientEmail: params.clientEmail || undefined,
-        clientCPF: params.clientCPF,
-        status: 'uploaded',
-        eventId: params.eventId,
-      },
-    })
+  // Cria registro parcial (para recuperação em caso de falha)
+  const signature = await prisma.contractSignature.create({
+    data: {
+      documentKey,
+      contractNumber: params.contractNumber,
+      spaceId: params.spaceId,
+      clientName: params.clientName,
+      clientPhone: params.clientPhone,
+      clientEmail: params.clientEmail || undefined,
+      clientCPF: params.clientCPF,
+      status: 'uploaded',
+      eventId: params.eventId,
+    },
+  })
 
+  // A partir daqui, qualquer falha precisa fazer rollback (cancelar documento e marcar
+  // signature como cancelled) para não bloquear novos envios com registros órfãos.
+  try {
     // Step 2: Create signer
     const phoneFormatted = formatPhoneForClicksign(params.clientPhone)
+    const clientCPFClean = cleanDocument(params.clientCPF)
     const { signerKey } = await clicksign.createSigner({
       email: params.clientEmail || `${phoneFormatted}@noemail.clicksign.com`,
       phoneNumber: phoneFormatted,
       name: params.clientName,
-      documentation: params.clientCPF,
+      documentation: clientCPFClean,
     })
 
     await prisma.contractSignature.update({
@@ -108,7 +126,7 @@ export async function sendContractToClicksign(params: SendContractParams) {
 
     // Step 4: Create contractor signer (contratado/proprietário)
     const contractorPhoneFormatted = formatPhoneForClicksign(params.contractorPhone)
-    const contractorCPFClean = params.contractorCPF.replace(/\D/g, '')
+    const contractorCPFClean = cleanDocument(params.contractorCPF)
     const { signerKey: contractorSignerKey } = await clicksign.createSigner({
       email: params.contractorEmail || `${contractorPhoneFormatted}@noemail.clicksign.com`,
       phoneNumber: contractorPhoneFormatted,
@@ -151,10 +169,33 @@ export async function sendContractToClicksign(params: SendContractParams) {
       },
     }
   } catch (error) {
-    console.error('Erro ao enviar contrato para Clicksign:', error)
+    console.error('Erro ao enviar contrato para Clicksign (rollback):', error)
+
+    // Rollback: tenta cancelar o documento no Clicksign e marca como cancelled localmente,
+    // evitando que o evento fique bloqueado com signature órfã em estado parcial.
+    try {
+      await clicksign.cancelDocument(documentKey)
+    } catch (cancelErr) {
+      console.error('Erro ao cancelar documento no Clicksign durante rollback:', cancelErr)
+    }
+
+    try {
+      await prisma.contractSignature.update({
+        where: { id: signature.id },
+        data: { status: 'cancelled' },
+      })
+    } catch (dbErr) {
+      console.error('Erro ao marcar signature como cancelled durante rollback:', dbErr)
+    }
+
+    revalidatePath('/')
+    revalidatePath(`/contracts`)
+    revalidatePath(`/events`)
+    revalidatePath(`/events/${params.eventId}`)
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      error: error instanceof Error ? error.message : 'Erro ao enviar contrato',
     }
   }
 }

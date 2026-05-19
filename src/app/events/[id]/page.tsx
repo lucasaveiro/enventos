@@ -24,13 +24,14 @@ import {
   Upload,
   ExternalLink,
   Edit3,
+  AlertCircle,
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
 import { getContractSignature, cancelContractSignature } from '@/app/actions/clicksign'
 import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
 import { deleteManualContract } from '@/app/actions/manualContracts'
-import { getGeneratedContracts } from '@/app/actions/generatedContracts'
+import { getGeneratedContracts, deleteGeneratedContract } from '@/app/actions/generatedContracts'
 import { getContractSpaceSlug } from '@/lib/contractTemplates'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -712,13 +713,28 @@ export default function EventPage() {
                 </a>
               </div>
             )}
+            {contractSignature &&
+              ['uploaded', 'signer_added'].includes(contractSignature.status) && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-800 leading-relaxed">
+                  <strong>Envio incompleto:</strong> o processo de envio para o Clicksign foi iniciado mas não foi
+                  concluído. O cliente provavelmente <strong>não recebeu</strong> o link no WhatsApp.
+                  Cancele o registro abaixo e tente enviar novamente.
+                </div>
+              </div>
+            )}
             {contractSignature && contractSignature.status !== 'cancelled' && (
               <Button
                 size="sm"
                 variant="outline"
                 className="gap-1 text-red-600 border-red-300 hover:bg-red-50 w-fit"
                 onClick={async () => {
-                  if (!confirm('Cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.')) return
+                  const isPartial = ['uploaded', 'signer_added'].includes(contractSignature.status)
+                  const message = isPartial
+                    ? 'Cancelar o registro de envio incompleto? Isso permitirá enviar o contrato novamente.'
+                    : 'Cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.'
+                  if (!confirm(message)) return
                   const result = await cancelContractSignature(eventId)
                   if (result.success) {
                     await fetchEvent()
@@ -729,7 +745,9 @@ export default function EventPage() {
                 }}
               >
                 <Trash2 className="h-3 w-3" />
-                Cancelar Contrato
+                {['uploaded', 'signer_added'].includes(contractSignature.status)
+                  ? 'Cancelar Envio Parcial'
+                  : 'Cancelar Contrato'}
               </Button>
             )}
             {(!contractSignature || contractSignature.status === 'cancelled') &&
@@ -778,6 +796,25 @@ export default function EventPage() {
                             <Edit3 className="h-4 w-4" />
                           </Button>
                         </Link>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Excluir contrato gerado"
+                          onClick={async () => {
+                            const msg = `Excluir o contrato gerado v${gc.version} (${gc.pdfFileName})?\n\nEsta ação não pode ser desfeita. O PDF também será removido.`
+                            if (!confirm(msg)) return
+                            const result = await deleteGeneratedContract(gc.id)
+                            if (result.success) {
+                              await fetchEvent()
+                              const refreshed = await getGeneratedContracts(eventId)
+                              if (refreshed.success && refreshed.data) setGeneratedContracts(refreshed.data)
+                            } else {
+                              alert(result.error || 'Erro ao excluir contrato')
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
                     </div>
                   ))}

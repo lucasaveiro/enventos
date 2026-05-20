@@ -149,7 +149,7 @@ const EVENT_TYPES = [
 
 const PAYMENT_CONDITIONS: { value: PaymentConditionType; label: string; description: string }[] = [
   { value: 'a_vista', label: 'À Vista', description: 'Pago via Pix/Depósito bancário na data da assinatura do contrato' },
-  { value: 'entrada_parcelas', label: 'Entrada + Parcelas', description: '20% no ato do contrato e restante parcelado no Pix até 10 dias antes do evento' },
+  { value: 'entrada_parcelas', label: 'Entrada + Parcelas', description: 'Entrada no ato do contrato e restante parcelado no Pix até 10 dias antes do evento' },
   { value: 'cartao_credito', label: 'Cartão de Crédito', description: 'Parcelado no cartão de crédito com juros adicionais da maquininha' },
 ]
 
@@ -504,20 +504,33 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const depositValue = useWatch({ control, name: 'depositValue' })
   const paymentCondition = useWatch({ control, name: 'paymentCondition' }) as PaymentConditionType
 
-  // Auto-calculate 20% deposit when condition is entrada_parcelas
+  // Whether the entrada is exactly 20% of the total — drives the "(20%)" label.
+  const depositIsTwentyPercent = useMemo(() => {
+    const total = parseFloat((totalValue || '').replace(',', '.'))
+    const deposit = parseFloat((depositValue || '').replace(',', '.'))
+    if (isNaN(total) || isNaN(deposit) || total <= 0) return false
+    return Math.abs(deposit - total * 0.2) < 0.01
+  }, [totalValue, depositValue])
+
+  // Suggest a 20% entrada ONLY when no plan is configured (empty entrada and no
+  // installments). It's just a pre-fill — once present it's never overwritten,
+  // leaving the user free to edit it.
   useEffect(() => {
-    if (paymentCondition === 'entrada_parcelas' && totalValue) {
-      const total = parseFloat((totalValue || '').replace(',', '.'))
-      if (!isNaN(total) && total > 0) {
-        const deposit20 = (total * 0.2).toFixed(2).replace('.', ',')
-        setValue('depositValue', deposit20)
+    if (paymentCondition === 'entrada_parcelas') {
+      const currentDeposit = (getValues('depositValue') || '').trim()
+      if (!currentDeposit && installments.length === 0) {
+        const total = parseFloat((totalValue || '').replace(',', '.'))
+        if (!isNaN(total) && total > 0) {
+          const suggested = (total * 0.2).toFixed(2).replace('.', ',')
+          setValue('depositValue', suggested)
+        }
       }
     }
     if (paymentCondition === 'a_vista') {
       setValue('depositValue', totalValue || '')
       setValue('remainingValue', '0,00')
     }
-  }, [paymentCondition, totalValue, setValue])
+  }, [paymentCondition, totalValue, setValue, getValues, installments.length])
 
   useEffect(() => {
     const total = parseFloat((totalValue || '').replace(',', '.'))
@@ -680,22 +693,23 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         if (event.eventType) setValue('eventType', event.eventType, { shouldValidate: true })
         if (event.guestCount) setValue('guestCount', String(event.guestCount), { shouldValidate: true })
 
-        // Financial data
-        const totalVal = Number(event.totalValue)
-        const depositVal = Number(event.deposit)
-        if (totalVal > 0) {
-          setValue('totalValue', totalVal.toFixed(2).replace('.', ','), { shouldValidate: true })
-        }
-        if (depositVal > 0) {
-          setValue('depositValue', depositVal.toFixed(2).replace('.', ','), { shouldValidate: true })
-        }
-
         // Notes → observations
         if (event.notes) setValue('observations', event.notes, { shouldValidate: true })
 
-        // Payment data from installments
+        // Payment data from the plan configured on the event page
         const sinal = installmentsList.find((i) => i.isSinal)
         const regularInstallments = installmentsList.filter((i) => !i.isSinal)
+
+        // Prefer the entrada from the configured plan (sinal installment) over
+        // the event's deposit field, so the contract reflects the event page.
+        const totalVal = Number(event.totalValue)
+        const configuredDeposit = sinal ? Number(sinal.amount) : Number(event.deposit)
+        if (totalVal > 0) {
+          setValue('totalValue', totalVal.toFixed(2).replace('.', ','), { shouldValidate: true })
+        }
+        if (configuredDeposit > 0) {
+          setValue('depositValue', configuredDeposit.toFixed(2).replace('.', ','), { shouldValidate: true })
+        }
 
         if (sinal) {
           const sinalDate = new Date(sinal.dueDate)
@@ -704,7 +718,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         }
 
         // Infer payment condition and set installments
-        if (totalVal > 0 && depositVal >= totalVal) {
+        if (totalVal > 0 && configuredDeposit >= totalVal) {
           setValue('paymentCondition', 'a_vista', { shouldValidate: true })
         } else if (regularInstallments.length > 0) {
           setValue('paymentCondition', 'entrada_parcelas', { shouldValidate: true })
@@ -1358,12 +1372,11 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         {paymentCondition === 'entrada_parcelas' && (
           <div className="mt-4 p-4 bg-[var(--secondary)] rounded-lg space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Field label="Entrada (20%) (R$)">
+              <Field label={`Entrada${depositIsTwentyPercent ? ' (20%)' : ''} (R$)`}>
                 <Input
-                  {...register('depositValue')}
-                  placeholder="auto-calculado"
-                  readOnly
-                  className="bg-[var(--input-bg)] text-[var(--muted-foreground)] cursor-default"
+                  {...register('depositValue', { onChange: () => setClausesApplied(false) })}
+                  placeholder="0,00"
+                  inputMode="decimal"
                 />
               </Field>
               <Field label="Data da Entrada">

@@ -224,7 +224,14 @@ export function buildPaymentConditionText(formData: Partial<ContractFormData>): 
     const depositFormatted = formatCurrency(formData.depositValue || '') || '[VALOR ENTRADA]'
     const installments = formData.installments || []
 
-    let text = `Entrada de ${depositFormatted} (20% do valor total) no ato do contrato`
+    // Only mention the percentage when the entrada is exactly 20% of the total.
+    const totalNum = parseFloat((formData.totalValue || '').replace(',', '.'))
+    const depositNum = parseFloat((formData.depositValue || '').replace(',', '.'))
+    const isTwentyPercent =
+      !isNaN(totalNum) && !isNaN(depositNum) && totalNum > 0 && Math.abs(depositNum - totalNum * 0.2) < 0.01
+    const percentLabel = isTwentyPercent ? ' (20% do valor total)' : ''
+
+    let text = `Entrada de ${depositFormatted}${percentLabel} no ato do contrato`
     if (installments.length > 0) {
       text += `, e o saldo restante parcelado em ${installments.length}x no Pix até 10 dias antes do evento, conforme abaixo:\n\n`
       installments.forEach((inst, i) => {

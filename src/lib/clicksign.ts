@@ -116,6 +116,58 @@ export async function addSignerToDocument(
   }
 }
 
+// ── Get Document (with signers) ───────────────────────────────────────────────
+
+export interface ClicksignDocumentSigner {
+  key: string
+  request_signature_key: string
+  name: string
+  email: string
+  sign_as: string
+  url: string
+  // Presente apenas quando o signatário já assinou.
+  signature?: unknown
+}
+
+export interface ClicksignDocumentDetail {
+  key: string
+  status: string // running, closed, canceled
+  deadline_at: string | null
+  signers: ClicksignDocumentSigner[]
+}
+
+export async function getDocument(documentKey: string): Promise<ClicksignDocumentDetail> {
+  const url = `${getBaseUrl()}/documents/${documentKey}?access_token=${getToken()}`
+  const res = await fetch(url, { headers: { Accept: 'application/json' } })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Clicksign get document error (${res.status}): ${text}`)
+  }
+
+  const data = (await res.json()) as { document: ClicksignDocumentDetail }
+  return data.document
+}
+
+// ── Update Document Deadline (prorrogar prazo) ────────────────────────────────
+
+export async function updateDocumentDeadline(
+  documentKey: string,
+  deadlineAt: string
+): Promise<void> {
+  const url = `${getBaseUrl()}/documents/${documentKey}?access_token=${getToken()}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ document: { deadline_at: deadlineAt } }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Clicksign update deadline error (${res.status}): ${text}`)
+  }
+}
+
 // ── Cancel Document ─────────────────────────────────────────────────────────
 
 export async function cancelDocument(documentKey: string): Promise<void> {

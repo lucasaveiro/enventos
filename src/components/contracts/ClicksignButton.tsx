@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { pdf } from '@react-pdf/renderer'
-import { Send, Loader2, CheckCircle2, ExternalLink, AlertCircle, XCircle } from 'lucide-react'
+import { Send, Loader2, CheckCircle2, ExternalLink, AlertCircle, XCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import {
   ContractClause,
@@ -12,7 +12,7 @@ import {
 } from '@/lib/contractTemplates'
 import { ContractPDFDocument } from './ContractPDF'
 import { ContractStatusBadge } from './ContractStatusBadge'
-import { sendContractToClicksign, cancelContractSignature } from '@/app/actions/clicksign'
+import { sendContractToClicksign, cancelContractSignature, resendSignatureLink } from '@/app/actions/clicksign'
 
 interface ExistingSignature {
   status: string
@@ -54,7 +54,31 @@ export default function ClicksignButton({
 
   const isPartial = existingSignature && PARTIAL_STATUSES.includes(existingSignature.status)
   const isFullySent = existingSignature && FINAL_SENT_STATUSES.includes(existingSignature.status)
+  const canResend = existingSignature?.status === 'sent_whatsapp'
   const [cancelling, setCancelling] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState<string | null>(null)
+
+  const handleResend = async () => {
+    if (!eventId) return
+    setResendMsg(null)
+    setResending(true)
+    try {
+      const result = await resendSignatureLink(eventId)
+      if (result.success) {
+        const names = result.data?.recipients?.join(', ')
+        setResendMsg(`Link reenviado por WhatsApp${names ? ` para: ${names}` : ''}.`)
+      } else {
+        setError(result.error || 'Erro ao reenviar link')
+        setState('error')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao reenviar')
+      setState('error')
+    } finally {
+      setResending(false)
+    }
+  }
 
   const cancelExistingSignature = async (): Promise<boolean> => {
     if (!eventId) return false
@@ -212,21 +236,46 @@ export default function ClicksignButton({
             </a>
           )}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleCancel}
-          disabled={cancelling}
-          className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-50 w-fit"
-        >
-          {cancelling ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <XCircle className="h-3 w-3" />
+        <div className="flex flex-wrap items-center gap-2">
+          {canResend && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleResend}
+              disabled={resending}
+              className="gap-1.5 text-xs text-orange-600 border-orange-300 hover:bg-orange-50 w-fit"
+            >
+              {resending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              {resending ? 'Reenviando...' : 'Reenviar link de assinatura'}
+            </Button>
           )}
-          {cancelling ? 'Cancelando...' : 'Cancelar e Reenviar'}
-        </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-50 w-fit"
+          >
+            {cancelling ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <XCircle className="h-3 w-3" />
+            )}
+            {cancelling ? 'Cancelando...' : 'Cancelar e Reenviar'}
+          </Button>
+        </div>
+        {resendMsg && (
+          <p className="text-xs text-emerald-600 flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            {resendMsg}
+          </p>
+        )}
       </div>
     )
   }

@@ -251,6 +251,114 @@ export async function cancelContractSignature(eventId: number) {
   }
 }
 
+// ── Reenviar link de assinatura (sem cancelar/recriar) ──────────────────────
+
+export async function resendSignatureLink(eventId: number) {
+  try {
+    const signature = await prisma.contractSignature.findFirst({
+      where: {
+        eventId,
+        status: { notIn: ['cancelled'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!signature) {
+      return { success: false, error: 'Nenhum contrato ativo encontrado para este evento' }
+    }
+
+    if (['signed', 'closed'].includes(signature.status)) {
+      return {
+        success: false,
+        error: 'Este contrato já foi assinado/finalizado. Não é necessário reenviar.',
+      }
+    }
+
+    // Busca o documento atual no Clicksign (status + signatários)
+    const doc = await clicksign.getDocument(signature.documentKey)
+
+    if (doc.status === 'closed' || doc.status === 'canceled') {
+      return {
+        success: false,
+        error:
+          'O documento foi finalizado ou cancelado no Clicksign e não pode ser reaproveitado. Gere um novo contrato.',
+      }
+    }
+
+    // Prorroga o prazo para 30 dias a partir de hoje (reativa o link)
+    const deadline = new Date()
+    deadline.setDate(deadline.getDate() + 30)
+    await clicksign.updateDocumentDeadline(signature.documentKey, deadline.toISOString())
+
+    // Reenvia apenas para quem ainda não assinou
+    const pending = doc.signers.filter((s) => !s.signature)
+    if (pending.length === 0) {
+      return { success: false, error: 'Todos os signatários já assinaram. Nada a reenviar.' }
+    }
+
+    const results = await Promise.all(
+      pending.map(async (signer) => {
+        try {
+          await clicksign.notifyByWhatsapp(signer.request_signature_key)
+          return { name: signer.name, ok: true as const }
+        } catch (err) {
+          return {
+            name: signer.name,
+            ok: false as const,
+            error: err instanceof Error ? err.message : 'erro desconhecido',
+          }
+        }
+      })
+    )
+
+    const delivered = results.filter((r) => r.ok)
+    if (delivered.length === 0) {
+      const reasons = results.map((r) => (r.ok ? '' : r.error)).filter(Boolean).join('; ')
+      return { success: false, error: `Falha ao reenviar notificações: ${reasons}` }
+    }
+
+    // Registra o reenvio no log e reativa o status local
+    const log: Array<Record<string, unknown>> = signature.webhookLog
+      ? JSON.parse(signature.webhookLog)
+      : []
+    log.push({
+      event: 'resend_signature',
+      at: new Date().toISOString(),
+      recipients: delivered.map((r) => r.name),
+      newDeadline: deadline.toISOString(),
+    })
+
+    await prisma.contractSignature.update({
+      where: { id: signature.id },
+      data: { status: 'sent_whatsapp', webhookLog: JSON.stringify(log) },
+    })
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { contractStatus: 'sent' },
+    })
+
+    revalidatePath('/')
+    revalidatePath('/events')
+    revalidatePath(`/events/${eventId}`)
+    revalidatePath('/contracts')
+
+    return {
+      success: true,
+      data: {
+        recipients: delivered.map((r) => r.name),
+        newDeadline: deadline.toISOString(),
+      },
+    }
+  } catch (error) {
+    console.error('Erro ao reenviar link de assinatura:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro ao reenviar link de assinatura',
+    }
+  }
+}
+
 // ── Buscar assinatura do contrato ───────────────────────────────────────────
 
 export async function getContractSignature(eventId: number) {

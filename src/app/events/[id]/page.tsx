@@ -25,10 +25,11 @@ import {
   ExternalLink,
   Edit3,
   AlertCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
-import { getContractSignature, cancelContractSignature } from '@/app/actions/clicksign'
+import { getContractSignature, cancelContractSignature, resendSignatureLink } from '@/app/actions/clicksign'
 import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
 import { deleteManualContract } from '@/app/actions/manualContracts'
 import { getGeneratedContracts, deleteGeneratedContract } from '@/app/actions/generatedContracts'
@@ -123,6 +124,7 @@ export default function EventPage() {
   const [event, setEvent] = useState<any | null>(null)
   const [transactions, setTransactions] = useState<any[]>([])
   const [contractSignature, setContractSignature] = useState<any | null>(null)
+  const [resendingContract, setResendingContract] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
@@ -725,30 +727,60 @@ export default function EventPage() {
               </div>
             )}
             {contractSignature && contractSignature.status !== 'cancelled' && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1 text-red-600 border-red-300 hover:bg-red-50 w-fit"
-                onClick={async () => {
-                  const isPartial = ['uploaded', 'signer_added'].includes(contractSignature.status)
-                  const message = isPartial
-                    ? 'Cancelar o registro de envio incompleto? Isso permitirá enviar o contrato novamente.'
-                    : 'Cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.'
-                  if (!confirm(message)) return
-                  const result = await cancelContractSignature(eventId)
-                  if (result.success) {
-                    await fetchEvent()
-                    setContractSignature(null)
-                  } else {
-                    alert(result.error || 'Erro ao cancelar contrato')
-                  }
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-                {['uploaded', 'signer_added'].includes(contractSignature.status)
-                  ? 'Cancelar Envio Parcial'
-                  : 'Cancelar Contrato'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {contractSignature.status === 'sent_whatsapp' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={resendingContract}
+                    className="gap-1 text-orange-600 border-orange-300 hover:bg-orange-50 w-fit"
+                    onClick={async () => {
+                      setResendingContract(true)
+                      try {
+                        const result = await resendSignatureLink(eventId)
+                        if (result.success) {
+                          const names = result.data?.recipients?.join(', ')
+                          await fetchEvent()
+                          const contractRes = await getContractSignature(eventId)
+                          if (contractRes.success && contractRes.data) setContractSignature(contractRes.data)
+                          alert(`Link reenviado por WhatsApp${names ? ` para: ${names}` : ''}.`)
+                        } else {
+                          alert(result.error || 'Erro ao reenviar link')
+                        }
+                      } finally {
+                        setResendingContract(false)
+                      }
+                    }}
+                  >
+                    <RefreshCw className={`h-3 w-3${resendingContract ? ' animate-spin' : ''}`} />
+                    {resendingContract ? 'Reenviando...' : 'Reenviar link de assinatura'}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 text-red-600 border-red-300 hover:bg-red-50 w-fit"
+                  onClick={async () => {
+                    const isPartial = ['uploaded', 'signer_added'].includes(contractSignature.status)
+                    const message = isPartial
+                      ? 'Cancelar o registro de envio incompleto? Isso permitirá enviar o contrato novamente.'
+                      : 'Cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.'
+                    if (!confirm(message)) return
+                    const result = await cancelContractSignature(eventId)
+                    if (result.success) {
+                      await fetchEvent()
+                      setContractSignature(null)
+                    } else {
+                      alert(result.error || 'Erro ao cancelar contrato')
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                  {['uploaded', 'signer_added'].includes(contractSignature.status)
+                    ? 'Cancelar Envio Parcial'
+                    : 'Cancelar Contrato'}
+                </Button>
+              </div>
             )}
             {(!contractSignature || contractSignature.status === 'cancelled') &&
               (!event.manualContracts || event.manualContracts.length === 0) &&

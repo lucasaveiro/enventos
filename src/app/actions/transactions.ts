@@ -69,24 +69,44 @@ export async function recalculateEventPaymentStatus(eventId: number) {
   if (!event) return
   if (event.category !== 'event') return
 
-  const payments = await prisma.transaction.aggregate({
+  // Paid installments (uses paidAmount when set, falls back to amount)
+  const paidInstallments = await prisma.paymentInstallment.findMany({
+    where: { eventId, status: 'paid' },
+    select: { amount: true, paidAmount: true },
+  })
+  const paidFromInstallments = paidInstallments.reduce(
+    (sum, inst) => sum + toNumber(inst.paidAmount ?? inst.amount),
+    0,
+  )
+
+  // Standalone paid income transactions (not linked to any installment),
+  // matching the FinancialSummaryCard logic to keep status in sync with UI
+  const standalonePayments = await prisma.transaction.aggregate({
     where: {
       eventId,
       type: 'income',
       status: 'paid',
+      installment: { is: null },
     },
-    _sum: {
-      amount: true,
-    },
+    _sum: { amount: true },
   })
+  const paidFromStandalone = standalonePayments._sum.amount
+    ? toNumber(standalonePayments._sum.amount)
+    : 0
 
   const totalValue = toNumber(event.totalValue)
-  const deposit = Math.min(toNumber(event.deposit), totalValue)
-  const paidFromTransactions = payments._sum.amount ? toNumber(payments._sum.amount) : 0
-  const totalPaid = deposit + paidFromTransactions
+  // If there are no installments at all, fall back to event.deposit as a
+  // historical "paid baseline" — same fallback used by the summary card.
+  const hasAnyInstallment = await prisma.paymentInstallment.count({
+    where: { eventId },
+  })
+  const depositFallback =
+    hasAnyInstallment === 0 ? Math.min(toNumber(event.deposit), totalValue) : 0
+
+  const totalPaid = paidFromInstallments + paidFromStandalone + depositFallback
 
   let paymentStatus = 'unpaid'
-  if (totalPaid >= totalValue) {
+  if (totalPaid >= totalValue && totalValue > 0) {
     paymentStatus = 'paid'
   } else if (totalPaid > 0) {
     paymentStatus = 'partial'

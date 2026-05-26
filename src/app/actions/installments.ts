@@ -299,9 +299,7 @@ export async function updateInstallment(
       }
     })
 
-    if (installment.status === 'paid' && installment.transactionId) {
-      await recalculateEventPaymentStatus(installment.eventId)
-    }
+    await recalculateEventPaymentStatus(installment.eventId)
 
     revalidateAll()
     return { success: true }
@@ -333,9 +331,7 @@ export async function deleteInstallment(installmentId: number) {
       }
     })
 
-    if (installment.transactionId) {
-      await recalculateEventPaymentStatus(installment.eventId)
-    }
+    await recalculateEventPaymentStatus(installment.eventId)
 
     revalidateAll()
     return { success: true }

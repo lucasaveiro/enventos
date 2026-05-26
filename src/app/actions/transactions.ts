@@ -827,7 +827,12 @@ export async function deleteTransaction(id: number) {
 export async function getTransactionsByEventId(eventId: number) {
   try {
     const transactions = await prisma.transaction.findMany({
-      where: { eventId },
+      where: {
+        eventId,
+        // Exclude transactions auto-created by installment payments — they
+        // are already shown in the "Plano de Pagamento" section.
+        installment: { is: null },
+      },
       orderBy: { date: 'desc' },
     })
     const serialized = transactions.map((t) => ({

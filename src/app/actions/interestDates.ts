@@ -50,8 +50,11 @@ export async function getInterestDatesByClient(clientId: number) {
 
 export async function getInterestDatesForCalendar() {
   try {
+    // Only "interest" status — confirmed (turned into events) and cancelled
+    // are hidden from the main calendar to avoid duplication with the event
+    // card on the same date.
     const interestDates = await prisma.clientInterestDate.findMany({
-      where: { status: { not: 'cancelled' } },
+      where: { status: 'interest' },
       include: { client: true, space: true },
       orderBy: { date: 'asc' },
     })

@@ -144,39 +144,36 @@ export function DashboardCalendar() {
   }, [fetchData])
 
   const eventStyleGetter = (event: CalendarEvent) => {
-    let backgroundColor = '#4a6fa5' // muted steel blue
+    // Cor fixa por tipo (ignora variação por status — status continua visível
+    // no titulo do card). Paleta: Eventos=vermelho, Visitas=verde claro,
+    // Interesses=amarelo, Servicos=roxo.
+    let backgroundColor = '#64748b' // slate fallback
+    let textColor = 'white'
 
     if (event.type === 'event') {
       const category = event.resource.category || 'event'
-      const status = event.resource.status
       if (category === 'visit') {
-        if (status === 'visit_done') backgroundColor = '#1e7a4e' // muted forest green
-        else if (status === 'visit_cancelled') backgroundColor = '#a83030' // muted red
-        else backgroundColor = '#0d9488' // muted teal
+        backgroundColor = '#22c55e' // green-500
       } else if (category === 'proposal') {
-        if (status === 'proposal_sent') backgroundColor = '#1e7a4e' // muted forest green
-        else if (status === 'proposal_cancelled') backgroundColor = '#a83030' // muted red
-        else backgroundColor = '#2a6aaa' // muted sky blue
-      } else if (status === 'confirming') backgroundColor = '#9e6c14' // muted amber
-      else if (status === 'reserved') backgroundColor = '#1e7a4e' // muted forest green
+        // Proposal continues to use yellow/interest semantics
+        backgroundColor = '#eab308' // yellow-500
+        textColor = '#1f2937'
+      } else {
+        backgroundColor = '#dc2626' // red-600
+      }
     } else if (event.type === 'task') {
-      const serviceName = event.resource.serviceType.name
-      if (serviceName === 'Limpeza') backgroundColor = '#3a6aac' // muted blue
-      else if (serviceName === 'Jardinagem') backgroundColor = '#2a7a42' // muted forest green
-      else if (serviceName === 'Piscina') backgroundColor = '#1a7a88' // muted teal
-      else backgroundColor = '#5c6c90' // muted slate
+      backgroundColor = '#8b5cf6' // violet-500
     } else if (event.type === 'interest') {
-      const status = event.resource?.status
-      if (status === 'confirmed') backgroundColor = '#1e7a4e'
-      else backgroundColor = '#7c3aed' // purple/violet
+      backgroundColor = '#eab308' // yellow-500
+      textColor = '#1f2937'
     }
 
     return {
       style: {
         backgroundColor,
         borderRadius: '6px',
-        opacity: 0.9,
-        color: 'white',
+        opacity: 0.95,
+        color: textColor,
         border: '0px',
         display: 'block',
         fontWeight: 500,
@@ -277,36 +274,20 @@ export function DashboardCalendar() {
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#1e7a4e' }} />
-            <span className="text-muted-foreground">Reservado</span>
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#dc2626' }} />
+            <span className="text-muted-foreground">Eventos</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#9e6c14' }} />
-            <span className="text-muted-foreground">Confirmando</span>
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#22c55e' }} />
+            <span className="text-muted-foreground">Visitas</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#0d9488' }} />
-            <span className="text-muted-foreground">Visita</span>
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#eab308' }} />
+            <span className="text-muted-foreground">Interesses</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#2a6aaa' }} />
-            <span className="text-muted-foreground">Enviar Proposta</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#7c3aed' }} />
-            <span className="text-muted-foreground">Interesse</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#3a6aac' }} />
-            <span className="text-muted-foreground">Limpeza</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#2a7a42' }} />
-            <span className="text-muted-foreground">Jardinagem</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#1a7a88' }} />
-            <span className="text-muted-foreground">Piscina</span>
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: '#8b5cf6' }} />
+            <span className="text-muted-foreground">Servicos</span>
           </div>
         </div>
       </div>

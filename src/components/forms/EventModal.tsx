@@ -16,6 +16,7 @@ import { getClients, createClient } from '@/app/actions/clients'
 import { getProfessionals } from '@/app/actions/professionals'
 import { createEvent, updateEvent, deleteEvent } from '@/app/actions/events'
 import { createManyInterestDates } from '@/app/actions/interestDates'
+import { DatePicker, DateTimePicker } from '@/components/ui/DatePicker'
 
 /** Format a Date to `YYYY-MM-DDTHH:mm` in local timezone (for datetime-local inputs) */
 function toLocalDatetimeString(date: Date): string {
@@ -219,6 +220,17 @@ export function EventModal({
   const selectedCategory = watch('category')
   const selectedStatus = watch('status')
   const shouldCreateProposal = watch('createProposalFollowUp')
+  const selectedSpaceId = watch('spaceId')
+  const selectedClientId = watch('clientId')
+  const startValue = watch('start')
+  const endValue = watch('end')
+  const proposalStartValue = watch('proposalStart')
+  const proposalEndValue = watch('proposalEnd')
+
+  const pickerSpaceId = selectedSpaceId ? parseInt(selectedSpaceId, 10) : null
+  const pickerClientId = selectedClientId ? parseInt(selectedClientId, 10) : null
+  const pickerMode: 'event' | 'interest' =
+    selectedCategory === 'event' ? 'event' : 'interest'
 
   useEffect(() => {
     async function loadData() {
@@ -526,12 +538,26 @@ export function EventModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="start">Início</Label>
-                <Input id="start" type="datetime-local" {...register('start')} />
+                <DateTimePicker
+                  id="start"
+                  value={startValue}
+                  onChange={(v) => setValue('start', v, { shouldValidate: true })}
+                  spaceId={pickerSpaceId}
+                  ownerClientId={pickerClientId}
+                  mode={pickerMode}
+                />
                 {errors.start && <span className="text-sm text-red-500">{errors.start.message}</span>}
               </div>
               <div>
                 <Label htmlFor="end">Fim</Label>
-                <Input id="end" type="datetime-local" {...register('end')} />
+                <DateTimePicker
+                  id="end"
+                  value={endValue}
+                  onChange={(v) => setValue('end', v, { shouldValidate: true })}
+                  spaceId={pickerSpaceId}
+                  ownerClientId={pickerClientId}
+                  mode={pickerMode}
+                />
                 {errors.end && <span className="text-sm text-red-500">{errors.end.message}</span>}
               </div>
             </div>
@@ -584,12 +610,26 @@ export function EventModal({
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="proposalStart">Início (Enviar Proposta)</Label>
-                        <Input id="proposalStart" type="datetime-local" {...register('proposalStart')} />
+                        <DateTimePicker
+                          id="proposalStart"
+                          value={proposalStartValue ?? ''}
+                          onChange={(v) => setValue('proposalStart', v, { shouldValidate: true })}
+                          spaceId={pickerSpaceId}
+                          ownerClientId={pickerClientId}
+                          mode="interest"
+                        />
                         {errors.proposalStart && <span className="text-sm text-red-500">{errors.proposalStart.message}</span>}
                       </div>
                       <div>
                         <Label htmlFor="proposalEnd">Fim (Enviar Proposta)</Label>
-                        <Input id="proposalEnd" type="datetime-local" {...register('proposalEnd')} />
+                        <DateTimePicker
+                          id="proposalEnd"
+                          value={proposalEndValue ?? ''}
+                          onChange={(v) => setValue('proposalEnd', v, { shouldValidate: true })}
+                          spaceId={pickerSpaceId}
+                          ownerClientId={pickerClientId}
+                          mode="interest"
+                        />
                         {errors.proposalEnd && <span className="text-sm text-red-500">{errors.proposalEnd.message}</span>}
                       </div>
                     </div>
@@ -633,18 +673,6 @@ export function EventModal({
                       <div key={index} className="flex items-start gap-2">
                         <div className="flex-1 grid grid-cols-2 gap-2">
                           <div>
-                            <Input
-                              type="date"
-                              value={item.date}
-                              onChange={(e) => {
-                                const updated = [...interestDates]
-                                updated[index].date = e.target.value
-                                setInterestDates(updated)
-                              }}
-                              placeholder="Data"
-                            />
-                          </div>
-                          <div>
                             <select
                               value={item.spaceId}
                               onChange={(e) => {
@@ -658,6 +686,20 @@ export function EventModal({
                                 <option key={space.id} value={space.id}>{space.name}</option>
                               ))}
                             </select>
+                          </div>
+                          <div>
+                            <DatePicker
+                              value={item.date}
+                              onChange={(v) => {
+                                const updated = [...interestDates]
+                                updated[index].date = v
+                                setInterestDates(updated)
+                              }}
+                              spaceId={item.spaceId ? parseInt(item.spaceId, 10) : null}
+                              ownerClientId={pickerClientId}
+                              mode="interest"
+                              placeholder="Data"
+                            />
                           </div>
                         </div>
                         <Input

@@ -3,9 +3,36 @@
 import { prisma } from '@/lib/prisma'
 import { del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
+import { startOfDay, endOfDay } from 'date-fns'
 import { createEventSchema, updateEventSchema } from '@/lib/validations'
 
 type EventCategory = 'event' | 'visit' | 'proposal'
+
+/**
+ * When a confirmed event is created/updated for a client, mark any interest
+ * dates of the SAME client on that day as "confirmed" — they should no longer
+ * show on the main calendar (the event card itself represents the booking).
+ */
+async function confirmMatchingInterestDates(args: {
+  clientId: number | null | undefined
+  category: EventCategory
+  start: Date
+}) {
+  if (!args.clientId) return
+  if (args.category !== 'event') return
+
+  const dayStart = startOfDay(args.start)
+  const dayEnd = endOfDay(args.start)
+
+  await prisma.clientInterestDate.updateMany({
+    where: {
+      clientId: args.clientId,
+      status: 'interest',
+      date: { gte: dayStart, lte: dayEnd },
+    },
+    data: { status: 'confirmed' },
+  })
+}
 
 export async function getEvents(
   start?: Date,
@@ -89,8 +116,16 @@ export async function createEvent(data: {
         } : undefined
       }
     })
+
+    await confirmMatchingInterestDates({
+      clientId: eventData.clientId ?? null,
+      category: (category ?? 'event') as EventCategory,
+      start: eventData.start,
+    })
+
     revalidatePath('/')
     revalidatePath('/events')
+    revalidatePath('/clients')
     return {
       success: true,
       data: {
@@ -147,8 +182,19 @@ export async function updateEvent(id: number, data: Partial<{
             where: { id },
             data: updateData
         })
+
+        if (eventData.start !== undefined) {
+            await confirmMatchingInterestDates({
+                clientId:
+                    eventData.clientId !== undefined ? eventData.clientId : event.clientId,
+                category: (eventData.category ?? event.category) as EventCategory,
+                start: eventData.start,
+            })
+        }
+
         revalidatePath('/')
         revalidatePath('/events')
+        revalidatePath('/clients')
         revalidatePath(`/events/${event.id}`)
         return {
             success: true,
@@ -281,6 +327,62 @@ export async function getEventsForList(filters?: {
 }
 
 // ── Delete Event ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns event/interest occupancy of a space within a given month, used by
+ * the date pickers to color days (red = booked event, yellow = interest from
+ * another client).
+ */
+export async function getSpaceOccupationByMonth(
+  spaceId: number,
+  year: number,
+  monthZeroIndexed: number,
+) {
+  try {
+    const start = new Date(year, monthZeroIndexed, 1, 0, 0, 0, 0)
+    const end = new Date(year, monthZeroIndexed + 1, 0, 23, 59, 59, 999)
+
+    const [events, interests] = await Promise.all([
+      prisma.event.findMany({
+        where: {
+          spaceId,
+          category: 'event',
+          status: { notIn: ['available', 'visit_cancelled', 'proposal_cancelled'] },
+          start: { gte: start, lte: end },
+        },
+        select: { id: true, start: true, clientId: true, title: true },
+      }),
+      prisma.clientInterestDate.findMany({
+        where: {
+          spaceId,
+          status: 'interest',
+          date: { gte: start, lte: end },
+        },
+        select: { id: true, date: true, clientId: true },
+      }),
+    ])
+
+    return {
+      success: true,
+      data: {
+        events: events.map((e) => ({
+          id: e.id,
+          date: e.start.toISOString(),
+          clientId: e.clientId,
+          title: e.title,
+        })),
+        interests: interests.map((i) => ({
+          id: i.id,
+          date: i.date.toISOString(),
+          clientId: i.clientId,
+        })),
+      },
+    }
+  } catch (error) {
+    console.error('Error fetching space occupation:', error)
+    return { success: false, error: 'Failed to fetch space occupation' }
+  }
+}
 
 export async function deleteEvent(id: number) {
   try {

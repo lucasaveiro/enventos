@@ -10,6 +10,7 @@ import { CalendarDays, Plus, Trash2, Users } from 'lucide-react'
 import { getInterestDatesByClient, createInterestDate, updateInterestDate, deleteInterestDate } from '@/app/actions/interestDates'
 import { parseLocalDate } from '@/lib/utils'
 import { getSpaces } from '@/app/actions/spaces'
+import { DatePicker } from '@/components/ui/DatePicker'
 
 interface InterestDatesModalProps {
   client: { id: number; name: string } | null
@@ -206,15 +207,6 @@ export function InterestDatesModal({ client, isOpen, onClose }: InterestDatesMod
               <Label className="text-sm font-medium">Adicionar Nova Data de Interesse</Label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label htmlFor="interestDate" className="text-xs text-muted-foreground">Data</Label>
-                  <Input
-                    id="interestDate"
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                  />
-                </div>
-                <div>
                   <Label htmlFor="interestSpace" className="text-xs text-muted-foreground">Espaco</Label>
                   <select
                     id="interestSpace"
@@ -227,6 +219,18 @@ export function InterestDatesModal({ client, isOpen, onClose }: InterestDatesMod
                       <option key={space.id} value={space.id}>{space.name}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <Label htmlFor="interestDate" className="text-xs text-muted-foreground">Data</Label>
+                  <DatePicker
+                    id="interestDate"
+                    value={newDate}
+                    onChange={setNewDate}
+                    spaceId={newSpaceId ? parseInt(newSpaceId, 10) : null}
+                    ownerClientId={client?.id ?? null}
+                    mode="interest"
+                    placeholder="Selecione..."
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">

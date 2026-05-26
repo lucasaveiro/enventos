@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,9 @@ interface EditInstallmentModalProps {
     installmentNumber: number
     dueDate: Date | string
     amount: number
+    paidAmount: number | null
+    paidAt: Date | string | null
+    status: string
     paymentMethod: string | null
     notes: string | null
     isSinal: boolean
@@ -51,6 +55,10 @@ export function EditInstallmentModal({
   const [amount, setAmount] = useState(0)
   const [paymentMethod, setPaymentMethod] = useState('')
   const [notes, setNotes] = useState('')
+  const [paidAmount, setPaidAmount] = useState(0)
+  const [paidAt, setPaidAt] = useState('')
+
+  const isPaid = installment?.status === 'paid'
 
   useEffect(() => {
     if (installment && isOpen) {
@@ -58,6 +66,12 @@ export function EditInstallmentModal({
       setAmount(installment.amount)
       setPaymentMethod(installment.paymentMethod ?? '')
       setNotes(installment.notes ?? '')
+      setPaidAmount(installment.paidAmount ?? installment.amount)
+      setPaidAt(
+        installment.paidAt
+          ? toDateInputValue(installment.paidAt)
+          : toDateInputValue(new Date()),
+      )
     }
   }, [installment, isOpen])
 
@@ -67,12 +81,18 @@ export function EditInstallmentModal({
 
     setIsSubmitting(true)
     try {
-      const result = await updateInstallment(installment.id, {
+      const payload: Parameters<typeof updateInstallment>[1] = {
         dueDate: parseLocalDate(dueDate),
         amount,
         paymentMethod: paymentMethod || undefined,
         notes: notes || undefined,
-      })
+      }
+      if (isPaid) {
+        payload.paidAmount = paidAmount
+        payload.paidAt = paidAt ? parseLocalDate(paidAt) : undefined
+      }
+
+      const result = await updateInstallment(installment.id, payload)
 
       if (result.success) {
         onSuccess()
@@ -97,6 +117,16 @@ export function EditInstallmentModal({
           </DialogDescription>
         </DialogHeader>
 
+        {isPaid && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span>
+              Esta parcela ja foi paga. Alterar o valor pago ou a data de pagamento
+              atualizara tambem a transacao vinculada no resumo financeiro.
+            </span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -109,7 +139,7 @@ export function EditInstallmentModal({
               />
             </div>
             <div>
-              <Label>Valor (R$)</Label>
+              <Label>Valor da Parcela (R$)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -120,6 +150,29 @@ export function EditInstallmentModal({
               />
             </div>
           </div>
+
+          {isPaid && (
+            <div className="grid gap-3 sm:grid-cols-2 rounded-lg border border-border bg-secondary/20 p-3">
+              <div>
+                <Label>Valor Pago (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <Label>Data do Pagamento</Label>
+                <Input
+                  type="date"
+                  value={paidAt}
+                  onChange={(e) => setPaidAt(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <Label>Metodo de Pagamento</Label>

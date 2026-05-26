@@ -94,6 +94,15 @@ export const createPaymentPlanSchema = z.object({
   depositAmount: nonNegativeNumber.optional(),
   depositDueDate: z.coerce.date().optional(),
   paymentMethod: z.string().max(50).optional(),
+  customInstallments: z
+    .array(
+      z.object({
+        dueDate: z.coerce.date(),
+        amount: nonNegativeNumber,
+        isSinal: z.boolean(),
+      }),
+    )
+    .optional(),
 })
 
 // ── Interest Date ───────────────────────────────────────────────────────────

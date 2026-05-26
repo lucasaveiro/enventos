@@ -110,6 +110,11 @@ export function InstallmentTable({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
+                  {isPaid && inst.paidAt && (
+                    <span className="mr-1 text-xs text-muted-foreground">
+                      {format(new Date(inst.paidAt), 'dd/MM', { locale: ptBR })}
+                    </span>
+                  )}
                   {!isPaid && (
                     <Button
                       variant="ghost"
@@ -121,33 +126,24 @@ export function InstallmentTable({
                       <CheckCircle className="h-4 w-4" />
                     </Button>
                   )}
-                  {!isPaid && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      title="Editar"
-                      onClick={() => onEdit(inst)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {!isPaid && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      title="Excluir"
-                      onClick={() => onDelete(inst)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {isPaid && inst.paidAt && (
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(inst.paidAt), 'dd/MM', { locale: ptBR })}
-                    </span>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    title="Editar"
+                    onClick={() => onEdit(inst)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                    title="Excluir"
+                    onClick={() => onDelete(inst)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </TableCell>
             </TableRow>

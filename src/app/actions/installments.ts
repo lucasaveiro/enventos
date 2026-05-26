@@ -50,6 +50,7 @@ export async function createPaymentPlan(data: {
   depositAmount?: number
   depositDueDate?: Date
   paymentMethod?: string
+  customInstallments?: { dueDate: Date; amount: number; isSinal: boolean }[]
 }) {
   try {
     const parsed = createPaymentPlanSchema.safeParse(data)
@@ -64,25 +65,26 @@ export async function createPaymentPlan(data: {
 
     if (!event) return { success: false, error: 'Evento nao encontrado' }
 
-    // Check if existing installments are all pending
-    const existingInstallments = await prisma.paymentInstallment.findMany({
-      where: { eventId: data.eventId },
-      select: { status: true },
-    })
-
-    const hasPaidInstallments = existingInstallments.some(
-      (inst) => inst.status === 'paid'
-    )
-
-    if (hasPaidInstallments) {
-      return {
-        success: false,
-        error: 'Existem parcelas pagas. Remova-as manualmente antes de recriar o plano.',
-      }
-    }
-
     await prisma.$transaction(async (tx) => {
-      // Delete existing pending installments
+      // Find existing installments and their linked transactions
+      const existingInstallments = await tx.paymentInstallment.findMany({
+        where: { eventId: data.eventId },
+        select: { id: true, transactionId: true },
+      })
+
+      const linkedTransactionIds = existingInstallments
+        .map((inst) => inst.transactionId)
+        .filter((id): id is number => id !== null)
+
+      // Delete linked transactions first (FK SetNull would otherwise leave
+      // standalone "phantom" income transactions that double-count)
+      if (linkedTransactionIds.length > 0) {
+        await tx.transaction.deleteMany({
+          where: { id: { in: linkedTransactionIds } },
+        })
+      }
+
+      // Delete all existing installments (paid or not)
       await tx.paymentInstallment.deleteMany({
         where: { eventId: data.eventId },
       })
@@ -96,47 +98,62 @@ export async function createPaymentPlan(data: {
         eventId: number
       }[] = []
 
-      let currentNumber = 1
-      const depositAmount = data.depositAmount ?? 0
-
-      // Create deposit installment
-      if (depositAmount > 0) {
-        installments.push({
-          installmentNumber: currentNumber,
-          dueDate: data.depositDueDate ?? data.startDate,
-          amount: depositAmount,
-          isSinal: true,
-          paymentMethod: data.paymentMethod ?? null,
-          eventId: data.eventId,
-        })
-        currentNumber++
-      }
-
-      // Calculate remaining amount and distribute
-      const remaining = data.totalValue - depositAmount
-      if (remaining > 0 && data.numberOfInstallments > 0) {
-        const installmentAmount = Math.floor((remaining / data.numberOfInstallments) * 100) / 100
-        const lastInstallmentAmount = remaining - installmentAmount * (data.numberOfInstallments - 1)
-
-        for (let i = 0; i < data.numberOfInstallments; i++) {
-          const dueDate = addMonths(new Date(data.startDate), i)
-          const isLast = i === data.numberOfInstallments - 1
+      if (data.customInstallments && data.customInstallments.length > 0) {
+        // Use custom values/dates provided by the user
+        data.customInstallments.forEach((item, index) => {
           installments.push({
-            installmentNumber: currentNumber + i,
-            dueDate,
-            amount: isLast
-              ? Math.round(lastInstallmentAmount * 100) / 100
-              : installmentAmount,
-            isSinal: false,
+            installmentNumber: index + 1,
+            dueDate: item.dueDate,
+            amount: item.amount,
+            isSinal: item.isSinal,
             paymentMethod: data.paymentMethod ?? null,
             eventId: data.eventId,
           })
+        })
+      } else {
+        let currentNumber = 1
+        const depositAmount = data.depositAmount ?? 0
+
+        // Create deposit installment
+        if (depositAmount > 0) {
+          installments.push({
+            installmentNumber: currentNumber,
+            dueDate: data.depositDueDate ?? data.startDate,
+            amount: depositAmount,
+            isSinal: true,
+            paymentMethod: data.paymentMethod ?? null,
+            eventId: data.eventId,
+          })
+          currentNumber++
+        }
+
+        // Calculate remaining amount and distribute
+        const remaining = data.totalValue - depositAmount
+        if (remaining > 0 && data.numberOfInstallments > 0) {
+          const installmentAmount = Math.floor((remaining / data.numberOfInstallments) * 100) / 100
+          const lastInstallmentAmount = remaining - installmentAmount * (data.numberOfInstallments - 1)
+
+          for (let i = 0; i < data.numberOfInstallments; i++) {
+            const dueDate = addMonths(new Date(data.startDate), i)
+            const isLast = i === data.numberOfInstallments - 1
+            installments.push({
+              installmentNumber: currentNumber + i,
+              dueDate,
+              amount: isLast
+                ? Math.round(lastInstallmentAmount * 100) / 100
+                : installmentAmount,
+              isSinal: false,
+              paymentMethod: data.paymentMethod ?? null,
+              eventId: data.eventId,
+            })
+          }
         }
       }
 
       await tx.paymentInstallment.createMany({ data: installments })
     })
 
+    await recalculateEventPaymentStatus(data.eventId)
     revalidateAll()
     return { success: true }
   } catch (error) {
@@ -239,22 +256,52 @@ export async function updateInstallment(
     amount: number
     paymentMethod: string
     notes: string
+    paidAmount: number
+    paidAt: Date
   }>
 ) {
   try {
     const installment = await prisma.paymentInstallment.findUnique({
       where: { id: installmentId },
-      select: { status: true },
+      select: { status: true, transactionId: true, eventId: true },
     })
 
     if (!installment) return { success: false, error: 'Parcela nao encontrada' }
-    if (installment.status === 'paid')
-      return { success: false, error: 'Nao e possivel editar parcela paga' }
 
-    await prisma.paymentInstallment.update({
-      where: { id: installmentId },
-      data,
+    const installmentUpdate: Record<string, unknown> = {}
+    if (data.dueDate !== undefined) installmentUpdate.dueDate = data.dueDate
+    if (data.amount !== undefined) installmentUpdate.amount = data.amount
+    if (data.paymentMethod !== undefined) installmentUpdate.paymentMethod = data.paymentMethod
+    if (data.notes !== undefined) installmentUpdate.notes = data.notes
+    if (data.paidAmount !== undefined) installmentUpdate.paidAmount = data.paidAmount
+    if (data.paidAt !== undefined) installmentUpdate.paidAt = data.paidAt
+
+    await prisma.$transaction(async (tx) => {
+      await tx.paymentInstallment.update({
+        where: { id: installmentId },
+        data: installmentUpdate,
+      })
+
+      // If this installment is paid and has a linked transaction, keep it in sync
+      if (installment.status === 'paid' && installment.transactionId) {
+        const txUpdate: Record<string, unknown> = {}
+        if (data.paidAmount !== undefined) txUpdate.amount = data.paidAmount
+        if (data.paidAt !== undefined) {
+          txUpdate.paidAt = data.paidAt
+          txUpdate.date = data.paidAt
+        }
+        if (Object.keys(txUpdate).length > 0) {
+          await tx.transaction.update({
+            where: { id: installment.transactionId },
+            data: txUpdate,
+          })
+        }
+      }
     })
+
+    if (installment.status === 'paid' && installment.transactionId) {
+      await recalculateEventPaymentStatus(installment.eventId)
+    }
 
     revalidateAll()
     return { success: true }
@@ -272,12 +319,23 @@ export async function deleteInstallment(installmentId: number) {
     })
 
     if (!installment) return { success: false, error: 'Parcela nao encontrada' }
-    if (installment.status === 'paid')
-      return { success: false, error: 'Nao e possivel excluir parcela paga' }
 
-    await prisma.paymentInstallment.delete({
-      where: { id: installmentId },
+    await prisma.$transaction(async (tx) => {
+      await tx.paymentInstallment.delete({
+        where: { id: installmentId },
+      })
+      // Delete the linked transaction to avoid orphaned income records
+      // double-counting in the financial summary
+      if (installment.transactionId) {
+        await tx.transaction.delete({
+          where: { id: installment.transactionId },
+        })
+      }
     })
+
+    if (installment.transactionId) {
+      await recalculateEventPaymentStatus(installment.eventId)
+    }
 
     revalidateAll()
     return { success: true }

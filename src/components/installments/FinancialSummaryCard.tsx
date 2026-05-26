@@ -19,6 +19,13 @@ interface FinancialSummaryCardProps {
     paidAmount: number | null
     dueDate: Date | string
     isSinal: boolean
+    transactionId?: number | null
+  }[]
+  transactions?: {
+    id: number
+    type: string
+    status: string
+    amount: number
   }[]
   paymentStatus: string
 }
@@ -27,20 +34,40 @@ export function FinancialSummaryCard({
   totalValue,
   deposit,
   installments,
+  transactions = [],
   paymentStatus,
 }: FinancialSummaryCardProps) {
   const paidInstallments = installments.filter((i) => i.status === 'paid')
   const overdueInstallments = installments.filter((i) => i.status === 'overdue')
   const pendingInstallments = installments.filter((i) => i.status === 'pending')
 
-  const totalPaid = paidInstallments.reduce(
+  const paidFromInstallments = paidInstallments.reduce(
     (sum, i) => sum + (i.paidAmount ?? i.amount),
     0
   )
 
-  // If no installments, use deposit as paid basis
-  const effectivePaid = installments.length > 0 ? totalPaid : deposit
+  // Standalone (non-installment) income transactions that were paid.
+  // We exclude transactions already linked to an installment to avoid
+  // double counting — those are represented by the installment itself.
+  const linkedTransactionIds = new Set(
+    installments.map((i) => i.transactionId).filter((id): id is number => id != null),
+  )
+  const paidFromTransactions = transactions
+    .filter(
+      (tx) =>
+        tx.type === 'income' &&
+        tx.status === 'paid' &&
+        !linkedTransactionIds.has(tx.id),
+    )
+    .reduce((sum, tx) => sum + tx.amount, 0)
+
+  const totalPaid = paidFromInstallments + paidFromTransactions
+
+  // If no installments at all, fall back to deposit + standalone transactions
+  const effectivePaid =
+    installments.length > 0 ? totalPaid : deposit + paidFromTransactions
   const remaining = Math.max(totalValue - effectivePaid, 0)
+  const overpaid = Math.max(effectivePaid - totalValue, 0)
   const progressPercent = totalValue > 0 ? Math.min((effectivePaid / totalValue) * 100, 100) : 0
 
   // Find next due installment
@@ -85,8 +112,14 @@ export function FinancialSummaryCard({
             <div className="font-semibold text-green-600 text-lg">{formatCurrency(effectivePaid)}</div>
           </div>
           <div className="rounded-lg border border-border bg-secondary/30 p-3">
-            <div className="text-xs text-muted-foreground">Saldo Restante</div>
-            <div className="font-semibold text-foreground text-lg">{formatCurrency(remaining)}</div>
+            <div className="text-xs text-muted-foreground">
+              {overpaid > 0 ? 'Excedente' : 'Saldo Restante'}
+            </div>
+            <div
+              className={`font-semibold text-lg ${overpaid > 0 ? 'text-amber-600' : 'text-foreground'}`}
+            >
+              {formatCurrency(overpaid > 0 ? overpaid : remaining)}
+            </div>
           </div>
           <div className="rounded-lg border border-border bg-secondary/30 p-3">
             <div className="text-xs text-muted-foreground">Parcelas</div>

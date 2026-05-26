@@ -502,6 +502,7 @@ export default function EventPage() {
           totalValue={event.totalValue}
           deposit={event.deposit}
           installments={event.installments || []}
+          transactions={transactions}
           paymentStatus={event.paymentStatus}
         />
       )}
@@ -540,9 +541,13 @@ export default function EventPage() {
                 setIsEditInstallmentModalOpen(true)
               }}
               onDelete={async (inst) => {
-                if (confirm('Excluir esta parcela?')) {
+                const message =
+                  inst.status === 'paid'
+                    ? 'Esta parcela esta marcada como paga. Excluir ira remover tambem o pagamento registrado no resumo financeiro. Deseja continuar?'
+                    : 'Excluir esta parcela?'
+                if (confirm(message)) {
                   await deleteInstallment(inst.id)
-                  await fetchEvent()
+                  await handleRefreshAfterTransaction()
                 }
               }}
             />
@@ -934,6 +939,10 @@ export default function EventPage() {
         eventId={eventId}
         totalValue={event?.totalValue ?? 0}
         deposit={event?.deposit ?? 0}
+        hasExistingPlan={(event?.installments?.length ?? 0) > 0}
+        hasPaidInstallments={(event?.installments ?? []).some(
+          (i: any) => i.status === 'paid',
+        )}
         onSuccess={async () => {
           await fetchEvent()
           await fetchTransactions()

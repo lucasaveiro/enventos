@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { addMonths, format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { addMonths } from 'date-fns'
+import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,13 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+interface PreviewItem {
+  id: string
+  date: string
+  amount: number
+  isSinal: boolean
+}
+
 const paymentMethods = [
   { value: '', label: 'Selecione...' },
   { value: 'pix', label: 'PIX' },
@@ -49,7 +56,45 @@ interface PaymentPlanModalProps {
   eventId: number
   totalValue: number
   deposit: number
+  hasExistingPlan: boolean
+  hasPaidInstallments: boolean
   onSuccess: () => void
+}
+
+function computePreview(
+  depositAmount: number,
+  depositDueDate: string,
+  numberOfInstallments: number,
+  startDate: string,
+  totalValue: number,
+): PreviewItem[] {
+  const items: PreviewItem[] = []
+  if (depositAmount > 0 && depositDueDate) {
+    items.push({
+      id: 'sinal',
+      date: depositDueDate,
+      amount: depositAmount,
+      isSinal: true,
+    })
+  }
+  const remaining = Math.max(totalValue - (depositAmount || 0), 0)
+  if (numberOfInstallments > 0 && startDate && remaining > 0) {
+    const baseAmount = Math.floor((remaining / numberOfInstallments) * 100) / 100
+    const lastAmount = remaining - baseAmount * (numberOfInstallments - 1)
+    for (let i = 0; i < numberOfInstallments; i++) {
+      const date = addMonths(parseLocalDate(startDate), i)
+      items.push({
+        id: `parcela-${i}`,
+        date: toDateInputValue(date),
+        amount:
+          i === numberOfInstallments - 1
+            ? Math.round(lastAmount * 100) / 100
+            : baseAmount,
+        isSinal: false,
+      })
+    }
+  }
+  return items
 }
 
 export function PaymentPlanModal({
@@ -58,15 +103,19 @@ export function PaymentPlanModal({
   eventId,
   totalValue,
   deposit,
+  hasExistingPlan,
+  hasPaidInstallments,
   onSuccess,
 }: PaymentPlanModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
+  const [items, setItems] = useState<PreviewItem[]>([])
+  const [manuallyEdited, setManuallyEdited] = useState(false)
 
   const {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -84,47 +133,123 @@ export function PaymentPlanModal({
   const watchStartDate = watch('startDate')
   const watchDepositDate = watch('depositDueDate')
 
-  const remaining = Math.max(totalValue - (watchDeposit || 0), 0)
-  const installmentAmount =
-    watchInstallments > 0 ? remaining / watchInstallments : 0
-
-  // Generate preview
-  const previewItems: { number: number; date: string; amount: number; isSinal: boolean }[] = []
-  if (watchDeposit > 0 && watchDepositDate) {
-    previewItems.push({
-      number: 1,
-      date: watchDepositDate,
-      amount: watchDeposit,
-      isSinal: true,
-    })
-  }
-  if (watchInstallments > 0 && watchStartDate && remaining > 0) {
-    const baseAmount = Math.floor((remaining / watchInstallments) * 100) / 100
-    const lastAmount = remaining - baseAmount * (watchInstallments - 1)
-    for (let i = 0; i < watchInstallments; i++) {
-      const date = addMonths(parseLocalDate(watchStartDate), i)
-      previewItems.push({
-        number: (watchDeposit > 0 ? 2 : 1) + i,
-        date: toDateInputValue(date),
-        amount: i === watchInstallments - 1
-          ? Math.round(lastAmount * 100) / 100
-          : baseAmount,
-        isSinal: false,
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        depositAmount: deposit,
+        depositDueDate: toDateInputValue(new Date()),
+        numberOfInstallments: 1,
+        startDate: toDateInputValue(addMonths(new Date(), 1)),
+        paymentMethod: '',
       })
+      setManuallyEdited(false)
     }
+  }, [isOpen, deposit, reset])
+
+  // Regenerate preview whenever inputs change AND no manual edits have happened
+  useEffect(() => {
+    if (manuallyEdited) return
+    setItems(
+      computePreview(
+        watchDeposit || 0,
+        watchDepositDate,
+        watchInstallments || 0,
+        watchStartDate,
+        totalValue,
+      ),
+    )
+  }, [
+    watchDeposit,
+    watchDepositDate,
+    watchInstallments,
+    watchStartDate,
+    totalValue,
+    manuallyEdited,
+  ])
+
+  const updateItem = (id: string, patch: Partial<PreviewItem>) => {
+    setManuallyEdited(true)
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)))
   }
+
+  const removeItem = (id: string) => {
+    setManuallyEdited(true)
+    setItems((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  const addInstallmentRow = () => {
+    setManuallyEdited(true)
+    const lastDate = items.length > 0 ? items[items.length - 1].date : watchStartDate
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `extra-${Date.now()}`,
+        date: toDateInputValue(addMonths(parseLocalDate(lastDate), 1)),
+        amount: 0,
+        isSinal: false,
+      },
+    ])
+  }
+
+  const resetAuto = () => {
+    setManuallyEdited(false)
+    setItems(
+      computePreview(
+        watchDeposit || 0,
+        watchDepositDate,
+        watchInstallments || 0,
+        watchStartDate,
+        totalValue,
+      ),
+    )
+  }
+
+  const itemsSum = items.reduce((s, it) => s + (Number.isFinite(it.amount) ? it.amount : 0), 0)
+  const sumMatches = Math.abs(itemsSum - totalValue) < 0.01
 
   const onSubmit = async (data: FormValues) => {
+    if (items.length === 0) {
+      alert('Adicione pelo menos uma parcela.')
+      return
+    }
+    if (!sumMatches) {
+      const confirmed = confirm(
+        `A soma das parcelas (${formatCurrency(itemsSum)}) e diferente do valor total do evento (${formatCurrency(totalValue)}). Deseja continuar mesmo assim?`,
+      )
+      if (!confirmed) return
+    }
+
+    if (hasExistingPlan) {
+      const baseMessage =
+        'Ao salvar, todas as parcelas existentes serao excluidas e o plano sera recriado do zero.'
+      const paidMessage = hasPaidInstallments
+        ? '\n\nATENCAO: existem parcelas marcadas como pagas. Elas (e suas transacoes vinculadas) serao removidas — as novas parcelas serao criadas como NAO PAGAS. Voce precisara dar baixa manualmente nos pagamentos ja recebidos.'
+        : ''
+      const confirmed = confirm(`${baseMessage}${paidMessage}\n\nDeseja prosseguir?`)
+      if (!confirmed) return
+    }
+
     setIsSubmitting(true)
     try {
+      const customInstallments = items.map((item) => ({
+        dueDate: parseLocalDate(item.date),
+        amount: item.amount,
+        isSinal: item.isSinal,
+      }))
+
       const result = await createPaymentPlan({
         eventId,
         totalValue,
-        numberOfInstallments: data.numberOfInstallments,
+        numberOfInstallments: Math.max(
+          customInstallments.filter((it) => !it.isSinal).length,
+          1,
+        ),
         startDate: parseLocalDate(data.startDate),
         depositAmount: data.depositAmount,
         depositDueDate: parseLocalDate(data.depositDueDate),
         paymentMethod: data.paymentMethod || undefined,
+        customInstallments,
       })
 
       if (result.success) {
@@ -140,13 +265,28 @@ export function PaymentPlanModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Configurar Parcelamento</DialogTitle>
           <DialogDescription>
             Valor total do evento: {formatCurrency(totalValue)}
           </DialogDescription>
         </DialogHeader>
+
+        {hasExistingPlan && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span>
+              Ja existe um plano configurado. Ao salvar, ele sera substituido pelo novo.
+              {hasPaidInstallments && (
+                <strong>
+                  {' '}Parcelas pagas serao apagadas — voce precisara registrar novamente
+                  os pagamentos ja recebidos.
+                </strong>
+              )}
+            </span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Deposit Section */}
@@ -201,10 +341,6 @@ export function PaymentPlanModal({
                 )}
               </div>
             </div>
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>Valor restante: {formatCurrency(remaining)}</span>
-              <span>Valor por parcela: {formatCurrency(installmentAmount)}</span>
-            </div>
           </div>
 
           {/* Payment Method */}
@@ -222,44 +358,115 @@ export function PaymentPlanModal({
             </select>
           </div>
 
-          {/* Preview Toggle */}
-          <div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => setShowPreview(!showPreview)}
-            >
-              {showPreview ? 'Ocultar Preview' : 'Visualizar Parcelas'}
-            </Button>
-          </div>
-
-          {showPreview && previewItems.length > 0 && (
-            <div className="rounded-lg border border-border bg-secondary/10 p-3 max-h-48 overflow-y-auto">
-              <div className="space-y-1.5">
-                {previewItems.map((item) => (
-                  <div
-                    key={item.number}
-                    className="flex items-center justify-between text-sm py-1 border-b border-border/50 last:border-0"
+          {/* Editable Preview */}
+          <div className="rounded-lg border border-border bg-secondary/10 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Parcelas a criar</h3>
+              <div className="flex items-center gap-2">
+                {manuallyEdited && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    onClick={resetAuto}
+                    title="Recalcular automaticamente"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium w-6 text-center">{item.number}</span>
-                      {item.isSinal && (
+                    <RefreshCw className="h-3 w-3" />
+                    Recalcular
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs"
+                  onClick={addInstallmentRow}
+                >
+                  + Adicionar
+                </Button>
+              </div>
+            </div>
+
+            {items.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">
+                Preencha o sinal e o numero de parcelas para gerar a previa.
+              </p>
+            ) : (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                {items.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-[28px_70px_1fr_1fr_28px] sm:grid-cols-[32px_80px_1fr_1fr_32px] items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5"
+                  >
+                    <span className="text-xs font-medium text-center text-muted-foreground">
+                      {idx + 1}
+                    </span>
+                    <div>
+                      {item.isSinal ? (
                         <Badge variant="info" className="text-[10px] px-1.5 py-0">
                           Sinal
                         </Badge>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground">Parcela</span>
                       )}
-                      <span className="text-muted-foreground">
-                        {format(parseLocalDate(item.date), 'dd/MM/yyyy', { locale: ptBR })}
-                      </span>
                     </div>
-                    <span className="font-medium">{formatCurrency(item.amount)}</span>
+                    <Input
+                      type="date"
+                      value={item.date}
+                      onChange={(e) => updateItem(item.id, { date: e.target.value })}
+                      className="h-8 text-xs"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.amount}
+                      onChange={(e) =>
+                        updateItem(item.id, { amount: Number(e.target.value) })
+                      }
+                      className="h-8 text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      onClick={() => removeItem(item.id)}
+                      title="Remover parcela"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 ))}
               </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
+              <span className="text-muted-foreground">
+                Soma: <span className="font-semibold text-foreground">{formatCurrency(itemsSum)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Total: <span className="font-semibold text-foreground">{formatCurrency(totalValue)}</span>
+              </span>
             </div>
-          )}
+            {!sumMatches && items.length > 0 && (
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>
+                  A soma das parcelas e diferente do valor total do evento (diferenca:{' '}
+                  {formatCurrency(Math.abs(itemsSum - totalValue))}).
+                </span>
+              </div>
+            )}
+
+            {items.some((it) => it.isSinal && it.amount > 0) && (
+              <p className="text-[11px] text-muted-foreground">
+                Dica: edite valores e datas livremente. Use &quot;Recalcular&quot; para voltar
+                ao calculo automatico.
+              </p>
+            )}
+          </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
@@ -267,7 +474,7 @@ export function PaymentPlanModal({
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Criando...' : 'Criar Parcelamento'}
+              {isSubmitting ? 'Salvando...' : hasExistingPlan ? 'Substituir Plano' : 'Criar Parcelamento'}
             </Button>
           </div>
         </form>

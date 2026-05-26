@@ -293,7 +293,7 @@ export function DashboardCalendar() {
       </div>
 
       {/* Calendar Container */}
-      <div className="h-[480px] sm:h-[580px] lg:h-[700px] p-2 sm:p-4">
+      <div className="h-[600px] sm:h-[725px] lg:h-[875px] p-2 sm:p-4">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <div className="flex flex-col items-center gap-3">

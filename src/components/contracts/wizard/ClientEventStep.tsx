@@ -7,16 +7,8 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { Checkbox } from '@/components/ui/Checkbox'
+import { DateTimePicker } from '@/components/ui/DatePicker'
 import { searchClientsForWizard, getSpacesForWizard, getProfessionalsForWizard } from '@/app/actions/contractWizard'
-
-function toLocalDatetimeString(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  const h = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  return `${y}-${m}-${d}T${h}:${min}`
-}
 
 const EVENT_TYPES = [
   'Casamento',
@@ -370,19 +362,27 @@ export function ClientEventStep({ data, onChange, errors }: Props) {
 
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Início *</Label>
-              <Input
-                type="datetime-local"
+              <DateTimePicker
                 value={data.eventStart}
-                onChange={(e) => update('eventStart', e.target.value)}
+                onChange={(v) => update('eventStart', v)}
+                spaceId={data.spaceId}
+                ownerClientId={data.clientId}
+                mode="event"
+                disabled={!data.spaceId}
+                placeholder={data.spaceId ? 'Selecione a data' : 'Selecione o espaço primeiro'}
               />
               {errors.eventStart && <p className="text-xs text-red-500 mt-1">{errors.eventStart}</p>}
             </div>
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Fim *</Label>
-              <Input
-                type="datetime-local"
+              <DateTimePicker
                 value={data.eventEnd}
-                onChange={(e) => update('eventEnd', e.target.value)}
+                onChange={(v) => update('eventEnd', v)}
+                spaceId={data.spaceId}
+                ownerClientId={data.clientId}
+                mode="event"
+                disabled={!data.spaceId}
+                placeholder={data.spaceId ? 'Selecione a data' : 'Selecione o espaço primeiro'}
               />
               {errors.eventEnd && <p className="text-xs text-red-500 mt-1">{errors.eventEnd}</p>}
             </div>

@@ -182,8 +182,10 @@ export function NewContractWizard() {
         return
       }
 
-      // Redirect directly to contract editor with event data pre-filled
-      const spaceSlug = getContractSpaceSlug(clientEventData.spaceId!)
+      // Redirect directly to contract editor with event data pre-filled.
+      // O slug vem resolvido pelo servidor a partir do próprio espaço; o helper
+      // por ID fica só como fallback de compatibilidade.
+      const spaceSlug = result.data!.spaceSlug || getContractSpaceSlug(clientEventData.spaceId!)
       router.push(`/contracts/${spaceSlug}?eventId=${result.data!.eventId}`)
     } catch (error) {
       console.error(error)

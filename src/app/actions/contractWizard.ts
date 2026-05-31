@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { addMonths } from 'date-fns'
+import { resolveContractSpaceSlug } from '@/lib/contractTemplates'
 
 export interface ClosedContractData {
   // Client
@@ -205,16 +206,28 @@ export async function createClosedContract(data: ClosedContractData) {
         },
       })
 
-      return { client, event }
+      const space = await tx.space.findUnique({ where: { id: data.spaceId } })
+
+      return { client, event, space }
     })
 
     revalidateAll()
+
+    // Resolve o slug do template a partir do próprio espaço criado, evitando
+    // depender de um mapa fixo de IDs ao redirecionar para o gerador.
+    const spaceSlug =
+      resolveContractSpaceSlug({
+        spaceId: result.space?.id ?? data.spaceId,
+        slug: result.space?.slug,
+        name: result.space?.name,
+      }) || 'rancho-aveiro'
 
     return {
       success: true,
       data: {
         clientId: result.client.id,
         eventId: result.event.id,
+        spaceSlug,
       },
     }
   } catch (error) {

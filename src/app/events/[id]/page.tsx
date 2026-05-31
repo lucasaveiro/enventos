@@ -673,7 +673,7 @@ export default function EventPage() {
               </div>
               <div className="flex items-center gap-2">
                 {event.spaceId && (
-                  <Link href={`/contracts/${getContractSpaceSlug(event.spaceId)}?eventId=${eventId}`}>
+                  <Link href={`/contracts/${getContractSpaceSlug(event.spaceId, { slug: event.space?.slug, name: event.space?.name })}?eventId=${eventId}`}>
                     <Button size="sm" variant="outline" className="gap-1">
                       <FileText className="h-4 w-4" />
                       Gerar Contrato

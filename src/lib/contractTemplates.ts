@@ -140,14 +140,50 @@ export const SPACES: Record<string, SpaceConfig> = {
   },
 }
 
-// Map database Space.id (int) to contract template space slug
+// Fallback legado: mapa fixo de Space.id (int) → slug do template.
+// Mantido apenas como último recurso para bancos antigos sem `slug`/nome
+// reconhecível. NÃO confie nele: IDs podem divergir entre ambientes e foi essa
+// fragilidade que misturava cláusulas entre espaços. Prefira sempre o slug
+// persistido no espaço (Space.slug) ou o casamento por nome.
 const SPACE_DB_TO_SLUG: Record<number, string> = {
-  1: 'rancho-aveiro',   // "Salão de Festas" in DB
-  2: 'estancia-aveiro', // "Chácara" in DB
+  1: 'rancho-aveiro',
+  2: 'estancia-aveiro',
 }
 
-export function getContractSpaceSlug(dbSpaceId: number): string {
-  return SPACE_DB_TO_SLUG[dbSpaceId] || 'rancho-aveiro'
+/**
+ * Resolve o slug do template do contrato a partir dos dados do espaço do banco.
+ * Ordem de prioridade (da mais confiável para a menos):
+ *   1. `slug` persistido no espaço (Space.slug);
+ *   2. casamento pelo nome de exibição do espaço;
+ *   3. mapa legado por ID (apenas compatibilidade).
+ * Retorna `null` quando nada casa, para que o chamador trate explicitamente em
+ * vez de assumir silenciosamente um espaço errado.
+ */
+export function resolveContractSpaceSlug(opts: {
+  spaceId?: number | null
+  slug?: string | null
+  name?: string | null
+}): string | null {
+  if (opts.slug && SPACES[opts.slug]) return opts.slug
+  if (opts.name) {
+    const byName = Object.values(SPACES).find((s) => s.displayName === opts.name)
+    if (byName) return byName.id
+  }
+  if (opts.spaceId != null && SPACE_DB_TO_SLUG[opts.spaceId]) {
+    return SPACE_DB_TO_SLUG[opts.spaceId]
+  }
+  return null
+}
+
+/**
+ * Versão não-nula para os locais que precisam de um slug de imediato (ex.: link
+ * "Gerar Contrato"). Cai em 'rancho-aveiro' apenas se absolutamente nada casar.
+ */
+export function getContractSpaceSlug(
+  dbSpaceId: number,
+  opts?: { slug?: string | null; name?: string | null }
+): string {
+  return resolveContractSpaceSlug({ spaceId: dbSpaceId, slug: opts?.slug, name: opts?.name }) || 'rancho-aveiro'
 }
 
 export function isCNPJ(doc: string): boolean {

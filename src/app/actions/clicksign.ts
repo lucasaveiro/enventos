@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import * as clicksign from '@/lib/clicksign'
+import { SPACES, resolveContractSpaceSlug } from '@/lib/contractTemplates'
 
 // ── Formatação de telefone ──────────────────────────────────────────────────
 
@@ -380,12 +381,33 @@ export async function getContractSignature(eventId: number) {
 
 // ── Listar eventos para vincular ao contrato ────────────────────────────────
 
-export async function getEventsForContractLinking(spaceDbId?: number) {
+export async function getEventsForContractLinking(spaceSlug?: string) {
   try {
+    // Quando um espaço é informado, restringe a lista APENAS aos eventos daquele
+    // espaço. Isso impede vincular, por engano, um contrato de um espaço a um
+    // evento de outro (origem da mistura de cláusulas). A resolução casa por
+    // slug persistido e, como reforço, pelo nome de exibição configurado.
+    let spaceIds: number[] | undefined
+    if (spaceSlug) {
+      const cfg = SPACES[spaceSlug]
+      const spaces = await prisma.space.findMany({
+        where: {
+          OR: [
+            { slug: spaceSlug },
+            ...(cfg ? [{ name: cfg.displayName }] : []),
+          ],
+        },
+        select: { id: true },
+      })
+      // Só aplica o filtro se conseguiu resolver o espaço; caso contrário mantém
+      // a lista completa (a tela ainda valida o espaço de cada evento ao gerar).
+      if (spaces.length > 0) spaceIds = spaces.map((s) => s.id)
+    }
+
     const events = await prisma.event.findMany({
       where: {
         category: 'event',
-        ...(spaceDbId ? { spaceId: spaceDbId } : {}),
+        ...(spaceIds ? { spaceId: { in: spaceIds } } : {}),
       },
       include: {
         client: true,
@@ -404,6 +426,7 @@ export async function getEventsForContractLinking(spaceDbId?: number) {
       clientEmail: e.client?.email || '',
       spaceName: e.space.name,
       spaceId: e.spaceId,
+      spaceSlug: resolveContractSpaceSlug({ spaceId: e.spaceId, slug: e.space.slug, name: e.space.name }),
       contractStatus: e.contractStatus,
       totalValue: e.totalValue.toNumber(),
       deposit: e.deposit.toNumber(),

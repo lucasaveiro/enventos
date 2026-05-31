@@ -13,6 +13,10 @@ datasource db {
 model Space {
   id        Int           @id @default(autoincrement())
   name      String
+  // Identificador estável do espaço, usado para escolher o modelo/cláusulas do
+  // contrato (ex.: 'rancho-aveiro', 'estancia-aveiro'). Substitui o antigo mapa
+  // fixo de IDs, que era frágil e causava mistura de cláusulas entre espaços.
+  slug      String?       @unique
   address   String?
   active    Boolean       @default(true)
   events        Event[]

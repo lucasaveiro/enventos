@@ -37,6 +37,7 @@ import {
   substituteClause,
   isCNPJ,
   isValidCPFOrCNPJ,
+  resolveContractSpaceSlug,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
 import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract, getLatestGeneratedContractForEvent } from '@/app/actions/generatedContracts'
@@ -375,6 +376,7 @@ interface EventOption {
   clientEmail: string
   spaceName: string
   spaceId: number
+  spaceSlug: string | null
   contractStatus: string
   totalValue: number
   deposit: number
@@ -415,17 +417,23 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     signingUrl?: string | null
   } | null>(null)
 
-  // Load events for linking
+  // Nome do espaço do evento vinculado quando ele NÃO é deste contrato.
+  // Enquanto preenchido, a geração fica bloqueada para não emitir um contrato
+  // com as cláusulas do espaço errado.
+  const [eventSpaceMismatch, setEventSpaceMismatch] = useState<string | null>(null)
+
+  // Load events for linking — restrito ao espaço deste contrato, para impedir
+  // vincular por engano um evento de outro espaço (origem da mistura de cláusulas).
   useEffect(() => {
     let cancelled = false
     setEventsLoading(true)
-    getEventsForContractLinking().then((result) => {
+    getEventsForContractLinking(space.id).then((result) => {
       if (cancelled) return
       if (result.success && result.data) setEvents(result.data)
       setEventsLoading(false)
     })
     return () => { cancelled = true }
-  }, [])
+  }, [space.id])
 
   // Load existing signature when event is selected
   useEffect(() => {
@@ -447,6 +455,27 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     })
     return () => { cancelled = true }
   }, [selectedEventId])
+
+  // Garante que o evento vinculado é do MESMO espaço deste contrato. Se for de
+  // outro espaço (vínculo equivocado), sinaliza para bloquear a geração.
+  useEffect(() => {
+    if (!selectedEventId) {
+      setEventSpaceMismatch(null)
+      return
+    }
+    let cancelled = false
+    getEventDataForContract(selectedEventId).then((result) => {
+      if (cancelled) return
+      const evSpace = result.success && result.data ? result.data.space : null
+      if (!evSpace) {
+        setEventSpaceMismatch(null)
+        return
+      }
+      const evSlug = resolveContractSpaceSlug({ spaceId: evSpace.id, slug: evSpace.slug, name: evSpace.name })
+      setEventSpaceMismatch(evSlug && evSlug !== space.id ? evSpace.name : null)
+    })
+    return () => { cancelled = true }
+  }, [selectedEventId, space.id])
 
   const {
     register,
@@ -620,7 +649,11 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     getLatestGeneratedContractForEvent(initialEventId).then((contractResult) => {
       if (cancelled) return
 
-      if (contractResult.success && contractResult.data) {
+      // Só restaura do contrato salvo se ele for DO MESMO espaço deste editor.
+      // Um contrato gerado para outro espaço (vínculo equivocado) não pode
+      // sobrescrever as cláusulas — senão a contaminação se propaga de uma versão
+      // para a seguinte. Nesse caso, cai no pré-preenchimento a partir do evento.
+      if (contractResult.success && contractResult.data && contractResult.data.spaceId === space.id) {
         // Restore from saved contract (same logic as loadContractId)
         const saved = contractResult.data
         const savedFormData = saved.formData as Record<string, unknown>
@@ -732,7 +765,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     })
 
     return () => { cancelled = true }
-  }, [initialEventId, loadContractId, setValue])
+  }, [initialEventId, loadContractId, setValue, space.id])
 
   // ─── Save handler for after PDF generation ────────────────────────────
   const handleSaveContract = useCallback(async (
@@ -1787,13 +1820,20 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               Vincule um evento acima para enviar via Clicksign.
             </p>
           )}
+          {eventSpaceMismatch && (
+            <p className="text-xs text-[var(--destructive)] mt-1 flex items-center gap-1 font-medium">
+              <AlertCircle className="h-3 w-3" />
+              O evento vinculado é do espaço &ldquo;{eventSpaceMismatch}&rdquo;, diferente deste contrato ({space.displayName}).
+              Selecione um evento do espaço {space.displayName} antes de gerar.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <PDFGeneratorButton
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
-            isValid={isValid}
+            isValid={isValid && !eventSpaceMismatch}
             onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterDownload}
           />
@@ -1801,7 +1841,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
-            isValid={isValid}
+            isValid={isValid && !eventSpaceMismatch}
             eventId={selectedEventId}
             existingSignature={existingSignature}
             onBeforeGenerate={applyFormDataToClauses}

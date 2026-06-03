@@ -39,6 +39,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
 import { Button, buttonVariants } from '@/components/ui/Button'
 import { ContractStatusBadge } from '@/components/contracts/ContractStatusBadge'
+import { ContractEditWarningModal } from '@/components/contracts/ContractEditWarningModal'
 import { EventDetailsActions } from '@/components/events/EventDetailsActions'
 import { AddProfessionalPopover } from '@/components/events/AddProfessionalPopover'
 import { LinkTransactionModal } from '@/components/events/LinkTransactionModal'
@@ -137,6 +138,7 @@ export default function EventPage() {
   const [generatedContracts, setGeneratedContracts] = useState<any[]>([])
   const [isUploadContractModalOpen, setIsUploadContractModalOpen] = useState(false)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
+  const [isClientEditWarningOpen, setIsClientEditWarningOpen] = useState(false)
   const [isInterestDatesModalOpen, setIsInterestDatesModalOpen] = useState(false)
 
   const fetchEvent = useCallback(async () => {
@@ -242,6 +244,12 @@ export default function EventPage() {
   const client = event.client
   const interestDates = client?.interestDates || []
 
+  // Há um contrato "vivo" no Clicksign (enviado/assinado, ainda não cancelado)? Se sim,
+  // editar dados do evento ou do cliente exige avisar antes: o contrato já enviado não se
+  // atualiza sozinho e o link de assinatura continuaria com os dados antigos.
+  // getContractSignature já retorna apenas assinaturas não-canceladas, então a presença basta.
+  const hasActiveContract = !!contractSignature && contractSignature.status !== 'cancelled'
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -258,7 +266,7 @@ export default function EventPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <EventDetailsActions event={event} />
+          <EventDetailsActions event={event} hasActiveContract={hasActiveContract} />
           <Link href="/events" className={buttonVariants({ variant: 'outline' })}>
             <ArrowLeft className="h-4 w-4" />
             Voltar aos eventos
@@ -312,7 +320,11 @@ export default function EventPage() {
                   variant="outline"
                   size="sm"
                   className="gap-1"
-                  onClick={() => setIsClientModalOpen(true)}
+                  onClick={() =>
+                    hasActiveContract
+                      ? setIsClientEditWarningOpen(true)
+                      : setIsClientModalOpen(true)
+                  }
                 >
                   <Pencil className="h-4 w-4" />
                   Editar Cliente
@@ -984,6 +996,17 @@ export default function EventPage() {
         onClose={() => setIsUploadContractModalOpen(false)}
         eventId={eventId}
         onSuccess={fetchEvent}
+      />
+
+      {/* Aviso antes de editar o cliente quando há contrato ativo no Clicksign */}
+      <ContractEditWarningModal
+        isOpen={isClientEditWarningOpen}
+        target="cliente"
+        onCancel={() => setIsClientEditWarningOpen(false)}
+        onConfirm={() => {
+          setIsClientEditWarningOpen(false)
+          setIsClientModalOpen(true)
+        }}
       />
 
       {/* Client Edit Modal */}

@@ -54,7 +54,11 @@ export default function ClicksignButton({
 
   const isPartial = existingSignature && PARTIAL_STATUSES.includes(existingSignature.status)
   const isFullySent = existingSignature && FINAL_SENT_STATUSES.includes(existingSignature.status)
-  const canResend = existingSignature?.status === 'sent_whatsapp'
+  // 'signed' significa "parcialmente assinado": a Clicksign emite `sign` a cada
+  // assinatura individual, então com múltiplos signatários o status vira 'signed' assim
+  // que um assina. Enquanto não estiver 'closed' (finalizado), ainda há quem notificar.
+  const canResend =
+    existingSignature?.status === 'sent_whatsapp' || existingSignature?.status === 'signed'
   const [cancelling, setCancelling] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendMsg, setResendMsg] = useState<string | null>(null)

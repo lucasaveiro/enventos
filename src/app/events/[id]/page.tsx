@@ -733,7 +733,11 @@ export default function EventPage() {
             )}
             {contractSignature && contractSignature.status !== 'cancelled' && (
               <div className="flex flex-wrap items-center gap-2">
-                {contractSignature.status === 'sent_whatsapp' && (
+                {/* 'signed' = parcialmente assinado: a Clicksign emite `sign` a cada
+                    assinatura individual, então com 2 signatários o status vira 'signed'
+                    assim que um assina (o contratante ainda pode estar pendente). Só
+                    'closed' (finalizado) é que dispensa o reenvio. */}
+                {['sent_whatsapp', 'signed'].includes(contractSignature.status) && (
                   <Button
                     size="sm"
                     variant="outline"

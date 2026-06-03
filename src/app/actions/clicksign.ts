@@ -268,10 +268,16 @@ export async function resendSignatureLink(eventId: number) {
       return { success: false, error: 'Nenhum contrato ativo encontrado para este evento' }
     }
 
-    if (['signed', 'closed'].includes(signature.status)) {
+    // 'closed' = documento finalizado na Clicksign (todos assinaram). 'signed' NÃO
+    // significa totalmente assinado: a Clicksign emite o evento `sign` a cada assinatura
+    // individual, então com 2 signatários o status vira 'signed' assim que UM assina,
+    // mesmo faltando o outro (ex.: o contratante). Por isso só bloqueamos 'closed' aqui;
+    // para 'signed' seguimos e deixamos a checagem real de pendentes (getDocument abaixo,
+    // que filtra signatários sem `signature`) decidir se há a quem reenviar.
+    if (signature.status === 'closed') {
       return {
         success: false,
-        error: 'Este contrato já foi assinado/finalizado. Não é necessário reenviar.',
+        error: 'Este contrato já foi finalizado. Não é necessário reenviar.',
       }
     }
 

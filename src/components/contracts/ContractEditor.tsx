@@ -35,6 +35,7 @@ import {
   getDefaultClauseTemplates,
   getInitialClauses,
   substituteClause,
+  clauseTemplateHasClientData,
   isCNPJ,
   isValidCPFOrCNPJ,
   resolveContractSpaceSlug,
@@ -853,9 +854,18 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const computeClausesWithFormData = useCallback((): ContractClause[] => {
     const formData = buildFormDataFromValues()
     return clauses.map((clause) => {
-      if (clause.edited) return clause
-      const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content || clause.content
-      return { ...clause, content: substituteClause(template, formData, effectiveSpace) }
+      const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content
+      // Cláusula editada manualmente: preserva o texto — EXCETO quando o modelo contém
+      // dados do cadastro do cliente (telefone, CPF, nome, qualificação...). Esses não são
+      // ajustados na cláusula, vêm da ficha do cliente, e precisam sempre refletir o valor
+      // atual. Senão um telefone/CPF corrigido fica "preso" no texto antigo da cláusula
+      // editada e o contrato (e o link de assinatura por WhatsApp) sai com o dado errado.
+      if (clause.edited && (!template || !clauseTemplateHasClientData(template))) {
+        return clause
+      }
+      // Reconstrói do modelo padrão com os dados atuais do formulário.
+      const base = template || clause.content
+      return { ...clause, content: substituteClause(base, formData, effectiveSpace), edited: false }
     })
   }, [clauses, space.id, effectiveSpace, buildFormDataFromValues])
 

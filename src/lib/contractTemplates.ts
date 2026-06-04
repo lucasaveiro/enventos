@@ -713,3 +713,27 @@ export function getDefaultClauseTemplates(spaceId?: string): Omit<ContractClause
 export function getInitialClauses(spaceId?: string): ContractClause[] {
   return getDefaultClauseTemplates(spaceId).map((clause) => ({ ...clause, edited: false }))
 }
+
+// Placeholders que derivam do CADASTRO DO CLIENTE. Cláusulas cujo modelo os usa
+// devem sempre refletir o cadastro atual — mesmo que tenham sido editadas — porque
+// esses dados não são ajustados manualmente na cláusula, vêm da ficha do cliente.
+// Sem isso, um telefone/CPF corrigido no cadastro ficaria "preso" no texto antigo da
+// cláusula editada e o contrato (e o link de assinatura por WhatsApp) sairia errado.
+const CLIENT_DATA_PLACEHOLDERS = [
+  '{clientQualification}',
+  '{clientName}',
+  '{clientCPF}',
+  '{clientRG}',
+  '{clientAddress}',
+  '{clientCity}',
+  '{clientState}',
+  '{clientPhone}',
+  '{clientEmail}',
+  '{clientNationality}',
+  '{clientCivilStatus}',
+  '{clientProfession}',
+]
+
+export function clauseTemplateHasClientData(template: string): boolean {
+  return CLIENT_DATA_PLACEHOLDERS.some((placeholder) => template.includes(placeholder))
+}

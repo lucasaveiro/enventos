@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Plus, Trash2, CalendarDays } from 'lucide-react'
+import { X, Plus, Trash2, CalendarDays, ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
@@ -173,6 +174,7 @@ export function EventModal({
   const [isNewClient, setIsNewClient] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [interestDates, setInterestDates] = useState<Array<{ date: string; spaceId: string; notes: string }>>([])
+  const [showMore, setShowMore] = useState(false)
 
   const handleDeleteEvent = async () => {
     if (!initialEvent?.id) return
@@ -251,6 +253,15 @@ export function EventModal({
 
     setIsNewClient(false)
     setInterestDates([])
+    // Abre "Mais opções" automaticamente ao editar um evento que já tem
+    // profissionais ou observações preenchidos.
+    setShowMore(
+      !!(
+        initialEvent &&
+        ((Array.isArray(initialEvent.professionals) && initialEvent.professionals.length > 0) ||
+          initialEvent.notes)
+      )
+    )
 
     if (initialEvent) {
       const category = (initialEvent.category || 'event') as EventCategory
@@ -498,7 +509,7 @@ export function EventModal({
               </div>
             </div>
 
-            {showProfessionals && (
+            {showProfessionals && showMore && (
               <div className="space-y-2">
                 <Label>Profissionais</Label>
                 {professionals.length === 0 ? (
@@ -590,10 +601,25 @@ export function EventModal({
               </select>
             </div>
 
-            <div>
-              <Label htmlFor="notes">Observações</Label>
-              <Textarea id="notes" {...register('notes')} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              <ChevronDown className={cn('h-4 w-4 transition-transform', showMore && 'rotate-180')} />
+              {showMore
+                ? 'Menos opções'
+                : showProfessionals
+                  ? 'Mais opções (profissionais, observações)'
+                  : 'Mais opções (observações)'}
+            </button>
+
+            {showMore && (
+              <div>
+                <Label htmlFor="notes">Observações</Label>
+                <Textarea id="notes" {...register('notes')} />
+              </div>
+            )}
 
             {showProposalFlow && (
               <div className="space-y-3 rounded-lg border border-border p-3">

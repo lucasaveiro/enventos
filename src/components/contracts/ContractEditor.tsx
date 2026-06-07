@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
+import { ContractSectionNav } from './ContractSectionNav'
 import {
   ContractClause,
   ContractFormData,
@@ -169,14 +170,16 @@ const PACKAGE_TYPES = [
 ]
 
 function SectionCard({
+  id,
   title,
   children,
 }: {
+  id?: string
   title: string
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+    <div id={id} className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden scroll-mt-24">
       <div className="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)]">
         <h3 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">{title}</h3>
       </div>
@@ -1079,8 +1082,10 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         </div>
       </div>
 
+      <ContractSectionNav />
+
       {/* ── SECTION 0: Vincular Evento (Clicksign) ── */}
-      <SectionCard title="Vincular ao Evento (Clicksign)">
+      <SectionCard id="ct-vincular" title="Vincular ao Evento (Clicksign)">
         <div className="space-y-3">
           <p className="text-xs text-[var(--muted-foreground)]">
             Selecione um evento para habilitar o envio do contrato para assinatura via Clicksign/WhatsApp.
@@ -1216,7 +1221,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       </SectionCard>
 
       {/* ── SECTION 2: Dados do Contratante ── */}
-      <SectionCard title="Dados do(a) Contratante">
+      <SectionCard id="ct-contratante" title="Dados do(a) Contratante">
         <FieldRow>
           <Field label={clientIsCNPJ ? 'Razão Social *' : 'Nome Completo *'} error={errors.clientName?.message} className="sm:col-span-2 lg:col-span-2">
             <Input {...register('clientName')} placeholder={clientIsCNPJ ? 'Empresa Ltda' : 'João da Silva'} />
@@ -1272,7 +1277,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       </SectionCard>
 
       {/* ── SECTION 3: Dados do Evento ── */}
-      <SectionCard title="Dados do Evento">
+      <SectionCard id="ct-evento" title="Dados do Evento">
         <FieldRow>
           <Field label="Data do Evento *" error={errors.eventDate?.message}>
             <Input type="date" {...register('eventDate')} />
@@ -1340,7 +1345,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       </SectionCard>
 
       {/* ── SECTION 4: Condições Financeiras ── */}
-      <SectionCard title="Condições Financeiras">
+      <SectionCard id="ct-financeiro" title="Condições Financeiras">
         <FieldRow>
           <Field label="Valor Total (R$) *" error={errors.totalValue?.message}>
             <Input
@@ -1535,7 +1540,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       </SectionCard>
 
       {/* ── SECTION 6: Cláusulas ── */}
-      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+      <div id="ct-clausulas" className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden scroll-mt-24">
         <div className="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">
             Cláusulas do Contrato

@@ -11,10 +11,7 @@ import {
   CheckSquare,
   Home,
   Sparkles,
-  BarChart3,
   Wallet,
-  Receipt,
-  CalendarClock,
   LogOut,
   FilePlus2,
   Settings,
@@ -40,6 +37,8 @@ type NavLeaf = {
   href: string
   icon: LucideIcon
   description?: string
+  /** Prefixos extras de rota que também marcam este item como ativo. */
+  matchPrefixes?: string[]
 }
 
 type NavItem =
@@ -56,15 +55,12 @@ const navigation: NavItem[] = [
   { type: 'link', name: 'Agenda', href: '/', icon: Calendar, description: 'Calendário de reservas' },
   { type: 'link', name: 'Eventos', href: '/events', icon: CalendarDays, description: 'Gerenciamento de eventos' },
   {
-    type: 'group',
+    type: 'link',
     name: 'Financeiro',
+    href: '/dashboard',
     icon: Wallet,
-    description: 'Receitas, despesas e parcelas',
-    children: [
-      { name: 'Resumo', href: '/dashboard', icon: BarChart3 },
-      { name: 'Lançamentos', href: '/financial', icon: Receipt },
-      { name: 'Vencimentos', href: '/financeiro/calendario', icon: CalendarClock },
-    ],
+    description: 'Resumo, lançamentos e vencimentos',
+    matchPrefixes: ['/dashboard', '/financial', '/financeiro'],
   },
   { type: 'link', name: 'Clientes', href: '/clients', icon: Users, description: 'Cadastro e datas de interesse' },
   {
@@ -108,7 +104,9 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   // ── Renderiza um link (de topo ou filho de grupo) ────────────────────────
   const renderLeaf = (item: NavLeaf, isChild = false) => {
-    const active = isActive(item.href)
+    const active =
+      isActive(item.href) ||
+      (item.matchPrefixes?.some((p) => pathname === p || pathname.startsWith(p)) ?? false)
     return (
       <Link
         key={item.name}

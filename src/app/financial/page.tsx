@@ -33,6 +33,7 @@ import {
   updateTransactionStatus,
 } from '@/app/actions/transactions'
 import { TransactionModal } from '@/components/forms/TransactionModal'
+import { FinanceTabs } from '@/components/financeiro/FinanceTabs'
 
 const categoryLabels: Record<string, string> = {
   event_payment: 'Pagamento de Evento',
@@ -175,6 +176,7 @@ export default function FinancialPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <FinanceTabs />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-primary/10">

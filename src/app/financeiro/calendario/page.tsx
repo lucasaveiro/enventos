@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { CalendarDays } from 'lucide-react'
 import { FinancialCalendar } from '@/components/calendar/FinancialCalendar'
 import { getSpaces } from '@/app/actions/spaces'
+import { FinanceTabs } from '@/components/financeiro/FinanceTabs'
 
 export default function FinancialCalendarPage() {
   const [spaces, setSpaces] = useState<{ id: number; name: string }[]>([])
@@ -20,6 +21,7 @@ export default function FinancialCalendarPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <FinanceTabs />
       <div className="flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
           <CalendarDays className="h-6 w-6 text-primary" />

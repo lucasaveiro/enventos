@@ -36,6 +36,7 @@ import {
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getAllFinancialData, getFinancialSummary, deleteTransaction, getFinancialForecastSummary } from '@/app/actions/transactions'
 import { TransactionModal } from '@/components/forms/TransactionModal'
+import { FinanceTabs } from '@/components/financeiro/FinanceTabs'
 import { addDays, endOfDay, format, startOfDay, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -245,6 +246,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <FinanceTabs />
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">

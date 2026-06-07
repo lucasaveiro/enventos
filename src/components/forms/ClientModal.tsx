@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { createClient, updateClient } from '@/app/actions/clients'
-import { User, Phone, Mail, AlertTriangle } from 'lucide-react'
+import { User, Phone, Mail, AlertTriangle, ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { isValidCPFOrCNPJ } from '@/lib/contractTemplates'
 import { checkBrazilianPhone, countPhoneDigits } from '@/lib/phone'
 
@@ -84,6 +85,24 @@ export function ClientModal({ isOpen, onClose, initialClient, onSuccess }: Clien
 
   const [confirm, setConfirm] = useState<PhoneConfirm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showMore, setShowMore] = useState(false)
+
+  // Em edição, abre a seção avançada automaticamente quando o cliente já tem
+  // dados além de nome/telefone/email — para esses dados ficarem visíveis.
+  useEffect(() => {
+    if (!isOpen) return
+    setShowMore(
+      !!(
+        initialClient &&
+        (initialClient.cpf ||
+          initialClient.rg ||
+          initialClient.address ||
+          initialClient.city ||
+          initialClient.state ||
+          initialClient.notes)
+      )
+    )
+  }, [isOpen, initialClient])
 
   const closeAll = () => {
     setConfirm(null)
@@ -236,6 +255,17 @@ export function ClientModal({ isOpen, onClose, initialClient, onSuccess }: Clien
                 </div>
               </div>
 
+              <button
+                type="button"
+                onClick={() => setShowMore((v) => !v)}
+                className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                <ChevronDown className={cn('h-4 w-4 transition-transform', showMore && 'rotate-180')} />
+                {showMore ? 'Menos opções' : 'Mais dados (documento, endereço, observações)'}
+              </button>
+
+              {showMore && (
+              <div className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="cpf">CPF / CNPJ</Label>
@@ -303,6 +333,8 @@ export function ClientModal({ isOpen, onClose, initialClient, onSuccess }: Clien
                   <p className="text-sm text-destructive">{errors.notes.message}</p>
                 )}
               </div>
+              </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={closeAll}>

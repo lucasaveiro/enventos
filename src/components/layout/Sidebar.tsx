@@ -2,20 +2,82 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, CalendarDays, Users, Briefcase, CheckSquare, Home, Sparkles, BarChart3, Wallet, FileText, X, CalendarClock, LogOut, FilePlus2 } from 'lucide-react'
+import { useState } from 'react'
+import {
+  Calendar,
+  CalendarDays,
+  Users,
+  Briefcase,
+  CheckSquare,
+  Home,
+  Sparkles,
+  BarChart3,
+  Wallet,
+  Receipt,
+  CalendarClock,
+  LogOut,
+  FilePlus2,
+  Settings,
+  ChevronDown,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const navigation = [
-  { name: 'Calendário', href: '/', icon: Calendar, description: 'Visualize suas reservas' },
-  { name: 'Eventos', href: '/events', icon: CalendarDays, description: 'Gerenciamento de eventos' },
-  { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Receitas e despesas' },
-  { name: 'Financeiro', href: '/financial', icon: Wallet, description: 'Planilha e previsões' },
-  { name: 'Cal. Financeiro', href: '/financeiro/calendario', icon: CalendarClock, description: 'Vencimentos e parcelas' },
-  { name: 'Espaços', href: '/spaces', icon: Home, description: 'Gerencie seus espaços' },
-  { name: 'Clientes', href: '/clients', icon: Users, description: 'Cadastro de clientes' },
-  { name: 'Profissionais', href: '/professionals', icon: Briefcase, description: 'Equipe de trabalho' },
-  { name: 'Serviços', href: '/services', icon: CheckSquare, description: 'Tarefas operacionais' },
-  { name: 'Contratos', href: '/contracts', icon: FileText, description: 'Geração de contratos PDF' },
+// ── Estrutura de navegação ────────────────────────────────────────────────
+// A navegação foi reagrupada de 10 itens planos para 5 grupos seguindo o
+// modelo mental de quem usa o sistema:
+//   1. Agenda        — calendário de reservas (antiga "Calendário")
+//   2. Eventos       — gerenciamento de eventos
+//   3. Financeiro    — grupo (Resumo, Lançamentos, Vencimentos)
+//   4. Clientes      — cadastro e datas de interesse
+//   5. Configurações — grupo (Espaços, Profissionais, Serviços)
+// O acesso a contratos continua via botão "Novo Contrato Fechado" (acima) e
+// pela página de cada Evento ("Gerar Contrato").
+
+type NavLeaf = {
+  name: string
+  href: string
+  icon: LucideIcon
+  description?: string
+}
+
+type NavItem =
+  | ({ type: 'link' } & NavLeaf)
+  | {
+      type: 'group'
+      name: string
+      icon: LucideIcon
+      description: string
+      children: NavLeaf[]
+    }
+
+const navigation: NavItem[] = [
+  { type: 'link', name: 'Agenda', href: '/', icon: Calendar, description: 'Calendário de reservas' },
+  { type: 'link', name: 'Eventos', href: '/events', icon: CalendarDays, description: 'Gerenciamento de eventos' },
+  {
+    type: 'group',
+    name: 'Financeiro',
+    icon: Wallet,
+    description: 'Receitas, despesas e parcelas',
+    children: [
+      { name: 'Resumo', href: '/dashboard', icon: BarChart3 },
+      { name: 'Lançamentos', href: '/financial', icon: Receipt },
+      { name: 'Vencimentos', href: '/financeiro/calendario', icon: CalendarClock },
+    ],
+  },
+  { type: 'link', name: 'Clientes', href: '/clients', icon: Users, description: 'Cadastro e datas de interesse' },
+  {
+    type: 'group',
+    name: 'Configurações',
+    icon: Settings,
+    description: 'Espaços, equipe e serviços',
+    children: [
+      { name: 'Espaços', href: '/spaces', icon: Home },
+      { name: 'Profissionais', href: '/professionals', icon: Briefcase },
+      { name: 'Serviços', href: '/services', icon: CheckSquare },
+    ],
+  },
 ]
 
 interface SidebarProps {
@@ -27,10 +89,69 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
+  // Estado de expansão manual dos grupos. Quando indefinido, o grupo segue o
+  // padrão "abre se contém a rota ativa".
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
   const handleLinkClick = () => {
     // Fecha o sidebar ao navegar no mobile
     onClose?.()
+  }
+
+  const isActive = (href: string) =>
+    pathname === href || (href !== '/' && pathname.startsWith(href))
+
+  const groupHasActive = (children: NavLeaf[]) => children.some((c) => isActive(c.href))
+
+  const toggleGroup = (name: string, currentlyOpen: boolean) =>
+    setOpenGroups((prev) => ({ ...prev, [name]: !currentlyOpen }))
+
+  // ── Renderiza um link (de topo ou filho de grupo) ────────────────────────
+  const renderLeaf = (item: NavLeaf, isChild = false) => {
+    const active = isActive(item.href)
+    return (
+      <Link
+        key={item.name}
+        href={item.href}
+        onClick={handleLinkClick}
+        className={cn(
+          'group flex items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all duration-200',
+          isChild ? 'py-2.5' : 'py-3',
+          active ? 'shadow-sm' : ''
+        )}
+        style={{
+          background: active ? 'var(--sidebar-active)' : 'transparent',
+          color: active ? '#ffffff' : 'var(--sidebar-text)',
+        }}
+        onMouseEnter={(e) => {
+          if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'
+        }}
+        onMouseLeave={(e) => {
+          if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
+        }}
+      >
+        <div
+          className={cn(
+            'flex items-center justify-center rounded-lg transition-all duration-200',
+            isChild ? 'h-7 w-7' : 'h-9 w-9'
+          )}
+          style={{ background: active ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)' }}
+        >
+          <item.icon
+            className={cn('transition-colors duration-200', isChild ? 'h-4 w-4' : 'h-5 w-5')}
+            style={{ color: active ? '#ffffff' : 'var(--sidebar-text-muted)' }}
+            aria-hidden="true"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="block">{item.name}</span>
+          {active && item.description && (
+            <span className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>{item.description}</span>
+          )}
+        </div>
+        {active && <div className="h-2 w-2 rounded-full bg-green-500 opacity-80 shrink-0" />}
+      </Link>
+    )
   }
 
   return (
@@ -93,47 +214,54 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             Menu Principal
           </p>
           {navigation.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+            if (item.type === 'link') {
+              return renderLeaf(item)
+            }
+
+            // ── Grupo expansível ──────────────────────────────────────────
+            const hasActive = groupHasActive(item.children)
+            const open = openGroups[item.name] ?? hasActive
             return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={handleLinkClick}
-                className={cn(
-                  'group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200',
-                  isActive ? 'shadow-sm' : ''
-                )}
-                style={{
-                  background: isActive ? 'var(--sidebar-active)' : 'transparent',
-                  color: isActive ? '#ffffff' : 'var(--sidebar-text)',
-                }}
-                onMouseEnter={e => {
-                  if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'
-                }}
-                onMouseLeave={e => {
-                  if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
-                }}
-              >
-                <div
-                  className="flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200"
-                  style={{ background: isActive ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)' }}
+              <div key={item.name}>
+                <button
+                  onClick={() => toggleGroup(item.name, open)}
+                  className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200"
+                  style={{
+                    background: 'transparent',
+                    color: hasActive ? '#ffffff' : 'var(--sidebar-text)',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = 'transparent'
+                  }}
+                  aria-expanded={open}
                 >
-                  <item.icon
-                    className="h-5 w-5 transition-colors duration-200"
-                    style={{ color: isActive ? '#ffffff' : 'var(--sidebar-text-muted)' }}
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200"
+                    style={{ background: hasActive ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)' }}
+                  >
+                    <item.icon
+                      className="h-5 w-5 transition-colors duration-200"
+                      style={{ color: hasActive ? '#ffffff' : 'var(--sidebar-text-muted)' }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <span className="flex-1 text-left">{item.name}</span>
+                  <ChevronDown
+                    className={cn('h-4 w-4 shrink-0 transition-transform duration-200', open && 'rotate-180')}
+                    style={{ color: 'var(--sidebar-text-muted)' }}
                     aria-hidden="true"
                   />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="block">{item.name}</span>
-                  {isActive && (
-                    <span className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>{item.description}</span>
-                  )}
-                </div>
-                {isActive && (
-                  <div className="h-2 w-2 rounded-full bg-green-500 opacity-80 shrink-0" />
+                </button>
+
+                {open && (
+                  <div className="mt-1 mb-1 ml-5 space-y-1 border-l border-white/10 pl-2">
+                    {item.children.map((child) => renderLeaf(child, true))}
+                  </div>
                 )}
-              </Link>
+              </div>
             )
           })}
         </nav>

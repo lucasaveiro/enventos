@@ -41,6 +41,7 @@ import { Button, buttonVariants } from '@/components/ui/Button'
 import { ContractStatusBadge } from '@/components/contracts/ContractStatusBadge'
 import { ContractEditWarningModal } from '@/components/contracts/ContractEditWarningModal'
 import { EventDetailsActions } from '@/components/events/EventDetailsActions'
+import { EventSectionNav } from '@/components/events/EventSectionNav'
 import { AddProfessionalPopover } from '@/components/events/AddProfessionalPopover'
 import { LinkTransactionModal } from '@/components/events/LinkTransactionModal'
 import { TransactionModal } from '@/components/forms/TransactionModal'
@@ -274,7 +275,9 @@ export default function EventPage() {
         </div>
       </div>
 
-      <Card>
+      <EventSectionNav isFinancialEvent={isFinancialEvent} />
+
+      <Card id="evt-detalhes" className="scroll-mt-24">
         <CardHeader>
           <CardTitle>Detalhes do Evento</CardTitle>
         </CardHeader>
@@ -307,7 +310,7 @@ export default function EventPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="evt-cliente" className="scroll-mt-24">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -521,7 +524,7 @@ export default function EventPage() {
 
       {/* Payment Plan Section */}
       {isFinancialEvent && (
-        <Card>
+        <Card id="evt-pagamentos" className="scroll-mt-24">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -569,7 +572,7 @@ export default function EventPage() {
 
       {/* Transactions Section */}
       {isFinancialEvent && (
-        <Card>
+        <Card id="evt-transacoes" className="scroll-mt-24">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -676,7 +679,7 @@ export default function EventPage() {
 
       {/* Contract Section */}
       {isFinancialEvent && (
-        <Card>
+        <Card id="evt-contrato" className="scroll-mt-24">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

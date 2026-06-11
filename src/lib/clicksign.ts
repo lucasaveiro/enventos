@@ -65,7 +65,7 @@ interface CreateSignerParams {
   email: string
   phoneNumber: string // digits only, e.g. "5511999999999"
   name: string
-  documentation: string // CPF
+  documentation: string // CPF (11 dígitos) ou CNPJ (14 dígitos) — só CPF é enviado à Clicksign
 }
 
 interface CreateSignerResponse {
@@ -73,14 +73,22 @@ interface CreateSignerResponse {
 }
 
 export async function createSigner(params: CreateSignerParams): Promise<{ signerKey: string }> {
+  // O campo `documentation` do signatário na Clicksign valida ESTRITAMENTE como CPF
+  // (11 dígitos). Cliente pessoa jurídica tem CNPJ (14 dígitos): enviá-lo aqui faz a
+  // API retornar 422 "CPF inválido" e o envio inteiro sofre rollback. Para CNPJ (ou
+  // documento ausente) o signatário assina sem verificação de CPF (has_documentation:false).
+  const docDigits = (params.documentation || '').replace(/\D/g, '')
+  const hasCPF = docDigits.length === 11
+
   const data = await request<CreateSignerResponse>('/signers', {
     signer: {
       email: params.email,
       phone_number: params.phoneNumber,
       auths: ['whatsapp'],
       name: params.name,
-      documentation: params.documentation,
-      has_documentation: true,
+      ...(hasCPF
+        ? { documentation: docDigits, has_documentation: true }
+        : { has_documentation: false }),
       communicate_by: 'whatsapp',
     },
   })

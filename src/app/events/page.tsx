@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Clock,
   Search,
+  FileSignature,
+  type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -32,6 +34,7 @@ import { ContractStatusBadge } from '@/components/contracts/ContractStatusBadge'
 import { EventModal } from '@/components/forms/EventModal'
 import { getEventsForList, deleteEvent } from '@/app/actions/events'
 import { getSpaces } from '@/app/actions/spaces'
+import { cn } from '@/lib/utils'
 
 const STATUS_LABELS: Record<string, string> = {
   confirming: 'Confirmando',
@@ -57,9 +60,75 @@ const PAYMENT_VARIANTS: Record<string, 'success' | 'warning' | 'destructive'> = 
   unpaid: 'destructive',
 }
 
+// "Pendência de assinatura" = contrato enviado à Clicksign e ainda não finalizado.
+// 'sent_whatsapp' = aguardando assinaturas; 'signed' = parcialmente assinado (a
+// Clicksign emite `sign` por assinatura individual, então com 2 partes o status
+// vira 'signed' assim que UMA assina). 'closed' (todos assinaram) e 'cancelled'
+// não contam. Derivado do status persistido — barato para uma lista; a verdade
+// por signatário (X de Y) fica na página do evento.
+const PENDING_SIGNATURE_STATUSES = ['sent_whatsapp', 'signed']
+
+function hasPendingSignature(event: any): boolean {
+  const sig = event?.contractSignatures?.[0]
+  return !!sig && PENDING_SIGNATURE_STATUSES.includes(sig.status)
+}
+
+type StatTone = 'primary' | 'success' | 'warning' | 'destructive' | 'info'
+
+const STAT_TONES: Record<StatTone, { bg: string; text: string; ring: string }> = {
+  primary: { bg: 'bg-primary/10', text: 'text-primary', ring: 'ring-primary' },
+  success: { bg: 'bg-success/10', text: 'text-success', ring: 'ring-success' },
+  warning: { bg: 'bg-warning/10', text: 'text-warning', ring: 'ring-warning' },
+  destructive: { bg: 'bg-destructive/10', text: 'text-destructive', ring: 'ring-destructive' },
+  info: { bg: 'bg-info/10', text: 'text-info', ring: 'ring-info' },
+}
+
+function StatCard({
+  icon: Icon,
+  count,
+  label,
+  tone,
+  active,
+  onClick,
+}: {
+  icon: LucideIcon
+  count: number
+  label: string
+  tone: StatTone
+  active: boolean
+  onClick: () => void
+}) {
+  const t = STAT_TONES[tone]
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={`Filtrar: ${label}`}
+      className={cn(
+        'rounded-xl border bg-[var(--card)] text-left text-[var(--card-foreground)] shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
+        active
+          ? cn('ring-2 ring-offset-1 ring-offset-[var(--background)] border-transparent', t.ring)
+          : 'border-[var(--border)] hover:border-[var(--border-hover)]',
+      )}
+    >
+      <div className="p-4">
+        <div className="flex items-center gap-3">
+          <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', t.bg)}>
+            <Icon className={cn('h-5 w-5', t.text)} />
+          </div>
+          <div>
+            <p className="text-2xl font-bold">{count}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([])
-  const [summary, setSummary] = useState({ totalEvents: 0, paidCount: 0, partialCount: 0, unpaidCount: 0 })
   const [spaces, setSpaces] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -70,23 +139,23 @@ export default function EventsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [paymentFilter, setPaymentFilter] = useState('all')
   const [contractFilter, setContractFilter] = useState('all')
+  const [signatureFilter, setSignatureFilter] = useState<'all' | 'pending'>('all')
   const [search, setSearch] = useState('')
 
+  // Só o espaço (contexto de escopo) filtra no servidor; os demais filtros e a
+  // busca rodam no cliente, para que os indicadores reflitam o total do espaço
+  // (e não o subconjunto já filtrado) e a filtragem por clique seja instantânea.
   const fetchEvents = useCallback(async () => {
     setIsLoading(true)
     const filters: any = {}
     if (spaceFilter !== 'all') filters.spaceId = Number(spaceFilter)
-    if (statusFilter !== 'all') filters.status = statusFilter
-    if (paymentFilter !== 'all') filters.paymentStatus = paymentFilter
-    if (contractFilter !== 'all') filters.contractStatus = contractFilter
 
     const res = await getEventsForList(filters)
     if (res.success && res.data) {
       setEvents(res.data)
-      if (res.summary) setSummary(res.summary)
     }
     setIsLoading(false)
-  }, [spaceFilter, statusFilter, paymentFilter, contractFilter])
+  }, [spaceFilter])
 
   useEffect(() => {
     fetchEvents()
@@ -98,16 +167,52 @@ export default function EventsPage() {
     })
   }, [])
 
-  const filteredEvents = search.trim()
-    ? events.filter((e) => {
-        const q = search.toLowerCase()
-        return (
-          e.title.toLowerCase().includes(q) ||
+  const summary = useMemo(
+    () => ({
+      totalEvents: events.length,
+      paidCount: events.filter((e) => e.paymentStatus === 'paid').length,
+      partialCount: events.filter((e) => e.paymentStatus === 'partial').length,
+      unpaidCount: events.filter((e) => e.paymentStatus === 'unpaid').length,
+      pendingSignatureCount: events.filter(hasPendingSignature).length,
+    }),
+    [events],
+  )
+
+  const filteredEvents = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return events.filter((e) => {
+      if (statusFilter !== 'all' && e.status !== statusFilter) return false
+      if (paymentFilter !== 'all' && e.paymentStatus !== paymentFilter) return false
+      if (contractFilter !== 'all' && (e.contractStatus || 'not_sent') !== contractFilter) return false
+      if (signatureFilter === 'pending' && !hasPendingSignature(e)) return false
+      if (q) {
+        const match =
+          e.title?.toLowerCase().includes(q) ||
           e.client?.name?.toLowerCase().includes(q) ||
           e.space?.name?.toLowerCase().includes(q)
-        )
-      })
-    : events
+        if (!match) return false
+      }
+      return true
+    })
+  }, [events, statusFilter, paymentFilter, contractFilter, signatureFilter, search])
+
+  // Indicadores como atalho de filtro: pagamento é mutuamente exclusivo (radio),
+  // assinatura é um toggle independente; "Total" zera ambos.
+  const togglePayment = (value: string) =>
+    setPaymentFilter((prev) => (prev === value ? 'all' : value))
+  const toggleSignature = () =>
+    setSignatureFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))
+  const clearQuickFilters = () => {
+    setPaymentFilter('all')
+    setSignatureFilter('all')
+  }
+  const clearAllFilters = () => {
+    setStatusFilter('all')
+    setPaymentFilter('all')
+    setContractFilter('all')
+    setSignatureFilter('all')
+    setSearch('')
+  }
 
   const handleCreate = () => {
     setSelectedEvent(undefined)
@@ -158,60 +263,48 @@ export default function EventsPage() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <CalendarDays className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{summary.totalEvents}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
-                <CheckCircle2 className="h-5 w-5 text-success" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{summary.paidCount}</p>
-                <p className="text-xs text-muted-foreground">Pagos</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
-                <Clock className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{summary.partialCount}</p>
-                <p className="text-xs text-muted-foreground">Parciais</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
-                <AlertCircle className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{summary.unpaidCount}</p>
-                <p className="text-xs text-muted-foreground">Pendentes</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Stats Cards — clicáveis: filtram a lista abaixo */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <StatCard
+          icon={CalendarDays}
+          count={summary.totalEvents}
+          label="Total"
+          tone="primary"
+          active={paymentFilter === 'all' && signatureFilter === 'all'}
+          onClick={clearQuickFilters}
+        />
+        <StatCard
+          icon={CheckCircle2}
+          count={summary.paidCount}
+          label="Pagos"
+          tone="success"
+          active={paymentFilter === 'paid'}
+          onClick={() => togglePayment('paid')}
+        />
+        <StatCard
+          icon={Clock}
+          count={summary.partialCount}
+          label="Parciais"
+          tone="warning"
+          active={paymentFilter === 'partial'}
+          onClick={() => togglePayment('partial')}
+        />
+        <StatCard
+          icon={AlertCircle}
+          count={summary.unpaidCount}
+          label="Pendentes"
+          tone="destructive"
+          active={paymentFilter === 'unpaid'}
+          onClick={() => togglePayment('unpaid')}
+        />
+        <StatCard
+          icon={FileSignature}
+          count={summary.pendingSignatureCount}
+          label="Assinatura pendente"
+          tone="info"
+          active={signatureFilter === 'pending'}
+          onClick={toggleSignature}
+        />
       </div>
 
       {/* Filters */}
@@ -261,6 +354,14 @@ export default function EventsPage() {
             <option value="sent">Enviado</option>
             <option value="signed">Assinado</option>
           </select>
+          <select
+            value={signatureFilter}
+            onChange={(e) => setSignatureFilter(e.target.value as 'all' | 'pending')}
+            className="!w-auto rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+          >
+            <option value="all">Assinatura</option>
+            <option value="pending">Pendente</option>
+          </select>
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -292,13 +393,27 @@ export default function EventsPage() {
             <div className="py-8">
               <EmptyState
                 icon={CalendarDays}
-                title="Nenhum evento encontrado"
-                description="Crie um novo evento para comecar"
+                title={
+                  events.length === 0
+                    ? 'Nenhum evento encontrado'
+                    : 'Nenhum evento corresponde aos filtros'
+                }
+                description={
+                  events.length === 0
+                    ? 'Crie um novo evento para comecar'
+                    : 'Ajuste ou limpe os filtros para ver mais eventos.'
+                }
                 action={
-                  <Button onClick={handleCreate} className="mt-4 gap-2">
-                    <Plus className="h-4 w-4" />
-                    Novo Evento
-                  </Button>
+                  events.length === 0 ? (
+                    <Button onClick={handleCreate} className="mt-4 gap-2">
+                      <Plus className="h-4 w-4" />
+                      Novo Evento
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={clearAllFilters} className="mt-4">
+                      Limpar filtros
+                    </Button>
+                  )
                 }
               />
             </div>

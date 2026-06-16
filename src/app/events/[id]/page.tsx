@@ -26,10 +26,12 @@ import {
   Edit3,
   AlertCircle,
   RefreshCw,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
-import { getContractSignature, cancelContractSignature, resendSignatureLink } from '@/app/actions/clicksign'
+import { getContractSignature, cancelContractSignature, resendSignatureLink, getSignatureProgress } from '@/app/actions/clicksign'
 import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
 import { deleteManualContract } from '@/app/actions/manualContracts'
 import { getGeneratedContracts, deleteGeneratedContract } from '@/app/actions/generatedContracts'
@@ -126,6 +128,9 @@ export default function EventPage() {
   const [event, setEvent] = useState<any | null>(null)
   const [transactions, setTransactions] = useState<any[]>([])
   const [contractSignature, setContractSignature] = useState<any | null>(null)
+  const [signatureProgress, setSignatureProgress] = useState<any | null>(null)
+  const [loadingProgress, setLoadingProgress] = useState(false)
+  const [progressError, setProgressError] = useState(false)
   const [resendingContract, setResendingContract] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -182,6 +187,49 @@ export default function EventPage() {
 
     loadEvent()
   }, [eventId, rawId])
+
+  // Estado real das assinaturas no Clicksign (X de Y assinaram + pendentes).
+  // Buscado depois do carregamento, fora do caminho crítico da página: a API da
+  // Clicksign pode ser lenta/instável e não deve travar o evento inteiro. Só roda
+  // quando há contrato já enviado (sent_whatsapp / signed / closed).
+  const contractStatusForProgress = contractSignature?.status
+  const contractIdForProgress = contractSignature?.id
+  useEffect(() => {
+    if (
+      !contractIdForProgress ||
+      !contractStatusForProgress ||
+      !['sent_whatsapp', 'signed', 'closed'].includes(contractStatusForProgress)
+    ) {
+      setSignatureProgress(null)
+      setProgressError(false)
+      return
+    }
+    let cancelled = false
+    setLoadingProgress(true)
+    setProgressError(false)
+    getSignatureProgress(eventId)
+      .then((res) => {
+        if (cancelled) return
+        if (res.success) {
+          // data === null = sem contrato a exibir; objeto = progresso real.
+          // Não realimentamos contractSignature.status aqui: o badge é derivado
+          // diretamente de signatureProgress (ver lógica do ContractStatusBadge),
+          // o que evita um segundo getDocument disparado por mudança de status.
+          setSignatureProgress(res.data)
+        } else {
+          // Falha ao consultar a Clicksign: mantém o último progresso conhecido
+          // (se houver) e sinaliza o erro, para não exibir o badge verde sozinho
+          // como se fosse a verdade.
+          setProgressError(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProgress(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [eventId, contractIdForProgress, contractStatusForProgress])
 
   const handleRefreshAfterTransaction = useCallback(async () => {
     await fetchTransactions()
@@ -715,7 +763,16 @@ export default function EventPage() {
                 status={
                   event.manualContracts?.length > 0 && !contractSignature
                     ? 'manual_uploaded'
-                    : contractSignature?.status || event.contractStatus || 'not_sent'
+                    : // O estado real do Clicksign manda: com 1 de 2 assinaturas o
+                      // status persistido é 'signed' (verde "Assinado"), o que parece
+                      // concluído. Quando o progresso revela que ALGUÉM já assinou mas
+                      // ainda falta alguém, mostramos "Parcialmente assinado" (âmbar).
+                      // Com 0 assinaturas mantemos "Enviado via WhatsApp" (azul).
+                      signatureProgress &&
+                        signatureProgress.signedCount > 0 &&
+                        !signatureProgress.allSigned
+                      ? 'partially_signed'
+                      : contractSignature?.status || event.contractStatus || 'not_sent'
                 }
               />
               {contractSignature?.contractNumber && (
@@ -735,6 +792,66 @@ export default function EventPage() {
                 </a>
               </div>
             )}
+
+            {/* Estado real das assinaturas (X de Y). Resolve a ambiguidade do badge
+                "Assinado": a Clicksign emite o evento `sign` assim que UM dos dois
+                assina, então só isto revela se ainda falta alguém. */}
+            {loadingProgress && !signatureProgress && (
+              <p className="text-sm text-muted-foreground">Verificando assinaturas...</p>
+            )}
+            {progressError && !loadingProgress && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                <p className="text-xs leading-relaxed text-amber-800">
+                  Não foi possível verificar o estado das assinaturas no Clicksign agora. O status
+                  acima pode estar desatualizado — recarregue a página para tentar novamente.
+                </p>
+              </div>
+            )}
+            {signatureProgress && signatureProgress.totalCount > 0 && (
+              <div className="space-y-2.5 rounded-lg border border-border bg-secondary/20 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">Assinaturas</span>
+                  <Badge variant={signatureProgress.allSigned ? 'success' : 'warning'}>
+                    {signatureProgress.signedCount} de {signatureProgress.totalCount} assinaram
+                  </Badge>
+                </div>
+                <div className="space-y-1.5">
+                  {signatureProgress.signers.map((s: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      {s.signed ? (
+                        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-600" />
+                      ) : (
+                        <Clock className="h-4 w-4 flex-shrink-0 text-amber-500" />
+                      )}
+                      <span className="text-foreground">{s.name}</span>
+                      <span
+                        className={`text-xs ${s.signed ? 'text-emerald-600' : 'text-amber-600'}`}
+                      >
+                        {s.signed ? 'Assinou' : 'Pendente'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {signatureProgress.allSigned ? (
+                  <p className="text-xs text-emerald-700">
+                    Todas as partes assinaram o contrato.
+                  </p>
+                ) : (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                    <p className="text-xs leading-relaxed text-amber-800">
+                      <strong>Pendente de assinatura</strong> de:{' '}
+                      {signatureProgress.signers
+                        .filter((s: any) => !s.signed)
+                        .map((s: any) => s.name)
+                        .join(', ')}
+                      .
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {contractSignature &&
               ['uploaded', 'signer_added'].includes(contractSignature.status) && (
               <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
@@ -751,8 +868,10 @@ export default function EventPage() {
                 {/* 'signed' = parcialmente assinado: a Clicksign emite `sign` a cada
                     assinatura individual, então com 2 signatários o status vira 'signed'
                     assim que um assina (o contratante ainda pode estar pendente). Só
-                    'closed' (finalizado) é que dispensa o reenvio. */}
-                {['sent_whatsapp', 'signed'].includes(contractSignature.status) && (
+                    'closed' (finalizado) é que dispensa o reenvio. Quando o progresso
+                    confirma que todos assinaram, escondemos o reenvio também. */}
+                {['sent_whatsapp', 'signed'].includes(contractSignature.status) &&
+                  !signatureProgress?.allSigned && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -786,14 +905,23 @@ export default function EventPage() {
                   className="gap-1 text-red-600 border-red-300 hover:bg-red-50 w-fit"
                   onClick={async () => {
                     const isPartial = ['uploaded', 'signer_added'].includes(contractSignature.status)
+                    // Finalizado = todos assinaram. Aqui a Clicksign NÃO cancela nada
+                    // (o documento assinado continua válido); só removemos o registro
+                    // local. A cópia precisa deixar isso explícito.
+                    const isFinalized =
+                      contractSignature.status === 'closed' || !!signatureProgress?.allSigned
                     const message = isPartial
                       ? 'Cancelar o registro de envio incompleto? Isso permitirá enviar o contrato novamente.'
+                      : isFinalized
+                      ? 'Este contrato já foi assinado por todas as partes e permanece válido no Clicksign. Esta ação remove apenas o registro local deste evento. Deseja continuar?'
                       : 'Cancelar o contrato atual no Clicksign? Isso permitirá enviar uma nova versão.'
                     if (!confirm(message)) return
                     const result = await cancelContractSignature(eventId)
                     if (result.success) {
                       await fetchEvent()
                       setContractSignature(null)
+                      setSignatureProgress(null)
+                      setProgressError(false)
                     } else {
                       alert(result.error || 'Erro ao cancelar contrato')
                     }
@@ -802,6 +930,8 @@ export default function EventPage() {
                   <Trash2 className="h-3 w-3" />
                   {['uploaded', 'signer_added'].includes(contractSignature.status)
                     ? 'Cancelar Envio Parcial'
+                    : contractSignature.status === 'closed' || signatureProgress?.allSigned
+                    ? 'Remover Registro'
                     : 'Cancelar Contrato'}
                 </Button>
               </div>

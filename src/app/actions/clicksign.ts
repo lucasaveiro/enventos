@@ -366,6 +366,105 @@ export async function resendSignatureLink(eventId: number) {
   }
 }
 
+// ── Progresso de assinaturas (estado real por signatário no Clicksign) ───────
+
+// Consulta o documento no Clicksign e devolve quem já assinou e quem está
+// pendente. O status local (ContractSignature.status) é movido só por webhook
+// (push) e a Clicksign emite o evento `sign` a CADA assinatura individual — então
+// "signed" pode significar "1 de 2 assinaram". Aqui buscamos a verdade signatário
+// a signatário (campo `signature` presente = assinou) e, de quebra, reconciliamos
+// o status local quando ele ficou defasado (ex.: webhook `close` perdido).
+export async function getSignatureProgress(eventId: number) {
+  try {
+    const signature = await prisma.contractSignature.findFirst({
+      where: { eventId, status: { notIn: ['cancelled'] } },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    // Sem contrato ativo, ou ainda em envio incompleto (signatários podem nem ter
+    // sido adicionados na Clicksign): nada a exibir. Também evita bater na API da
+    // Clicksign à toa em todo carregamento de evento sem contrato enviado.
+    if (!signature || !['sent_whatsapp', 'signed', 'closed'].includes(signature.status)) {
+      return { success: true as const, data: null }
+    }
+
+    const doc = await clicksign.getDocument(signature.documentKey)
+
+    // Documento cancelado na Clicksign: está morto e não há progresso a exibir.
+    // Não promovemos o status por causa de uma assinatura avulsa que possa ter
+    // ficado registrada — isso inverteria a verdade. O cancelamento explícito
+    // (botão / webhook `cancel`) e o fluxo de reenvio cuidam do registro local.
+    if (doc.status === 'canceled') {
+      return { success: true as const, data: null }
+    }
+
+    const signers = doc.signers.map((s) => ({
+      name: s.name || s.email || 'Signatário',
+      email: s.email || '',
+      signAs: s.sign_as || '',
+      signed: !!s.signature,
+    }))
+
+    const signedCount = signers.filter((s) => s.signed).length
+    const totalCount = signers.length
+    const allSigned = totalCount > 0 && signedCount === totalCount
+
+    // Reconciliação: a consulta ao documento é a fonte real. Corrige o status local
+    // só "para frente" (nunca rebaixa) quando ele estiver atrás da realidade.
+    let reconciledStatus = signature.status
+    if (doc.status === 'closed') {
+      reconciledStatus = 'closed'
+    } else if (doc.status === 'running' && signedCount > 0 && signature.status === 'sent_whatsapp') {
+      reconciledStatus = 'signed'
+    }
+
+    if (reconciledStatus !== signature.status) {
+      // As duas escritas vão numa única transação, e o update do evento é
+      // condicionado ao registro ainda estar ativo (notIn['cancelled']). Assim, se
+      // o usuário cancelar o contrato enquanto este getDocument (lento) estava em
+      // andamento, ou o updateMany vira no-op (cancelamento veio antes), ou o lock
+      // de linha serializa o cancelamento para depois desta transação (vem depois e
+      // vence) — nunca "ressuscitamos" o contrato nem deixamos Event.contractStatus
+      // dessincronizado entre as duas gravações.
+      const applied = await prisma.$transaction(async (tx) => {
+        const updated = await tx.contractSignature.updateMany({
+          where: { id: signature.id, status: { notIn: ['cancelled'] } },
+          data: { status: reconciledStatus },
+        })
+        if (updated.count === 0) return false
+        await tx.event.update({
+          where: { id: eventId },
+          data: { contractStatus: 'signed' },
+        })
+        return true
+      })
+
+      if (applied) {
+        revalidatePath('/')
+        revalidatePath('/events')
+        revalidatePath(`/events/${eventId}`)
+        revalidatePath('/contracts')
+      }
+    }
+
+    return {
+      success: true as const,
+      data: {
+        docStatus: doc.status,
+        signedCount,
+        totalCount,
+        allSigned,
+        reconciledStatus,
+        signers,
+      },
+    }
+  } catch (error) {
+    console.error('Erro ao buscar progresso de assinaturas:', error)
+    // Falha ao consultar a Clicksign não deve quebrar a página do evento.
+    return { success: false as const, error: 'Erro ao buscar progresso de assinaturas' }
+  }
+}
+
 // ── Buscar assinatura do contrato ───────────────────────────────────────────
 
 export async function getContractSignature(eventId: number) {

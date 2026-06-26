@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -79,6 +79,8 @@ const baseSchema = z.object({
   clientNationality: z.string().optional(),
   clientCivilStatus: z.string().optional(),
   clientProfession: z.string().optional(),
+  clientRepName: z.string().optional(),
+  clientRepRole: z.string().optional(),
   clientAddress: z.string().min(5, 'Endereço obrigatório'),
   clientCity: z.string().min(1, 'Obrigatório'),
   clientState: z.string().min(2, 'UF obrigatória'),
@@ -499,6 +501,8 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       clientNationality: 'Brasileira',
       clientCivilStatus: '',
       clientProfession: '',
+      clientRepName: '',
+      clientRepRole: '',
       clientAddress: '',
       clientCity: '',
       clientState: '',
@@ -608,6 +612,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       const formKeys = [
         'contractNumber', 'contractDate',
         'clientName', 'clientCPF', 'clientRG', 'clientNationality', 'clientCivilStatus', 'clientProfession',
+        'clientRepName', 'clientRepRole',
         'clientAddress', 'clientCity', 'clientState', 'clientPhone', 'clientEmail',
         'eventDate', 'eventStartTime', 'eventEndTime', 'eventType', 'guestCount',
         'dailyCount', 'packageType', 'eventCheckoutDate',
@@ -832,6 +837,8 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       clientNationality: v.clientNationality ?? '',
       clientCivilStatus: v.clientCivilStatus ?? '',
       clientProfession: v.clientProfession ?? '',
+      clientRepName: v.clientRepName ?? '',
+      clientRepRole: v.clientRepRole ?? '',
       clientEmail: v.clientEmail ?? '',
       remainingValue: v.remainingValue ?? '',
       remainingDueDate: v.remainingDueDate ?? '',
@@ -871,6 +878,21 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       return { ...clause, content: substituteClause(base, formData, effectiveSpace), edited: false }
     })
   }, [clauses, space.id, effectiveSpace, buildFormDataFromValues])
+
+  // Quando o documento do contratante alterna entre CPF (pessoa física) e CNPJ
+  // (pessoa jurídica), a estrutura da qualificação das partes muda. Se as cláusulas
+  // já foram aplicadas, reaplica na hora para o preâmbulo no preview refletir a
+  // estrutura correta — sem isto ele ficaria "preso" no formato anterior (ex.: ainda
+  // mostrando estado civil/profissão/"residente" para um CNPJ) até o usuário clicar
+  // novamente em "Aplicar dados". O PDF final já trocava; isto corrige só a prévia.
+  const prevClientIsCNPJ = useRef(clientIsCNPJ)
+  useEffect(() => {
+    if (prevClientIsCNPJ.current === clientIsCNPJ) return
+    prevClientIsCNPJ.current = clientIsCNPJ
+    if (clausesApplied) {
+      setClauses(computeClausesWithFormData())
+    }
+  }, [clientIsCNPJ, clausesApplied, computeClausesWithFormData])
 
   const [isRefreshingClient, setIsRefreshingClient] = useState(false)
 
@@ -1260,6 +1282,23 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               <Input {...register('clientProfession')} placeholder="Engenheiro, Professor..." />
             </Field>
           </FieldRow>
+        )}
+        {clientIsCNPJ && (
+          <>
+            <FieldRow>
+              <Field label="Representante Legal (opcional)" className="sm:col-span-2">
+                <Input {...register('clientRepName')} placeholder="Quem assina pela empresa — opcional" />
+              </Field>
+              <Field label="Cargo do Representante (opcional)">
+                <Input {...register('clientRepRole')} placeholder="Sócio, Administrador..." />
+              </Field>
+            </FieldRow>
+            <p className="text-xs text-[var(--muted-foreground)] -mt-2 mb-4">
+              Locatário pessoa jurídica: a assinatura é feita pela empresa via WhatsApp (Clicksign),
+              sem necessidade do CPF do representante. Preencher o representante é opcional — apenas
+              enriquece a qualificação e a assinatura no contrato.
+            </p>
+          </>
         )}
         <FieldRow>
           <Field label="Endereço Completo *" error={errors.clientAddress?.message} className="sm:col-span-2">

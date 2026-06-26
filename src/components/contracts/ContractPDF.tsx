@@ -236,6 +236,7 @@ function getPackageLabel(packageType: string): string {
 function RanchoContractPage({ formData, clauses, space }: Props) {
   const preamble = clauses.find((clause) => clause.number === 'PREÂMBULO')
   const legalClauses = clauses.filter((clause) => clause.id !== preamble?.id)
+  const clientIsCNPJ = isCNPJ(formData.clientCPF)
 
   return (
     <Page size="A4" style={styles.page}>
@@ -297,6 +298,11 @@ function RanchoContractPage({ formData, clauses, space }: Props) {
             <View style={styles.signatureLine} />
             <Text style={styles.signatureName}>{formData.clientName || '________________________________'}</Text>
             <Text style={styles.signatureRole}>LOCATÁRIO</Text>
+            {clientIsCNPJ && formData.clientRepName ? (
+              <Text style={styles.witnessText}>
+                Rep.: {formData.clientRepName}{formData.clientRepRole ? ` — ${formData.clientRepRole}` : ''}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -419,6 +425,14 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
           {formData.clientState ? `/${formData.clientState}` : ''}
         </Text>
       </View>
+      {clientIsCNPJ && formData.clientRepName ? (
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>Representante: </Text>
+          <Text style={styles.fieldValue}>
+            {formData.clientRepName}{formData.clientRepRole ? ` (${formData.clientRepRole})` : ''}
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.fieldRow}>
         <Text style={styles.fieldLabel}>Telefone: </Text>
         <Text style={styles.fieldValue}>{formData.clientPhone}</Text>
@@ -542,6 +556,11 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
             <View style={styles.signatureLine} />
             <Text style={styles.signatureName}>{formData.clientName}</Text>
             <Text style={styles.signatureRole}>CONTRATANTE</Text>
+            {clientIsCNPJ && formData.clientRepName ? (
+              <Text style={styles.witnessText}>
+                Rep.: {formData.clientRepName}{formData.clientRepRole ? ` — ${formData.clientRepRole}` : ''}
+              </Text>
+            ) : null}
           </View>
         </View>
 

@@ -15,6 +15,10 @@ export interface ContractFormData {
   clientNationality: string
   clientCivilStatus: string
   clientProfession: string
+  // Representante legal — usado apenas para locatário PJ (CNPJ). Opcional e SEM CPF:
+  // a empresa assina via WhatsApp (Clicksign) sem exigir o CPF do representante.
+  clientRepName: string
+  clientRepRole: string
   clientAddress: string
   clientCity: string
   clientState: string
@@ -309,15 +313,29 @@ export function substituteClause(
   // Build client qualification text (PF vs PJ)
   let clientQualification: string
   if (clientIsCNPJ) {
-    // Pessoa Jurídica
-    const parts = [formData.clientName || '[RAZÃO SOCIAL]']
-    parts.push(`inscrita no CNPJ nº ${formData.clientCPF || '[CNPJ]'}`)
+    // Pessoa Jurídica (locatário CNPJ) — qualificação da empresa. O CPF do
+    // representante NÃO é exigido; nomeá-lo é opcional (clientRepName/clientRepRole).
+    const parts = [
+      formData.clientName || '[RAZÃO SOCIAL]',
+      'pessoa jurídica de direito privado',
+      `inscrita no CNPJ sob o nº ${formData.clientCPF || '[CNPJ]'}`,
+    ]
     if (formData.clientAddress) {
-      parts.push(`com sede em ${formData.clientAddress}`)
+      let sede = `com sede à ${formData.clientAddress}`
       if (formData.clientCity) {
-        parts[parts.length - 1] += `, ${formData.clientCity}`
-        if (formData.clientState) parts[parts.length - 1] += ` - ${formData.clientState}`
+        sede += `, ${formData.clientCity}`
+        if (formData.clientState) sede += `/${formData.clientState}`
       }
+      parts.push(sede)
+    }
+    const repName = (formData.clientRepName || '').trim()
+    if (repName) {
+      const repRole = (formData.clientRepRole || '').trim()
+      parts.push(
+        repRole
+          ? `neste ato representada por seu(sua) ${repRole}, ${repName}`
+          : `neste ato representada por ${repName}`
+      )
     }
     clientQualification = parts.join(', ')
   } else {
@@ -380,6 +398,8 @@ export function substituteClause(
     .replace(/{clientState}/g, formData.clientState || '[ESTADO]')
     .replace(/{clientPhone}/g, formData.clientPhone || '[TELEFONE]')
     .replace(/{clientEmail}/g, formData.clientEmail || '[EMAIL]')
+    .replace(/{clientRepName}/g, formData.clientRepName || '[REPRESENTANTE]')
+    .replace(/{clientRepRole}/g, formData.clientRepRole || '[CARGO]')
     .replace(/{eventDate}/g, formatDate(formData.eventDate || '') || '[DATA DO EVENTO]')
     .replace(/{eventStartTime}/g, formData.eventStartTime || '[HORA INÍCIO]')
     .replace(/{eventEndTime}/g, formData.eventEndTime || '[HORA FIM]')
@@ -732,6 +752,8 @@ const CLIENT_DATA_PLACEHOLDERS = [
   '{clientNationality}',
   '{clientCivilStatus}',
   '{clientProfession}',
+  '{clientRepName}',
+  '{clientRepRole}',
 ]
 
 export function clauseTemplateHasClientData(template: string): boolean {

@@ -27,6 +27,13 @@ import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { ContractSectionNav } from './ContractSectionNav'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/Dialog'
+import {
   ContractClause,
   ContractFormData,
   SpaceConfig,
@@ -36,7 +43,6 @@ import {
   getDefaultClauseTemplates,
   getInitialClauses,
   substituteClause,
-  clauseTemplateHasClientData,
   isCNPJ,
   isValidCPFOrCNPJ,
   resolveContractSpaceSlug,
@@ -408,6 +414,9 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const [newClauseContent, setNewClauseContent] = useState('')
   const [newClauseError, setNewClauseError] = useState('')
   const [pendingRemovalClauseId, setPendingRemovalClauseId] = useState<string | null>(null)
+  // Quando o usuário edita uma cláusula e tenta sair (recolher/abrir outra) sem
+  // salvar, guardamos a navegação pretendida aqui e abrimos o aviso Salvar/Descartar.
+  const [leavePrompt, setLeavePrompt] = useState<{ run: () => void } | null>(null)
 
   // Contractor (owner) overrides
   const [contractorOverrides, setContractorOverrides] = useState<ContractorOverrides>({})
@@ -864,16 +873,16 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const computeClausesWithFormData = useCallback((): ContractClause[] => {
     const formData = buildFormDataFromValues()
     return clauses.map((clause) => {
-      const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content
-      // Cláusula editada manualmente: preserva o texto — EXCETO quando o modelo contém
-      // dados do cadastro do cliente (telefone, CPF, nome, qualificação...). Esses não são
-      // ajustados na cláusula, vêm da ficha do cliente, e precisam sempre refletir o valor
-      // atual. Senão um telefone/CPF corrigido fica "preso" no texto antigo da cláusula
-      // editada e o contrato (e o link de assinatura por WhatsApp) sai com o dado errado.
-      if (clause.edited && (!template || !clauseTemplateHasClientData(template))) {
+      // Hierarquia de edições (nível mais alto): uma cláusula editada manualmente
+      // tem prioridade MÁXIMA e é preservada INTEGRALMENTE — o texto digitado pelo
+      // usuário substitui o que viria do formulário/cadastro, inclusive nome, CPF,
+      // telefone e e-mail. Para "soltar" uma cláusula editada e voltar a refletir o
+      // formulário, o usuário usa "Restaurar padrão" naquela cláusula.
+      if (clause.edited) {
         return clause
       }
-      // Reconstrói do modelo padrão com os dados atuais do formulário.
+      // Cláusula não editada: reconstrói do modelo padrão com os dados atuais do formulário.
+      const template = getDefaultClauseTemplates(space.id).find((c) => c.id === clause.id)?.content
       const base = template || clause.content
       return { ...clause, content: substituteClause(base, formData, effectiveSpace), edited: false }
     })
@@ -894,53 +903,27 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     }
   }, [clientIsCNPJ, clausesApplied, computeClausesWithFormData])
 
-  const [isRefreshingClient, setIsRefreshingClient] = useState(false)
-
-  // Lista de campos que vêm direto do cadastro do cliente — só esses são
-  // sobrescritos pelo refresh, preservando edições manuais nos demais.
-  const CLIENT_FIELDS_TO_REFRESH: (keyof FormValues)[] = [
-    'clientName', 'clientCPF', 'clientRG',
-    'clientPhone', 'clientEmail',
-    'clientAddress', 'clientCity', 'clientState',
-  ]
-
-  const applyFormDataToClauses = useCallback(async () => {
-    // Se um evento está vinculado, puxa dados frescos do cliente do banco antes
-    // de aplicar nas cláusulas. Isso evita usar dados desatualizados quando o
-    // cadastro do cliente foi corrigido após o contrato ter sido salvo.
-    if (selectedEventId) {
-      setIsRefreshingClient(true)
-      try {
-        const result = await getEventDataForContract(selectedEventId)
-        if (result.success && result.data?.client) {
-          const c = result.data.client
-          const freshValues: Partial<Record<keyof FormValues, string>> = {
-            clientName: c.name || '',
-            clientCPF: c.cpf || '',
-            clientRG: c.rg || '',
-            clientPhone: c.phone || '',
-            clientEmail: c.email || '',
-            clientAddress: c.address || '',
-            clientCity: c.city || '',
-            clientState: c.state || '',
-          }
-          for (const key of CLIENT_FIELDS_TO_REFRESH) {
-            const value = freshValues[key]
-            if (value !== undefined) setValue(key, value, { shouldValidate: true })
-          }
-        }
-      } catch (err) {
-        console.error('Erro ao atualizar dados do cliente:', err)
-      } finally {
-        setIsRefreshingClient(false)
-      }
-    }
+  // Aplica os dados ATUAIS do formulário nas cláusulas. O formulário é a fonte da
+  // verdade (já pré-preenchido a partir do cadastro do cliente/evento ao carregar):
+  // o que o usuário alterou aqui sobrescreve o que veio do cadastro. Cláusulas
+  // editadas manualmente são preservadas integralmente (ver computeClausesWithFormData).
+  // IMPORTANTE: não rebuscamos o cliente do banco aqui — isso apagaria o que o usuário
+  // digitou no formulário (ex.: e-mail de um cliente sem e-mail cadastrado).
+  const applyFormDataToClauses = useCallback(() => {
     setClauses(computeClausesWithFormData())
     setClausesApplied(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computeClausesWithFormData, selectedEventId, setValue])
+  }, [computeClausesWithFormData])
 
-  const toggleClause = (id: string) => {
+  // Há alterações não salvas quando uma cláusula está aberta para edição individual
+  // e o texto do editor difere do conteúdo já salvo dela.
+  const expandedClauseContent = useMemo(
+    () => (expandedId ? clauses.find((c) => c.id === expandedId)?.content ?? '' : ''),
+    [expandedId, clauses]
+  )
+  const hasUnsavedEdit = !allExpanded && expandedId !== null && editingContent !== expandedClauseContent
+
+  // Executa de fato a abertura/recolhimento de uma cláusula (sem checar pendências).
+  const performToggle = (id: string) => {
     if (expandedId === id) {
       setExpandedId(null)
       setPendingRemovalClauseId(null)
@@ -952,11 +935,37 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     }
   }
 
+  const toggleClause = (id: string) => {
+    // Se há edição pendente na cláusula aberta, pede para Salvar/Descartar antes de sair.
+    if (hasUnsavedEdit) {
+      setLeavePrompt({ run: () => performToggle(id) })
+      return
+    }
+    performToggle(id)
+  }
+
   const saveClause = (id: string) => {
     setClauses((prev) =>
       prev.map((c) => (c.id === id ? { ...c, content: editingContent, edited: true } : c))
     )
     setExpandedId(null)
+  }
+
+  // Aviso de saída com edição pendente: salva a cláusula aberta e segue a navegação.
+  const handleLeaveSave = () => {
+    if (!leavePrompt) return
+    const run = leavePrompt.run
+    if (expandedId) saveClause(expandedId)
+    setLeavePrompt(null)
+    run()
+  }
+
+  // Descarta a edição pendente e segue a navegação pretendida.
+  const handleLeaveDiscard = () => {
+    if (!leavePrompt) return
+    const run = leavePrompt.run
+    setLeavePrompt(null)
+    run()
   }
 
   const resetClause = (id: string) => {
@@ -1590,28 +1599,22 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               variant={clausesApplied ? 'outline' : 'default'}
               size="sm"
               onClick={applyFormDataToClauses}
-              disabled={isRefreshingClient}
+              disabled={hasUnsavedEdit}
               className={`gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center font-semibold ${
                 clausesApplied
                   ? ''
                   : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-200 animate-pulse-slow'
               }`}
               title={clausesApplied
-                ? 'Atualiza os dados do cliente do cadastro e reaplica nas cláusulas'
-                : 'Recomendado: atualiza dados do cliente do cadastro e aplica nas cláusulas antes de gerar o contrato'}
+                ? 'Reaplica os dados do formulário nas cláusulas (preserva cláusulas editadas manualmente)'
+                : 'Recomendado: aplica os dados do formulário nas cláusulas antes de gerar o contrato'}
             >
-              {isRefreshingClient ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-3.5 w-3.5" />
-              )}
+              <CheckCircle2 className="h-3.5 w-3.5" />
               <span className="sm:hidden">
-                {isRefreshingClient ? 'Atualizando...' : (clausesApplied ? 'Reatualizar' : 'Aplicar dados')}
+                {clausesApplied ? 'Reatualizar' : 'Aplicar dados'}
               </span>
               <span className="hidden sm:inline">
-                {isRefreshingClient
-                  ? 'Atualizando do cadastro...'
-                  : (clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário')}
+                {clausesApplied ? 'Reatualizar com formulário' : 'Aplicar dados do formulário'}
               </span>
             </Button>
             <Button
@@ -1619,6 +1622,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               variant="ghost"
               size="sm"
               onClick={toggleAllClauses}
+              disabled={hasUnsavedEdit}
               className="gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center"
             >
               {allExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -1630,6 +1634,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               variant="ghost"
               size="sm"
               onClick={resetAllClauses}
+              disabled={hasUnsavedEdit}
               className="gap-1.5 text-xs text-[var(--muted-foreground)] w-full justify-start sm:w-auto sm:justify-center"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -1640,6 +1645,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               variant="outline"
               size="sm"
               onClick={openAddClauseForm}
+              disabled={hasUnsavedEdit}
               className="gap-1.5 text-xs w-full justify-start sm:w-auto sm:justify-center"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -1807,11 +1813,17 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => setExpandedId(null)}
+                            onClick={() => toggleClause(clause.id)}
                             className="text-[var(--muted-foreground)]"
                           >
-                            Cancelar
+                            Fechar
                           </Button>
+                          {expandedId === clause.id && hasUnsavedEdit && (
+                            <span className="text-xs text-amber-700 flex items-center gap-1 ml-auto">
+                              <AlertCircle className="h-3 w-3" />
+                              Alterações não salvas
+                            </span>
+                          )}
                         </div>
                         {pendingRemovalClauseId === clause.id && (
                           <div className="mt-3 border border-red-300 bg-red-50 rounded-lg p-3">
@@ -1881,13 +1893,19 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               Selecione um evento do espaço {space.displayName} antes de gerar.
             </p>
           )}
+          {hasUnsavedEdit && (
+            <p className="text-xs text-amber-700 mt-1 flex items-center gap-1 font-medium">
+              <AlertCircle className="h-3 w-3" />
+              Você tem alterações não salvas em uma cláusula. Salve ou descarte antes de gerar o contrato.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <PDFGeneratorButton
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
-            isValid={isValid && !eventSpaceMismatch}
+            isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit}
             onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterDownload}
           />
@@ -1895,7 +1913,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
-            isValid={isValid && !eventSpaceMismatch}
+            isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit}
             eventId={selectedEventId}
             existingSignature={existingSignature}
             onBeforeGenerate={applyFormDataToClauses}
@@ -1919,6 +1937,35 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
           </div>
         )}
       </div>
+
+      {/* Aviso de alterações não salvas em uma cláusula */}
+      <Dialog open={!!leavePrompt} onOpenChange={(open) => { if (!open) setLeavePrompt(null) }}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Alterações não salvas nesta cláusula
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[var(--foreground)] leading-relaxed">
+            Você alterou esta cláusula e ainda não salvou. Se <strong>salvar</strong>, a cláusula passa
+            a valer exatamente como você a editou — substituindo integralmente o texto gerado a partir
+            do formulário. Se <strong>descartar</strong>, as alterações serão perdidas.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setLeavePrompt(null)}>
+              Continuar editando
+            </Button>
+            <Button type="button" variant="outline" onClick={handleLeaveDiscard}>
+              Descartar
+            </Button>
+            <Button type="button" onClick={handleLeaveSave} className="gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Salvar alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

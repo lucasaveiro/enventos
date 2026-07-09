@@ -301,7 +301,16 @@ export async function getEventsForList(filters?: {
           take: 1,
           select: { status: true, signingUrl: true },
         },
-        _count: { select: { transactions: true } },
+        // Counts de contratos: usados pela lista para bloquear a exclusão de
+        // eventos com contrato antes mesmo de chamar o servidor.
+        _count: {
+          select: {
+            transactions: true,
+            generatedContracts: true,
+            manualContracts: true,
+            contractSignatures: { where: { status: { not: 'cancelled' } } },
+          },
+        },
       },
       orderBy: { start: 'desc' },
     })
@@ -386,6 +395,37 @@ export async function getSpaceOccupationByMonth(
 
 export async function deleteEvent(id: number) {
   try {
+    // Trava de segurança: evento com contrato (gerado, anexado manualmente ou
+    // com assinatura não-cancelada no Clicksign) não pode ser excluído — a
+    // exclusão apagaria os contratos junto. O usuário precisa excluir/cancelar
+    // os contratos na página do evento antes.
+    const existing = await prisma.event.findUnique({
+      where: { id },
+      select: {
+        _count: {
+          select: {
+            generatedContracts: true,
+            manualContracts: true,
+            contractSignatures: { where: { status: { not: 'cancelled' } } },
+          },
+        },
+      },
+    })
+    if (!existing) {
+      return { success: false, error: 'Evento não encontrado.' }
+    }
+    const contractCount =
+      existing._count.generatedContracts +
+      existing._count.manualContracts +
+      existing._count.contractSignatures
+    if (contractCount > 0) {
+      return {
+        success: false,
+        error:
+          'Este evento tem contrato vinculado e não pode ser excluído. Exclua ou cancele os contratos na página do evento antes de excluir o evento.',
+      }
+    }
+
     // Clean up manual contract blobs before transaction
     const manualContracts = await prisma.manualContract.findMany({
       where: { eventId: id },

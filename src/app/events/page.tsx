@@ -32,6 +32,7 @@ import {
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ContractStatusBadge } from '@/components/contracts/ContractStatusBadge'
 import { EventModal } from '@/components/forms/EventModal'
+import { DeleteEventBlockedModal } from '@/components/events/DeleteEventBlockedModal'
 import { getEventsForList, deleteEvent } from '@/app/actions/events'
 import { getSpaces } from '@/app/actions/spaces'
 import { cn } from '@/lib/utils'
@@ -133,6 +134,8 @@ export default function EventsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<any | undefined>(undefined)
+  // Evento cuja exclusão foi bloqueada por ter contrato (abre o modal explicativo)
+  const [deleteBlockedEventId, setDeleteBlockedEventId] = useState<number | null>(null)
 
   // Filters
   const [spaceFilter, setSpaceFilter] = useState('all')
@@ -224,9 +227,20 @@ export default function EventsPage() {
     setIsModalOpen(true)
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (event: any) => {
+    // Evento com contrato (gerado, manual ou assinatura ativa) não pode ser
+    // excluído — o servidor também bloqueia; aqui evitamos o confirm inútil.
+    const counts = event._count || {}
+    const hasContracts =
+      (counts.generatedContracts ?? 0) > 0 ||
+      (counts.manualContracts ?? 0) > 0 ||
+      (counts.contractSignatures ?? 0) > 0
+    if (hasContracts) {
+      setDeleteBlockedEventId(event.id)
+      return
+    }
     if (confirm('Tem certeza que deseja excluir este evento e todos os registros vinculados?')) {
-      const res = await deleteEvent(id)
+      const res = await deleteEvent(event.id)
       if (!res.success) {
         alert(res.error || 'Erro ao excluir evento')
       }
@@ -489,7 +503,7 @@ export default function EventsPage() {
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(event.id)}
+                          onClick={() => handleDelete(event)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -513,6 +527,13 @@ export default function EventsPage() {
         initialEvent={selectedEvent}
         initialCategory="event"
         onSuccess={fetchEvents}
+      />
+
+      {/* Aviso de exclusão bloqueada (evento com contrato) */}
+      <DeleteEventBlockedModal
+        isOpen={deleteBlockedEventId !== null}
+        onClose={() => setDeleteBlockedEventId(null)}
+        eventId={deleteBlockedEventId ?? undefined}
       />
     </div>
   )

@@ -299,6 +299,13 @@ export default function EventPage() {
   // getContractSignature já retorna apenas assinaturas não-canceladas, então a presença basta.
   const hasActiveContract = !!contractSignature && contractSignature.status !== 'cancelled'
 
+  // Evento com QUALQUER contrato (gerado, anexado manualmente ou assinatura ativa)
+  // não pode ser excluído — os contratos precisam ser excluídos/cancelados antes.
+  const hasContracts =
+    hasActiveContract ||
+    generatedContracts.length > 0 ||
+    (event.manualContracts?.length ?? 0) > 0
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -315,7 +322,11 @@ export default function EventPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <EventDetailsActions event={event} hasActiveContract={hasActiveContract} />
+          <EventDetailsActions
+            event={event}
+            hasActiveContract={hasActiveContract}
+            hasContracts={hasContracts}
+          />
           <Link href="/events" className={buttonVariants({ variant: 'outline' })}>
             <ArrowLeft className="h-4 w-4" />
             Voltar aos eventos

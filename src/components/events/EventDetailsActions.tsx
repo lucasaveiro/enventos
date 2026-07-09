@@ -5,18 +5,22 @@ import { useRouter } from 'next/navigation'
 import { Pencil, Trash2 } from 'lucide-react'
 import { EventModal } from '@/components/forms/EventModal'
 import { ContractEditWarningModal } from '@/components/contracts/ContractEditWarningModal'
+import { DeleteEventBlockedModal } from '@/components/events/DeleteEventBlockedModal'
 import { Button } from '@/components/ui/Button'
 import { deleteEvent } from '@/app/actions/events'
 
 type EventDetailsActionsProps = {
   event: any
   hasActiveContract?: boolean
+  /** Evento tem qualquer contrato (gerado, manual ou assinatura ativa)? Bloqueia a exclusão. */
+  hasContracts?: boolean
 }
 
-export function EventDetailsActions({ event, hasActiveContract }: EventDetailsActionsProps) {
+export function EventDetailsActions({ event, hasActiveContract, hasContracts }: EventDetailsActionsProps) {
   const router = useRouter()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isWarningOpen, setIsWarningOpen] = useState(false)
+  const [isDeleteBlockedOpen, setIsDeleteBlockedOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
   // Com contrato ativo, editar o evento exige confirmar o aviso primeiro.
@@ -26,6 +30,11 @@ export function EventDetailsActions({ event, hasActiveContract }: EventDetailsAc
   }
 
   const handleDelete = async () => {
+    // Evento com contrato não pode ser excluído (o servidor também bloqueia).
+    if (hasContracts) {
+      setIsDeleteBlockedOpen(true)
+      return
+    }
     if (!confirm('Tem certeza que deseja excluir esta marcação e todos os registros vinculados?')) return
     setIsDeleting(true)
     try {
@@ -65,6 +74,10 @@ export function EventDetailsActions({ event, hasActiveContract }: EventDetailsAc
           setIsWarningOpen(false)
           setIsModalOpen(true)
         }}
+      />
+      <DeleteEventBlockedModal
+        isOpen={isDeleteBlockedOpen}
+        onClose={() => setIsDeleteBlockedOpen(false)}
       />
       <EventModal
         isOpen={isModalOpen}

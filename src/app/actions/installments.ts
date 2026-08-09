@@ -249,6 +249,51 @@ export async function markInstallmentAsPaid(
   }
 }
 
+export async function revertInstallmentPayment(installmentId: number) {
+  try {
+    const installment = await prisma.paymentInstallment.findUnique({
+      where: { id: installmentId },
+      select: { status: true, transactionId: true, eventId: true, dueDate: true },
+    })
+
+    if (!installment) return { success: false, error: 'Parcela nao encontrada' }
+    if (installment.status !== 'paid')
+      return { success: false, error: 'Parcela nao esta marcada como paga' }
+
+    // Volta para "vencida" se o vencimento ja passou, senao "pendente"
+    const newStatus =
+      installment.dueDate < startOfDay(new Date()) ? 'overdue' : 'pending'
+
+    await prisma.$transaction(async (tx) => {
+      await tx.paymentInstallment.update({
+        where: { id: installmentId },
+        data: {
+          status: newStatus,
+          paidAt: null,
+          paidAmount: null,
+          transactionId: null,
+        },
+      })
+
+      // Remove a transacao criada na confirmacao do pagamento; a parcela
+      // pendente ja representa o valor a receber (evita dupla contagem)
+      if (installment.transactionId) {
+        await tx.transaction.delete({
+          where: { id: installment.transactionId },
+        })
+      }
+    })
+
+    await recalculateEventPaymentStatus(installment.eventId)
+    revalidateAll()
+    revalidatePath(`/events/${installment.eventId}`)
+    return { success: true, newStatus }
+  } catch (error) {
+    console.error('Error reverting installment payment:', error)
+    return { success: false, error: 'Failed to revert installment payment' }
+  }
+}
+
 export async function updateInstallment(
   installmentId: number,
   data: Partial<{

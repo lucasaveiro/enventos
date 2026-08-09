@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { CheckCircle, Pencil, Trash2 } from 'lucide-react'
+import { CheckCircle, Pencil, Trash2, Undo2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import {
@@ -50,6 +50,7 @@ interface InstallmentTableProps {
   onMarkPaid: (installment: Installment) => void
   onEdit: (installment: Installment) => void
   onDelete: (installment: Installment) => void
+  onRevertPaid: (installment: Installment) => void
 }
 
 export function InstallmentTable({
@@ -57,6 +58,7 @@ export function InstallmentTable({
   onMarkPaid,
   onEdit,
   onDelete,
+  onRevertPaid,
 }: InstallmentTableProps) {
   if (installments.length === 0) {
     return (
@@ -99,6 +101,11 @@ export function InstallmentTable({
               </TableCell>
               <TableCell className="font-medium whitespace-nowrap">
                 {formatCurrency(isPaid && inst.paidAmount ? inst.paidAmount : inst.amount)}
+                {isPaid && inst.paidAmount != null && inst.paidAmount !== inst.amount && (
+                  <div className="text-[11px] font-normal text-muted-foreground">
+                    Parcela: {formatCurrency(inst.amount)}
+                  </div>
+                )}
               </TableCell>
               <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                 {inst.paymentMethod
@@ -126,11 +133,22 @@ export function InstallmentTable({
                       <CheckCircle className="h-4 w-4" />
                     </Button>
                   )}
+                  {isPaid && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700"
+                      title="Desfazer pagamento (voltar para pendente)"
+                      onClick={() => onRevertPaid(inst)}
+                    >
+                      <Undo2 className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 p-0"
-                    title="Editar"
+                    title={isPaid ? 'Editar (inclusive valor pago e data do pagamento)' : 'Editar'}
                     onClick={() => onEdit(inst)}
                   >
                     <Pencil className="h-4 w-4" />

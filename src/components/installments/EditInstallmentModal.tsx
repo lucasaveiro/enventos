@@ -121,8 +121,11 @@ export function EditInstallmentModal({
           <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
             <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
             <span>
-              Esta parcela ja foi paga. Alterar o valor pago ou a data de pagamento
-              atualizara tambem a transacao vinculada no resumo financeiro.
+              Esta parcela ja foi paga, mas voce pode corrigir o valor pago e a data
+              do pagamento abaixo — o resumo financeiro sera atualizado
+              automaticamente. Se o pagamento foi marcado por engano, use o botao{' '}
+              <span className="font-semibold">Desfazer pagamento</span> na lista de
+              parcelas para volta-la a pendente.
             </span>
           </div>
         )}

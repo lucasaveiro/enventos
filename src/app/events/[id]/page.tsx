@@ -32,7 +32,7 @@ import {
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
 import { getContractSignature, cancelContractSignature, resendSignatureLink, getSignatureProgress } from '@/app/actions/clicksign'
-import { checkOverdueInstallments, deleteInstallment } from '@/app/actions/installments'
+import { checkOverdueInstallments, deleteInstallment, revertInstallmentPayment } from '@/app/actions/installments'
 import { deleteManualContract } from '@/app/actions/manualContracts'
 import { getGeneratedContracts, deleteGeneratedContract } from '@/app/actions/generatedContracts'
 import { getContractSpaceSlug } from '@/lib/contractTemplates'
@@ -617,10 +617,23 @@ export default function EventPage() {
               onDelete={async (inst) => {
                 const message =
                   inst.status === 'paid'
-                    ? 'Esta parcela esta marcada como paga. Excluir ira remover tambem o pagamento registrado no resumo financeiro. Deseja continuar?'
+                    ? 'Esta parcela esta marcada como paga. Excluir ira remover tambem o pagamento registrado no resumo financeiro. Para apenas desfazer o pagamento (mantendo a parcela), use o botao Desfazer pagamento. Deseja realmente excluir?'
                     : 'Excluir esta parcela?'
                 if (confirm(message)) {
                   await deleteInstallment(inst.id)
+                  await handleRefreshAfterTransaction()
+                }
+              }}
+              onRevertPaid={async (inst) => {
+                const label = inst.isSinal
+                  ? `Sinal (parcela ${inst.installmentNumber})`
+                  : `parcela ${inst.installmentNumber}`
+                const message = `Desfazer o pagamento da ${label}? A parcela voltara a ficar pendente (ou vencida, se o vencimento ja passou) e o pagamento registrado no resumo financeiro sera removido.`
+                if (confirm(message)) {
+                  const result = await revertInstallmentPayment(inst.id)
+                  if (!result.success) {
+                    alert(result.error || 'Erro ao desfazer pagamento')
+                  }
                   await handleRefreshAfterTransaction()
                 }
               }}

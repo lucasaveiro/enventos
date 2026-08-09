@@ -157,6 +157,13 @@ export function MarkAsPaidModal({
             />
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            Esta acao pode ser revertida: depois de confirmar, voce pode ajustar o
+            valor pago em <span className="font-medium">Editar</span> ou usar{' '}
+            <span className="font-medium">Desfazer pagamento</span> para voltar a
+            parcela para pendente.
+          </p>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar

@@ -10,6 +10,7 @@ import {
   getInstallmentsForCalendar,
   getFinancialCalendarSummary,
   checkOverdueInstallments,
+  revertInstallmentPayment,
 } from '@/app/actions/installments'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -29,6 +30,7 @@ import {
   CheckCircle,
   CalendarDays,
   ExternalLink,
+  Undo2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -415,6 +417,13 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <div className="text-xs text-muted-foreground">Valor</div>
                   <div className="font-semibold">{formatCurrency(selectedItem.amount)}</div>
+                  {selectedItem.status === 'paid' &&
+                    selectedItem.paidAmount != null &&
+                    selectedItem.paidAmount !== selectedItem.amount && (
+                      <div className="text-xs text-muted-foreground">
+                        Pago: {formatCurrency(selectedItem.paidAmount)}
+                      </div>
+                    )}
                 </div>
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <div className="text-xs text-muted-foreground">Vencimento</div>
@@ -450,6 +459,28 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
                   >
                     <CheckCircle className="h-4 w-4" />
                     Marcar como Pago
+                  </Button>
+                )}
+                {selectedItem.status === 'paid' && !selectedItem.isTransaction && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 gap-1 text-amber-700 hover:text-amber-800"
+                    onClick={async () => {
+                      const ok = confirm(
+                        'Desfazer o pagamento desta parcela? Ela voltara a ficar pendente (ou vencida) e o pagamento registrado sera removido do resumo financeiro.',
+                      )
+                      if (!ok) return
+                      const result = await revertInstallmentPayment(selectedItem.id)
+                      if (!result.success) {
+                        alert(result.error || 'Erro ao desfazer pagamento')
+                      }
+                      setIsQuickViewOpen(false)
+                      setSelectedItem(null)
+                      fetchData()
+                    }}
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    Desfazer Pagamento
                   </Button>
                 )}
                 <Button

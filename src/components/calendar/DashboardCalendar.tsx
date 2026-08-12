@@ -2,14 +2,15 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Calendar as BigCalendar, dateFnsLocalizer, Views, View } from 'react-big-calendar'
-import { format, parse, startOfWeek, getDay } from 'date-fns'
+import { Calendar as BigCalendar, dateFnsLocalizer, Views, View, type AgendaTimeProps } from 'react-big-calendar'
+import { format, parse, startOfWeek, getDay, isSameDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
 import { getEvents } from '@/app/actions/events'
 import { getServiceTasks, getPendingServiceTasks } from '@/app/actions/services'
 import { getInterestDatesForCalendar } from '@/app/actions/interestDates'
+import { getCalendarDisplayEnd } from '@/lib/calendarDisplay'
 import { EventModal } from '@/components/forms/EventModal'
 import { ServiceTaskModal } from '@/components/forms/ServiceTaskModal'
 import { Card } from '@/components/ui/Card'
@@ -45,6 +46,22 @@ interface CalendarEvent {
 }
 
 type EventModalCategory = 'event' | 'visit'
+
+// Na Agenda, um evento com fim visual truncado pela regra da madrugada
+// mostraria "08:00 – 23:59"; aqui exibimos o horário real do contrato
+// (ex.: "08:00 – 01:00"), lido do resource.
+function AgendaEventTime({ event, label }: AgendaTimeProps) {
+  const calEvent = event as CalendarEvent
+  if (calEvent.type === 'event' && calEvent.resource?.end) {
+    const realEnd = new Date(calEvent.resource.end)
+    if (isSameDay(calEvent.start, calEvent.end) && realEnd.getTime() !== calEvent.end.getTime()) {
+      return <span>{`${format(calEvent.start, 'HH:mm')} – ${format(realEnd, 'HH:mm')}`}</span>
+    }
+  }
+  return <span>{label}</span>
+}
+
+const calendarComponents = { agenda: { time: AgendaEventTime } }
 
 export function DashboardCalendar() {
   const router = useRouter()
@@ -88,11 +105,12 @@ export function DashboardCalendar() {
               : category === 'proposal'
                 ? `Enviar Proposta - ${e.space.name}`
                 : `${e.space.name} - ${e.title}`
+            const start = new Date(e.start)
             calendarEvents.push({
                 id: e.id,
                 title,
-                start: new Date(e.start),
-                end: new Date(e.end),
+                start,
+                end: getCalendarDisplayEnd(start, new Date(e.end)),
                 type: 'event',
                 resource: e
             })
@@ -328,6 +346,7 @@ export function DashboardCalendar() {
                 noEventsInRange: "Não há eventos neste período."
             }}
             eventPropGetter={eventStyleGetter}
+            components={calendarComponents}
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectEvent}
             formats={calendarFormats}

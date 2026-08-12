@@ -18,6 +18,7 @@ import {
 import type { ClientEventData } from './ClientEventStep'
 import type { PaymentData } from './PaymentStep'
 import type { ContractData } from './ContractStep'
+import { paymentMethodLabel } from '@/lib/paymentMethods'
 import { ContractClause, SPACES } from '@/lib/contractTemplates'
 
 interface Props {
@@ -197,7 +198,7 @@ export function ReviewStep({ clientEventData, paymentData, contractData, clauses
           <div className="flex items-center gap-2 mt-3 text-sm">
             <CreditCard className="h-4 w-4 text-[var(--muted-foreground)]" />
             <span className="text-[var(--muted-foreground)]">Forma de pagamento:</span>
-            <span className="font-medium text-[var(--foreground)]">{paymentData.paymentMethod || '—'}</span>
+            <span className="font-medium text-[var(--foreground)]">{paymentMethodLabel(paymentData.paymentMethod) || '—'}</span>
           </div>
         </div>
       </div>

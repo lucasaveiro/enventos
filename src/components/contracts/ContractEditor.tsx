@@ -51,6 +51,7 @@ import { getEventsForContractLinking, getContractSignature } from '@/app/actions
 import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract, getLatestGeneratedContractForEvent } from '@/app/actions/generatedContracts'
 import { ContractStatusBadge } from './ContractStatusBadge'
 import { toDateInputValue } from '@/lib/utils'
+import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
 const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
@@ -765,7 +766,15 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         if (sinal) {
           const sinalDate = new Date(sinal.dueDate)
           setValue('depositDueDate', sinalDate.toISOString().split('T')[0], { shouldValidate: true })
-          if (sinal.paymentMethod) setValue('paymentMethod', sinal.paymentMethod, { shouldValidate: true })
+        }
+
+        // Forma de pagamento do plano: sinal ou, na falta dele, a primeira
+        // parcela que tiver o dado. No formulário/cláusula vive o RÓTULO
+        // ("PIX"), editável livremente no campo da seção financeira.
+        const methodFromPlan =
+          sinal?.paymentMethod || installmentsList.find((i) => i.paymentMethod)?.paymentMethod
+        if (methodFromPlan) {
+          setValue('paymentMethod', paymentMethodLabel(methodFromPlan), { shouldValidate: true })
         }
 
         // Infer payment condition and set installments
@@ -1417,6 +1426,21 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               />
             </Field>
           )}
+          <Field label="Forma de Pagamento" error={errors.paymentMethod?.message}>
+            <Input
+              {...register('paymentMethod')}
+              placeholder="PIX"
+              list="contract-payment-methods"
+            />
+            <datalist id="contract-payment-methods">
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.label} />
+              ))}
+            </datalist>
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+              Importada do plano de pagamento do evento; edite livremente — o texto entra na cláusula como digitado.
+            </p>
+          </Field>
         </FieldRow>
 
         {/* Payment Condition Selector */}

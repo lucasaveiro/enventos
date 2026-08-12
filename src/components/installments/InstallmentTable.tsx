@@ -13,18 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/Table'
+import { paymentMethodLabel } from '@/lib/paymentMethods'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-const paymentMethodLabels: Record<string, string> = {
-  pix: 'PIX',
-  credit_card: 'Cartao de Credito',
-  debit_card: 'Cartao de Debito',
-  bank_transfer: 'Transferencia',
-  cash: 'Dinheiro',
-  boleto: 'Boleto',
-}
 
 const statusConfig: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' }> = {
   paid: { label: 'Pago', variant: 'success' },
@@ -108,9 +101,7 @@ export function InstallmentTable({
                 )}
               </TableCell>
               <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                {inst.paymentMethod
-                  ? paymentMethodLabels[inst.paymentMethod] ?? inst.paymentMethod
-                  : '-'}
+                {paymentMethodLabel(inst.paymentMethod) || '-'}
               </TableCell>
               <TableCell>
                 <Badge variant={config.variant}>{config.label}</Badge>

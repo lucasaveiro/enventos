@@ -9,6 +9,7 @@ import {
   View,
 } from '@react-pdf/renderer'
 import { ContractClause, ContractFormData, SpaceConfig, formatDate, isCNPJ } from '@/lib/contractTemplates'
+import { paymentMethodLabel } from '@/lib/paymentMethods'
 
 Font.register({
   family: 'Roboto',
@@ -483,7 +484,7 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
         <Text style={styles.fieldLabel}>Valor Total: </Text>
         <Text style={styles.fieldValue}>{toCurrency(formData.totalValue)}</Text>
         <Text style={styles.fieldLabel}>   Forma de pagamento: </Text>
-        <Text style={styles.fieldValue}>{formData.paymentMethod}</Text>
+        <Text style={styles.fieldValue}>{paymentMethodLabel(formData.paymentMethod)}</Text>
       </View>
       <View style={[styles.fieldRow, { marginBottom: 1 }]}>
         <Text style={styles.fieldLabel}>Entrada/Sinal: </Text>

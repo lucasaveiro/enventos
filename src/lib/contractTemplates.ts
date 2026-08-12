@@ -1,3 +1,5 @@
+import { paymentMethodLabel } from '@/lib/paymentMethods'
+
 export interface PaymentInstallment {
   date: string
   value: string
@@ -418,7 +420,7 @@ export function substituteClause(
     .replace(/{depositDueDate}/g, formatDate(formData.depositDueDate || '') || '[DATA ENTRADA]')
     .replace(/{remainingValue}/g, formatCurrency(formData.remainingValue || '') || '[VALOR RESTANTE]')
     .replace(/{remainingDueDate}/g, formatDate(formData.remainingDueDate || '') || '[DATA RESTANTE]')
-    .replace(/{paymentMethod}/g, formData.paymentMethod || '[FORMA DE PAGAMENTO]')
+    .replace(/{paymentMethod}/g, paymentMethodLabel(formData.paymentMethod) || '[FORMA DE PAGAMENTO]')
     .replace(/{paymentConditionText}/g, buildPaymentConditionText(formData))
     .replace(/{cautionValue}/g, formatCurrency(formData.cautionValue || '') || '[VALOR DO CAUÇÃO]')
     .replace(/{chairCount}/g, String(buildFurnitureText(formData).chairs) || '0')

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { addMonths } from 'date-fns'
 import { ChevronDown, ChevronUp, Edit3, RotateCcw, Plus, Trash2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -18,6 +19,7 @@ import {
   formatCurrency,
   formatDate,
 } from '@/lib/contractTemplates'
+import { paymentMethodLabel } from '@/lib/paymentMethods'
 import type { ClientEventData } from './ClientEventStep'
 import type { PaymentData } from './PaymentStep'
 
@@ -76,7 +78,6 @@ export function ContractStep({ data, onChange, clientEventData, paymentData, cla
     const numberOfInstallments = parseInt(paymentData.numberOfInstallments || '1') || 1
     let remainingDueDate = paymentData.firstInstallmentDate
     if (numberOfInstallments > 1 && paymentData.firstInstallmentDate) {
-      const { addMonths } = require('date-fns')
       const lastDate = addMonths(new Date(paymentData.firstInstallmentDate + 'T12:00:00'), numberOfInstallments - 1)
       remainingDueDate = lastDate.toISOString().split('T')[0]
     }
@@ -105,7 +106,8 @@ export function ContractStep({ data, onChange, clientEventData, paymentData, cla
       depositDueDate: paymentData.depositDueDate,
       remainingValue: remaining.toFixed(2),
       remainingDueDate,
-      paymentMethod: paymentData.paymentMethod,
+      // Cláusula recebe o rótulo legível, nunca o código (pix -> "PIX")
+      paymentMethod: paymentMethodLabel(paymentData.paymentMethod),
       cautionValue: paymentData.cautionValue,
       observations: data.observations,
     }

@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/Label'
 import { Badge } from '@/components/ui/Badge'
 import { createPaymentPlan } from '@/app/actions/installments'
 import { parseLocalDate, toDateInputValue } from '@/lib/utils'
+import { PAYMENT_METHODS } from '@/lib/paymentMethods'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -40,15 +41,7 @@ interface PreviewItem {
   isSinal: boolean
 }
 
-const paymentMethods = [
-  { value: '', label: 'Selecione...' },
-  { value: 'pix', label: 'PIX' },
-  { value: 'credit_card', label: 'Cartao de Credito' },
-  { value: 'debit_card', label: 'Cartao de Debito' },
-  { value: 'bank_transfer', label: 'Transferencia Bancaria' },
-  { value: 'cash', label: 'Dinheiro' },
-  { value: 'boleto', label: 'Boleto' },
-]
+const paymentMethods = [{ value: '', label: 'Selecione...' }, ...PAYMENT_METHODS]
 
 interface PaymentPlanModalProps {
   isOpen: boolean

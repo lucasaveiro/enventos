@@ -1,21 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { addMonths, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { DollarSign, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Checkbox } from '@/components/ui/Checkbox'
-
-const PAYMENT_METHODS = [
-  'PIX',
-  'Dinheiro',
-  'Transferência bancária',
-  'Cartão de crédito',
-  'Cartão de débito',
-  'Boleto bancário',
-]
+import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
 
 export interface PaymentData {
   totalValue: string
@@ -43,6 +35,11 @@ function formatCurrency(value: number): string {
 }
 
 export function PaymentStep({ data, onChange, errors }: Props) {
+  // Sinal herda a forma de pagamento geral do contrato; o select próprio só
+  // aparece quando o usuário pede uma forma diferente.
+  const [customDepositMethod, setCustomDepositMethod] = useState(false)
+  const showDepositMethodSelect = customDepositMethod || Boolean(data.depositPaymentMethod)
+
   const update = (field: keyof PaymentData, value: any) => {
     onChange({ ...data, [field]: value })
   }
@@ -111,7 +108,7 @@ export function PaymentStep({ data, onChange, errors }: Props) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Vencimento da Entrada *</Label>
               <Input
@@ -130,6 +127,23 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                 onChange={(e) => update('cautionValue', e.target.value)}
                 placeholder="0,00"
               />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Forma de Pagamento *</Label>
+              <select
+                className={selectClass}
+                value={data.paymentMethod}
+                onChange={(e) => update('paymentMethod', e.target.value)}
+              >
+                <option value="">Selecione...</option>
+                {PAYMENT_METHODS.map((method) => (
+                  <option key={method.value} value={method.value}>{method.label}</option>
+                ))}
+              </select>
+              {errors.paymentMethod && <p className="text-xs text-red-500 mt-1">{errors.paymentMethod}</p>}
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Vale para o sinal e todas as parcelas. Você poderá ajustar no contrato ou por parcela, se precisar.
+              </p>
             </div>
           </div>
 
@@ -160,16 +174,45 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Método de Pagamento</Label>
-                  <select
-                    className={selectClass}
-                    value={data.depositPaymentMethod}
-                    onChange={(e) => update('depositPaymentMethod', e.target.value)}
-                  >
-                    <option value="">Selecione...</option>
-                    {PAYMENT_METHODS.map((method) => (
-                      <option key={method} value={method}>{method}</option>
-                    ))}
-                  </select>
+                  {showDepositMethodSelect ? (
+                    <div className="space-y-1">
+                      <select
+                        className={selectClass}
+                        value={data.depositPaymentMethod}
+                        onChange={(e) => update('depositPaymentMethod', e.target.value)}
+                      >
+                        <option value="">Selecione...</option>
+                        {PAYMENT_METHODS.map((method) => (
+                          <option key={method.value} value={method.value}>{method.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="text-xs text-[var(--primary)] hover:underline"
+                        onClick={() => {
+                          setCustomDepositMethod(false)
+                          update('depositPaymentMethod', '')
+                        }}
+                      >
+                        Usar a mesma forma do contrato
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex h-11 items-center justify-between gap-3 px-4 rounded-lg border border-[var(--input-border)] bg-[var(--secondary)] text-sm">
+                      <span className="text-[var(--muted-foreground)] truncate">
+                        {data.paymentMethod
+                          ? `Mesma do contrato (${paymentMethodLabel(data.paymentMethod)})`
+                          : 'Mesma do contrato'}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs text-[var(--primary)] hover:underline shrink-0"
+                        onClick={() => setCustomDepositMethod(true)}
+                      >
+                        Usar outra
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -186,7 +229,7 @@ export function PaymentStep({ data, onChange, errors }: Props) {
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Nº de Parcelas *</Label>
               <Input
@@ -206,20 +249,6 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                 onChange={(e) => update('firstInstallmentDate', e.target.value)}
               />
               {errors.firstInstallmentDate && <p className="text-xs text-red-500 mt-1">{errors.firstInstallmentDate}</p>}
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Forma de Pagamento *</Label>
-              <select
-                className={selectClass}
-                value={data.paymentMethod}
-                onChange={(e) => update('paymentMethod', e.target.value)}
-              >
-                <option value="">Selecione...</option>
-                {PAYMENT_METHODS.map((method) => (
-                  <option key={method} value={method}>{method}</option>
-                ))}
-              </select>
-              {errors.paymentMethod && <p className="text-xs text-red-500 mt-1">{errors.paymentMethod}</p>}
             </div>
           </div>
 

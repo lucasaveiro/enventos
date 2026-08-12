@@ -15,16 +15,9 @@ import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
 import { updateInstallment } from '@/app/actions/installments'
 import { parseLocalDate, toDateInputValue } from '@/lib/utils'
+import { PAYMENT_METHODS, normalizePaymentMethod } from '@/lib/paymentMethods'
 
-const paymentMethods = [
-  { value: '', label: 'Selecione...' },
-  { value: 'pix', label: 'PIX' },
-  { value: 'credit_card', label: 'Cartao de Credito' },
-  { value: 'debit_card', label: 'Cartao de Debito' },
-  { value: 'bank_transfer', label: 'Transferencia Bancaria' },
-  { value: 'cash', label: 'Dinheiro' },
-  { value: 'boleto', label: 'Boleto' },
-]
+const paymentMethods = [{ value: '', label: 'Selecione...' }, ...PAYMENT_METHODS]
 
 interface EditInstallmentModalProps {
   isOpen: boolean
@@ -64,7 +57,7 @@ export function EditInstallmentModal({
     if (installment && isOpen) {
       setDueDate(toDateInputValue(installment.dueDate))
       setAmount(installment.amount)
-      setPaymentMethod(installment.paymentMethod ?? '')
+      setPaymentMethod(normalizePaymentMethod(installment.paymentMethod) ?? '')
       setNotes(installment.notes ?? '')
       setPaidAmount(installment.paidAmount ?? installment.amount)
       setPaidAt(

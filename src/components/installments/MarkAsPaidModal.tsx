@@ -16,19 +16,12 @@ import { Label } from '@/components/ui/Label'
 import { Badge } from '@/components/ui/Badge'
 import { markInstallmentAsPaid } from '@/app/actions/installments'
 import { parseLocalDate, toDateInputValue } from '@/lib/utils'
+import { PAYMENT_METHODS, normalizePaymentMethod } from '@/lib/paymentMethods'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-const paymentMethods = [
-  { value: '', label: 'Selecione...' },
-  { value: 'pix', label: 'PIX' },
-  { value: 'credit_card', label: 'Cartao de Credito' },
-  { value: 'debit_card', label: 'Cartao de Debito' },
-  { value: 'bank_transfer', label: 'Transferencia Bancaria' },
-  { value: 'cash', label: 'Dinheiro' },
-  { value: 'boleto', label: 'Boleto' },
-]
+const paymentMethods = [{ value: '', label: 'Selecione...' }, ...PAYMENT_METHODS]
 
 interface MarkAsPaidModalProps {
   isOpen: boolean
@@ -59,7 +52,9 @@ export function MarkAsPaidModal({
   const resetForm = () => {
     if (installment) {
       setPaidAmount(installment.amount)
-      setPaymentMethod(installment.paymentMethod ?? '')
+      // Normaliza valores legados ("PIX", "Transferência bancária") para o
+      // código canônico — sem isso o select não reconhece e força re-seleção.
+      setPaymentMethod(normalizePaymentMethod(installment.paymentMethod) ?? '')
       setPaidAt(toDateInputValue(new Date()))
     }
   }

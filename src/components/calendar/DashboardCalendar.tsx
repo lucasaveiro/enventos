@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Calendar as BigCalendar, dateFnsLocalizer, Views, View, type AgendaTimeProps } from 'react-big-calendar'
+import { Calendar as BigCalendar, dateFnsLocalizer, Views, View, type AgendaTimeProps, type EventProps } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, isSameDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
@@ -10,7 +10,7 @@ import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
 import { getEvents } from '@/app/actions/events'
 import { getServiceTasks, getPendingServiceTasks } from '@/app/actions/services'
 import { getInterestDatesForCalendar } from '@/app/actions/interestDates'
-import { getCalendarDisplayEnd } from '@/lib/calendarDisplay'
+import { getCalendarDisplayEnd, firstWord } from '@/lib/calendarDisplay'
 import { EventModal } from '@/components/forms/EventModal'
 import { ServiceTaskModal } from '@/components/forms/ServiceTaskModal'
 import { Card } from '@/components/ui/Card'
@@ -61,7 +61,38 @@ function AgendaEventTime({ event, label }: AgendaTimeProps) {
   return <span>{label}</span>
 }
 
-const calendarComponents = { agenda: { time: AgendaEventTime } }
+// Card (mês/semana/dia): em telas >= md, visita mostra também o primeiro nome
+// do cliente e o horário de início ("Visita - Rancho - Gabriela - 14:00").
+// Abaixo de md mantém o título curto ("Visita - Rancho Aveiro").
+function EventCard({ event }: EventProps<CalendarEvent>) {
+  if (event.type === 'event' && event.resource?.category === 'visit') {
+    const rich = [
+      'Visita',
+      firstWord(event.resource.space?.name),
+      firstWord(event.resource.client?.name),
+      format(event.start, 'HH:mm'),
+    ]
+      .filter(Boolean)
+      .join(' - ')
+    return (
+      <>
+        <span className="md:hidden">{event.title}</span>
+        <span className="hidden md:inline">{rich}</span>
+      </>
+    )
+  }
+  return <>{event.title}</>
+}
+
+// Agenda mantém o título curto (a coluna Hora já mostra o horário).
+function AgendaEventTitle({ event }: EventProps<CalendarEvent>) {
+  return <span>{event.title}</span>
+}
+
+const calendarComponents = {
+  event: EventCard,
+  agenda: { time: AgendaEventTime, event: AgendaEventTitle },
+}
 
 export function DashboardCalendar() {
   const router = useRouter()

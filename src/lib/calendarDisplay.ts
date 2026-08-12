@@ -13,3 +13,9 @@ export function getCalendarDisplayEnd(start: Date, end: Date): Date {
   }
   return end
 }
+
+// Primeira palavra de um nome ("Rancho Aveiro" -> "Rancho"); undefined quando
+// vazio, para compor rótulos com .filter(Boolean).
+export function firstWord(text?: string | null): string | undefined {
+  return text?.trim().split(/\s+/)[0] || undefined
+}

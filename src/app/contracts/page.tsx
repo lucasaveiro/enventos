@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { FileText, ArrowRight, MapPin } from 'lucide-react'
+import { FileText, FileSearch, ArrowRight, MapPin } from 'lucide-react'
 import { SPACES } from '@/lib/contractTemplates'
 import { cn } from '@/lib/utils'
 
@@ -71,6 +71,21 @@ export default function ContractsPage() {
           </Link>
         ))}
       </div>
+
+      {/* Blank model cross-link */}
+      <Link
+        href="/contracts/blank"
+        className="flex items-center gap-3 rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 transition-colors hover:bg-amber-100"
+      >
+        <FileSearch className="h-5 w-5 text-amber-700 shrink-0" />
+        <div className="flex-1 text-sm">
+          <span className="font-semibold text-amber-900">Precisa só do modelo em branco?</span>{' '}
+          <span className="text-amber-800">
+            Gere o contrato sem dados do cliente para ele conferir as cláusulas antes de fechar.
+          </span>
+        </div>
+        <ArrowRight className="h-4 w-4 text-amber-700 shrink-0" />
+      </Link>
 
       {/* Info box */}
       <div className="rounded-xl bg-[var(--info-light)] border border-[var(--border)] p-5">

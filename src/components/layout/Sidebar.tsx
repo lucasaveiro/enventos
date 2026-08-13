@@ -14,6 +14,7 @@ import {
   Wallet,
   LogOut,
   FilePlus2,
+  FileSearch,
   Settings,
   ChevronDown,
   X,
@@ -30,7 +31,9 @@ import { cn } from '@/lib/utils'
 //   4. Clientes      — cadastro e datas de interesse
 //   5. Configurações — grupo (Espaços, Profissionais, Serviços)
 // O acesso a contratos continua via botão "Novo Contrato Fechado" (acima) e
-// pela página de cada Evento ("Gerar Contrato").
+// pela página de cada Evento ("Gerar Contrato"). O botão secundário "Contrato
+// em Branco (Modelo)" gera a minuta padrão sem dados do cliente, apenas para
+// o cliente conferir as cláusulas antes de fechar a locação.
 
 type NavLeaf = {
   name: string
@@ -203,6 +206,16 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           >
             <FilePlus2 className="h-5 w-5" />
             Novo Contrato Fechado
+          </Link>
+
+          {/* Blank contract model (clauses only, no client data) */}
+          <Link
+            href="/contracts/blank"
+            onClick={handleLinkClick}
+            className="mt-2 flex items-center justify-center gap-2 w-full rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-white/85 transition-all duration-200 hover:bg-white/10 hover:text-white"
+          >
+            <FileSearch className="h-4 w-4" />
+            Contrato em Branco (Modelo)
           </Link>
         </div>
 

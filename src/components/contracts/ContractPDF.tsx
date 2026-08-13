@@ -162,6 +162,33 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     color: '#888',
   },
+  footerBetween: {
+    justifyContent: 'space-between',
+  },
+
+  // ─── Blank model banner ────────────────────────────────────────────────────
+  blankBanner: {
+    borderWidth: 1,
+    borderColor: '#b45309',
+    backgroundColor: '#fef3c7',
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  blankBannerTitle: {
+    fontSize: 9.5,
+    fontWeight: 700,
+    textAlign: 'center',
+    color: '#92400e',
+  },
+  blankBannerText: {
+    fontSize: 8,
+    textAlign: 'center',
+    color: '#92400e',
+    marginTop: 2,
+    lineHeight: 1.4,
+  },
 
   // ─── Estância Header ───────────────────────────────────────────────────────
   estanciaHeaderCenter: {
@@ -204,6 +231,28 @@ interface Props {
   formData: ContractFormData
   clauses: ContractClause[]
   space: SpaceConfig
+  /**
+   * Modo "contrato em branco": minuta sem dados do cliente, gerada apenas para
+   * o cliente conferir as cláusulas. Adiciona banner de identificação e aviso
+   * no rodapé de todas as páginas para que não seja confundida com o contrato
+   * oficial nem assinada.
+   */
+  isBlankModel?: boolean
+}
+
+function BlankModelBanner() {
+  return (
+    <View style={styles.blankBanner}>
+      <Text style={styles.blankBannerTitle}>
+        MODELO DE CONTRATO — SOMENTE PARA CONFERÊNCIA DAS CLÁUSULAS
+      </Text>
+      <Text style={styles.blankBannerText}>
+        Versão em branco do contrato padrão, sem dados do locatário e do evento. Os campos
+        entre colchetes [ ] e as lacunas serão preenchidos no contrato oficial. Este documento
+        não tem valor contratual e não deve ser assinado.
+      </Text>
+    </View>
+  )
 }
 
 function toCurrency(value: string): string {
@@ -234,7 +283,7 @@ function getPackageLabel(packageType: string): string {
 
 // ─── Rancho Aveiro Contract ─────────────────────────────────────────────────
 
-function RanchoContractPage({ formData, clauses, space }: Props) {
+function RanchoContractPage({ formData, clauses, space, isBlankModel }: Props) {
   const preamble = clauses.find((clause) => clause.number === 'PREÂMBULO')
   const legalClauses = clauses.filter((clause) => clause.id !== preamble?.id)
   const clientIsCNPJ = isCNPJ(formData.clientCPF)
@@ -250,6 +299,8 @@ function RanchoContractPage({ formData, clauses, space }: Props) {
         <Text style={styles.headerSubtitle}>Espaço para eventos</Text>
         <Text style={styles.headerPhone}>(19) 99623-1666</Text>
       </View>
+
+      {isBlankModel ? <BlankModelBanner /> : null}
 
       {/* Title */}
       <Text style={styles.contractTitle}>
@@ -324,7 +375,10 @@ function RanchoContractPage({ formData, clauses, space }: Props) {
       </View>
 
       {/* Footer */}
-      <View style={styles.footer} fixed>
+      <View style={isBlankModel ? [styles.footer, styles.footerBetween] : styles.footer} fixed>
+        {isBlankModel ? (
+          <Text style={styles.footerText}>MODELO PARA CONFERÊNCIA — SEM VALOR CONTRATUAL</Text>
+        ) : null}
         <Text
           style={styles.footerText}
           render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`}
@@ -336,7 +390,7 @@ function RanchoContractPage({ formData, clauses, space }: Props) {
 
 // ─── Estância Aveiro Contract ───────────────────────────────────────────────
 
-function EstanciaContractPage({ formData, clauses, space }: Props) {
+function EstanciaContractPage({ formData, clauses, space, isBlankModel }: Props) {
   const preamble = clauses.find((clause) => clause.number === 'PREÂMBULO')
   const legalClauses = clauses.filter((clause) => clause.id !== preamble?.id)
   const clientIsCNPJ = isCNPJ(formData.clientCPF)
@@ -353,6 +407,8 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
         <Text style={styles.headerSubtitle}>Espaço para eventos</Text>
       </View>
 
+      {isBlankModel ? <BlankModelBanner /> : null}
+
       {/* Title */}
       <Text style={styles.contractTitle}>
         Contrato de Locação de Espaço para Eventos N: {formData.contractNumber}
@@ -360,7 +416,7 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
 
       {/* Contract date */}
       <Text style={[styles.bodyText, { marginBottom: 10 }]}>
-        Data do contrato: {formatDate(formData.contractDate)}
+        Data do contrato: {formatDate(formData.contractDate) || '____/____/______'}
       </Text>
 
       {/* Preamble */}
@@ -582,7 +638,10 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
       </View>
 
       {/* Footer */}
-      <View style={styles.footer} fixed>
+      <View style={isBlankModel ? [styles.footer, styles.footerBetween] : styles.footer} fixed>
+        {isBlankModel ? (
+          <Text style={styles.footerText}>MODELO PARA CONFERÊNCIA — SEM VALOR CONTRATUAL</Text>
+        ) : null}
         <Text
           style={styles.footerText}
           render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`}
@@ -594,20 +653,22 @@ function EstanciaContractPage({ formData, clauses, space }: Props) {
 
 // ─── Document Router ────────────────────────────────────────────────────────
 
-export function ContractPDFDocument({ formData, clauses, space }: Props) {
-  const title = `Contrato ${formData.contractNumber} - ${space.displayName}`
+export function ContractPDFDocument({ formData, clauses, space, isBlankModel }: Props) {
+  const title = isBlankModel
+    ? `Modelo de Contrato (em branco) - ${space.displayName}`
+    : `Contrato ${formData.contractNumber} - ${space.displayName}`
 
   if (space.id === 'rancho-aveiro') {
     return (
       <Document title={title} author={space.ownerName}>
-        <RanchoContractPage formData={formData} clauses={clauses} space={space} />
+        <RanchoContractPage formData={formData} clauses={clauses} space={space} isBlankModel={isBlankModel} />
       </Document>
     )
   }
 
   return (
     <Document title={title} author={space.ownerName}>
-      <EstanciaContractPage formData={formData} clauses={clauses} space={space} />
+      <EstanciaContractPage formData={formData} clauses={clauses} space={space} isBlankModel={isBlankModel} />
     </Document>
   )
 }

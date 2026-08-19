@@ -129,6 +129,7 @@ export function PaymentStep({ data, onChange, errors }: Props) {
               />
               <p className="text-xs text-[var(--muted-foreground)] mt-1">
                 Garantia contra avarias: paga via Pix até 48h antes da entrada e devolvida após a vistoria de saída.
+                Aplica-se à Estância; no Rancho Aveiro a caução é fixa de R$ 2.500, já prevista em cláusula.
               </p>
             </div>
             <div>

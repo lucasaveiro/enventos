@@ -265,6 +265,23 @@ model ManualContract {
   @@index([eventId])
 }
 
+// Item do inventário usado no Termo de Vistoria (Anexo I do contrato).
+// `package`: 'simples' | 'completo' | NULL (NULL = pertence a todos os pacotes
+// do espaço, ou espaço sem conceito de pacote). O Pacote Completo da Estância
+// inclui os itens do Simples, então o filtro por pacote é cumulativo.
+model InventoryItem {
+  id        Int      @id @default(autoincrement())
+  spaceSlug String   // 'estancia-aveiro' | 'rancho-aveiro'
+  name      String
+  quantity  Int      @default(1)
+  package   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([spaceSlug])
+}
+
 model AdminSession {
   id        String   @id @default(cuid())
   token     String   @unique

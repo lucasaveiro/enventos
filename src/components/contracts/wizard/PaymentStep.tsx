@@ -119,7 +119,7 @@ export function PaymentStep({ data, onChange, errors }: Props) {
               {errors.depositDueDate && <p className="text-xs text-red-500 mt-1">{errors.depositDueDate}</p>}
             </div>
             <div>
-              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Valor do Caução (R$)</Label>
+              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Valor da Caução (R$)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -127,6 +127,9 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                 onChange={(e) => update('cautionValue', e.target.value)}
                 placeholder="0,00"
               />
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Garantia contra avarias: paga via Pix até 48h antes da entrada e devolvida após a vistoria de saída.
+              </p>
             </div>
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Forma de Pagamento *</Label>

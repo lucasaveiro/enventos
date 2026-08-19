@@ -64,6 +64,16 @@ const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
   ),
 })
 
+const VistoriaDownloadButton = dynamic(() => import('./VistoriaDownloadButton'), {
+  ssr: false,
+  loading: () => (
+    <Button disabled variant="outline" className="gap-2">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Preparando termo...
+    </Button>
+  ),
+})
+
 const ClicksignButton = dynamic(() => import('./ClicksignButton'), {
   ssr: false,
   loading: () => (
@@ -1924,7 +1934,14 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             </p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {requiresExtendedEventData && (
+            <VistoriaDownloadButton
+              space={effectiveSpace}
+              getFormData={getFormDataForPDF}
+              isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit}
+            />
+          )}
           <PDFGeneratorButton
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}

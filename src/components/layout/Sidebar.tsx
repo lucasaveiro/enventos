@@ -9,6 +9,7 @@ import {
   Users,
   Briefcase,
   CheckSquare,
+  ClipboardList,
   Home,
   Sparkles,
   Wallet,
@@ -73,6 +74,7 @@ const navigation: NavItem[] = [
     description: 'Espaços, equipe e serviços',
     children: [
       { name: 'Espaços', href: '/spaces', icon: Home },
+      { name: 'Inventário da Vistoria', href: '/inventario', icon: ClipboardList },
       { name: 'Profissionais', href: '/professionals', icon: Briefcase },
       { name: 'Serviços', href: '/services', icon: CheckSquare },
     ],

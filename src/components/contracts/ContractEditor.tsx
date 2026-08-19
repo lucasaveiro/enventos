@@ -1415,7 +1415,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             />
           </Field>
           {requiresExtendedEventData && (
-            <Field label="Valor do Caução (R$) *" error={errors.cautionValue?.message}>
+            <Field label="Valor da Caução (R$) *" error={errors.cautionValue?.message}>
               <Input
                 {...register('cautionValue')}
                 placeholder="1000,00"

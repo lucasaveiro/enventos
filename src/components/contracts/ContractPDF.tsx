@@ -572,7 +572,7 @@ function EstanciaContractPage({ formData, clauses, space, isBlankModel }: Props)
       ) : null}
       {formData.cautionValue ? (
         <View style={[styles.fieldRow, { marginBottom: 6 }]}>
-          <Text style={styles.fieldLabel}>Cheque Caução: </Text>
+          <Text style={styles.fieldLabel}>Caução (garantia): </Text>
           <Text style={styles.fieldValue}>{toCurrency(formData.cautionValue)}</Text>
         </View>
       ) : null}

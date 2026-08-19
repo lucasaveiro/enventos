@@ -550,71 +550,78 @@ export const RANCHO_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
       'Recebendo as dependências do imóvel em perfeitas condições de serem ocupadas, na mais perfeita ordem, torneiras, pias, lâmpadas e demais acessórios, instalações elétricas e hidráulicas, acessórios, equipamentos, utensílios, jardim e plantas, obriga-se o LOCATÁRIO a manter tudo como recebe e a sua própria custa, de forma a restituir tudo na mais perfeita ordem e no mesmo estado de conservação e perfeito funcionamento, quando findo ou rescindido o presente contrato, de modo que possa ser imediatamente utilizado, sem que isso dependa de qualquer conserto, reparo ou pintura.\n\nNo caso de exceder a capacidade máxima de 300 pessoas, será cobrado o valor de R$ 50,00 por cada pessoa excedente.',
   },
   {
-    id: 'quarta',
+    id: 'caucao',
     number: 'QUARTA',
+    title: 'DA CAUÇÃO E DA GARANTIA CONTRA AVARIAS',
+    content:
+      'Como garantia da conservação do imóvel e de seus pertences, o LOCATÁRIO pagará ao LOCADOR, a título de caução, o valor fixo de R$ 2.500,00 (dois mil e quinhentos reais), com antecedência mínima de 48 (quarenta e oito) horas do horário de início da locação, via Pix ou transferência para a conta indicada na Cláusula Segunda, servindo o comprovante de transferência como recibo. A caução destina-se a cobrir eventuais danos causados ao imóvel, aos seus equipamentos, mobiliário, utensílios, jardim e demais pertences, limpeza extraordinária, multas e demais valores devidos por força deste contrato, causados pelo LOCATÁRIO, por seus convidados ou por prestadores de serviço por ele contratados.\n\nParágrafo primeiro: A entrega das chaves e a liberação do acesso ao imóvel ficam condicionadas à confirmação do pagamento da caução. O não pagamento no prazo estipulado caracteriza inadimplemento do LOCATÁRIO, facultando ao LOCADOR impedir o acesso ao imóvel e aplicar as regras de desistência previstas na Cláusula Segunda, sem que caiba ao LOCATÁRIO qualquer indenização.\n\nParágrafo segundo: A critério do LOCADOR, a caução em dinheiro poderá ser substituída por pré-autorização (bloqueio) de valor equivalente em cartão de crédito de titularidade do LOCATÁRIO, a ser liberada após a vistoria de saída sem constatação de danos.\n\nParágrafo terceiro: A caução não se confunde com o valor da locação e não poderá ser utilizada pelo LOCATÁRIO para abater parcelas ou qualquer outro pagamento previsto neste contrato.\n\nParágrafo quarto: Na entrada, LOCADOR (ou seu representante) e LOCATÁRIO realizarão vistoria conjunta do imóvel e de seus pertences, com registro fotográfico; na saída, nova vistoria será realizada nos mesmos moldes, servindo a comparação entre as duas como prova do estado do imóvel e de seus pertences. Caso o LOCATÁRIO não compareça ou se recuse a participar de qualquer das vistorias, prevalecerá o registro realizado pelo LOCADOR, presumindo-se que o imóvel e seus pertences foram entregues em perfeitas condições.\n\nParágrafo quinto: Não sendo constatado qualquer dano, falta ou infração na vistoria de saída, a caução será devolvida integralmente ao LOCATÁRIO, via Pix, em conta de sua titularidade, no prazo de até 3 (três) dias úteis contados da devolução do imóvel.\n\nParágrafo sexto: Constatado dano, falta ou infração, o LOCADOR apresentará ao LOCATÁRIO, em até 10 (dez) dias corridos, relatório com registro fotográfico e orçamentos ou notas fiscais dos reparos e reposições, ficando desde já autorizado a deduzir da caução os valores apurados e a devolver o saldo remanescente, se houver, em até 3 (três) dias úteis após a apuração.\n\nParágrafo sétimo: Se os prejuízos apurados excederem o valor da caução, o LOCATÁRIO pagará a diferença no prazo de até 5 (cinco) dias úteis contados da notificação, feita por escrito, e-mail ou WhatsApp, sob pena de multa de 10% (dez por cento), juros de mora de 1% (um por cento) ao mês e correção monetária pelo IPCA, servindo o presente contrato, assinado pelas partes e por 2 (duas) testemunhas, como título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil, podendo o débito, ainda, ser protestado e inscrito nos cadastros de proteção ao crédito.',
+  },
+  {
+    id: 'quarta',
+    number: 'QUINTA',
     title: 'DA CIRCULAÇÃO NAS ADJACÊNCIAS',
     content:
       'É expressamente proibida a circulação de pessoas e veículos nas ruas, alamedas, caminhos e adjacências do imóvel objeto desta locação, exceto o trajeto da portaria ao imóvel e vice-versa.',
   },
   {
     id: 'quinta',
-    number: 'QUINTA',
+    number: 'SEXTA',
     title: 'DA VEDAÇÃO À TRANSFERÊNCIA',
     content:
       'Não é permitida a transferência deste contrato, no todo ou em parte, nem a sublocação ou empréstimo do imóvel locado, sem o prévio consentimento por escrito do LOCADOR, mesmo que a transferência, a sublocação e/ou o empréstimo parcial sejam para firmas oriundas de alterações contratuais, bem como sociedade formada pelo LOCATÁRIO e terceiros.',
   },
   {
     id: 'sexta',
-    number: 'SEXTA',
+    number: 'SÉTIMA',
     title: 'DA DESTINAÇÃO DO IMÓVEL',
     content:
       'O LOCATÁRIO não poderá destinar o imóvel deste contrato para fins comerciais, não podendo em hipótese alguma alterar sua destinação sem prévio consentimento por escrito do LOCADOR. O não cumprimento desta obrigação implicará na rescisão contratual.',
   },
   {
     id: 'setima',
-    number: 'SÉTIMA',
+    number: 'OITAVA',
     title: 'DA RESCISÃO E DA MULTA',
     content:
       'Ocorrerá também a rescisão do presente contrato se o LOCATÁRIO infringir obrigação legal ou cometer infração a qualquer cláusula deste instrumento, sujeitando-se cumulativa ou alternativamente à multa equivalente ao valor de uma locação, sem prejuízo da exigência de valores por eventuais perdas e danos.',
   },
   {
     id: 'oitava',
-    number: 'OITAVA',
+    number: 'NONA',
     title: 'DAS RESPONSABILIDADES DO LOCATÁRIO',
     content:
-      'Fica o LOCATÁRIO responsável por atos e fatos próprios, de seus prepostos, fornecedores, visitantes, convidados e demais pessoas a que permitir ou não impedir de adentrar ou permanecer no imóvel, respondendo administrativa ou judicialmente, ficando o LOCADOR livre de qualquer responsabilidade de natureza civil ou criminal, durante o período que durar a locação. Autoriza, desde já, o LOCATÁRIO, até a apuração de eventual responsabilização, a dedução pelo LOCADOR da quantia necessária.\n\nParágrafo único: Também é responsável o LOCATÁRIO pela adequação do uso às normas legais vigentes, bem como pelos danos e riscos da utilização do imóvel, devendo observar a compatibilidade das instalações com o número de pessoas, capacidade elétrica e equipamentos que serão utilizados, equipamentos de segurança e emergência, desobstrução de acessos e saídas e demais cuidados relativos às condições peculiares do evento que realizar, ficando autorizado, desde a assinatura do presente instrumento, realizar vistoria prévia.',
+      'Fica o LOCATÁRIO responsável por atos e fatos próprios, de seus prepostos, fornecedores, visitantes, convidados e demais pessoas a que permitir ou não impedir de adentrar ou permanecer no imóvel, respondendo administrativa ou judicialmente, ficando o LOCADOR livre de qualquer responsabilidade de natureza civil ou criminal, durante o período que durar a locação. Autoriza, desde já, o LOCATÁRIO, até a apuração de eventual responsabilização, a dedução pelo LOCADOR da quantia necessária, prioritariamente da caução prevista na Cláusula Quarta e na forma nela estabelecida.\n\nParágrafo único: Também é responsável o LOCATÁRIO pela adequação do uso às normas legais vigentes, bem como pelos danos e riscos da utilização do imóvel, devendo observar a compatibilidade das instalações com o número de pessoas, capacidade elétrica e equipamentos que serão utilizados, equipamentos de segurança e emergência, desobstrução de acessos e saídas e demais cuidados relativos às condições peculiares do evento que realizar, ficando autorizado, desde a assinatura do presente instrumento, realizar vistoria prévia.',
   },
   {
     id: 'nona',
-    number: 'NONA',
+    number: 'DÉCIMA',
     title: 'DO USO DE SOM E DIREITOS AUTORAIS',
     content:
       'O LOCATÁRIO compromete-se, no caso de uso de aparelho de som, a observar a legislação pertinente e manter o mesmo em um nível que não incomode os vizinhos, para que seja mantida uma harmonia entre os moradores das chácaras vizinhas. É proibido o uso do gramado para pista de dança, palco e DJ, ao menos que seja colocado algum tipo de proteção que não machuque o gramado.\n\nParágrafo único: É de total responsabilidade do LOCATÁRIO, no uso do imóvel, a observância da legislação em vigor, seja ela federal, estadual ou municipal e, dentre todas, fica aqui advertido, em especial, o disposto na Lei 9.610/98, que cuida da proteção aos direitos autorais, à qual o LOCATÁRIO declara estar ciente e concorda, sendo o caso, em recolher eventuais valores que lhes sejam devidos pela utilização de obras teatrais, composições musicais ou lítero-musicais e fonogramas, em representações e execuções públicas.',
   },
   {
     id: 'decima',
-    number: 'DÉCIMA',
+    number: 'DÉCIMA PRIMEIRA',
     title: 'DAS PROIBIÇÕES E MULTA',
     content:
       'É expressamente proibido: o uso de ski paper (chuva de papel picado) e qualquer outro tipo de papel, sendo laminado ou não; queima de fogos de artifício ou indoor, com barulho ou não, em qualquer local das dependências do Rancho Aveiro (sob penas da lei).\n\nParágrafo único: No caso de descumprimento será gerada multa no valor de R$ 5.000,00 (cinco mil reais).',
   },
   {
     id: 'decima-primeira',
-    number: 'DÉCIMA PRIMEIRA',
+    number: 'DÉCIMA SEGUNDA',
     title: 'DOS ITENS INCLUSOS E SERVIÇOS NÃO INCLUSOS',
     content:
       'Findo o prazo convencionado, a renovação não será automática, sendo necessária para tanto a assinatura de novo contrato, sem prejuízo do previsto na cláusula primeira quanto à multa por atraso, bem como a extensão de todas as responsabilidades do LOCATÁRIO previstas neste contrato.\n\nEstão incluídos na locação:\n1. Estacionamento para 120 veículos.\n2. Hall de entrada.\n3. Salão para 300 pessoas.\n4. Varanda coberta com fechamento de toldos.\n5. Pergolado.\n6. Conjunto de bancos de madeira para lounge (2 bancos de um lugar e 1 banco de dois lugares).\n7. Banheiros masculinos com papel higiênico, sabonete líquido e papel toalha.\n8. Banheiros femininos com papel higiênico, sabonete líquido e papel toalha.\n9. Sala de suporte.\n10. Cozinha com pias, dois fogões industriais, forno e gás encanado.\n11. Área externa coberta com churrasqueira, pias, geladeiras, câmara fria e freezer.\n12. Banheiro externo com chuveiro.\n13. Limpeza pré e pós evento.\n14. Iluminação do jardim.\n15. Auxiliar de estacionamento.\n16. Bancos para cerimônia, quantidade de {benchCount}.\n17. Mesas redondas de 1,45 cm, quantidade de {tableCount}.\n18. Cadeiras almofadadas de rattan, quantidade de {chairCount}.\n\nParágrafo primeiro: O presente contrato de locação de imóvel não contempla nenhum tipo de prestação de serviço; ficando a cargo e total responsabilidade do LOCATÁRIO a eventual contratação dos serviços que entender necessários, tipo: recepcionistas, manobristas, segurança, vigilância ou qualquer outro.',
   },
   {
     id: 'decima-segunda',
-    number: 'DÉCIMA SEGUNDA',
+    number: 'DÉCIMA TERCEIRA',
     title: 'DA RESPONSABILIDADE SANITÁRIA E CUMPRIMENTO DE DECRETOS',
     content:
       'É de responsabilidade integral do LOCATÁRIO e de seus profissionais contratados respeitar e cumprir os requisitos de acordo com os decretos estaduais e municipais vigentes, seguindo rigorosamente as medidas preventivas e o protocolo de distanciamento e limitação de capacidade, as regras de uso de EPIs, álcool em gel, máscaras e todos os equipamentos e procedimentos necessários para a proteção dentro das dependências da chácara "{spaceName}".\n\nParágrafo único: O LOCATÁRIO, neste ato, isenta o LOCADOR de quaisquer responsabilidades e obrigações relacionadas ao cumprimento dos requisitos de acordo com os decretos estaduais e municipais vigentes e demais obrigações legais, além de responsabilizar-se também por qualquer demanda administrativa e/ou judicial proveniente do não cumprimento do disposto no caput.',
   },
   {
     id: 'decima-terceira',
-    number: 'DÉCIMA TERCEIRA',
+    number: 'DÉCIMA QUARTA',
     title: 'DOS CASOS FORTUITOS E FORÇA MAIOR',
     content:
       'Os casos fortuitos ou motivos de força maior serão excludentes de responsabilidade, na forma do parágrafo único do artigo 393 do Código Civil Brasileiro.\n\nParágrafo primeiro: A parte que for afetada ("PARTE AFETADA") por caso fortuito ou motivo de força maior deverá notificar a outra, de imediato, da extensão do fato e do prazo estimado durante o qual estará inabilitada a cumprir, ou pelo qual será obrigada a atrasar o cumprimento de suas obrigações decorrentes deste contrato.\n\nParágrafo segundo: Cessados os efeitos de caso fortuito ou motivo de força maior, a PARTE AFETADA deverá, de imediato, notificar a outra para conhecimento deste fato, restabelecendo a situação imediatamente anterior à ocorrência do caso fortuito ou do motivo de força maior, no menor tempo possível.\n\nParágrafo terceiro: Se a ocorrência de caso fortuito ou motivo de força maior prejudicar apenas parcialmente a execução das obrigações oriundas deste contrato por uma das partes, a PARTE AFETADA deverá cumprir as obrigações que não tiverem sido afetadas pela ocorrência.\n\nParágrafo quarto: Na ocorrência das hipóteses de caso fortuito ou força maior, inclusive quando haja situação extrema que demande providências e determinações de órgãos públicos e autoridades governamentais, que impeçam e/ou inviabilizem a realização do evento ora programado, o LOCADOR poderá ajustar a realização do evento em outra data, que deverá ser previamente estabelecida entre as partes em comum acordo, a partir da cessação dos efeitos de caso fortuito ou força maior ou do impeditivo, em prazo que não poderá ser superior a 12 (doze) meses.\n\nParágrafo quinto: Ocorrendo o reagendamento da data para a realização do evento, conforme acima disposto, o pagamento do saldo remanescente da remuneração acordada nos termos deste instrumento, se houver, ficará condicionado à realização do evento na nova data, sem a incidência de qualquer acréscimo, correção e/ou penalidade.\n\nParágrafo sexto: Não poderão ser considerados eventos de força maior ou caso fortuito: (i) greves promovidas pelos contratados do LOCATÁRIO, de suas subcontratadas ou de terceiros trabalhando sob sua responsabilidade ou supervisão; (ii) interrupções ou anormalidades no tráfego de veículos; (iii) condições climáticas e meteorológicas que possam ser consideradas dentro da normalidade para a época e local do evento.\n\nE por estarem de comum acordo, assinam o presente contrato em 02 (duas) vias de igual teor e forma, na presença das testemunhas abaixo, elegendo o foro da comarca de {city}-{state} para dirimir todas e quaisquer questões oriundas deste instrumento, com renúncia de qualquer outro, por mais privilegiado que seja.',

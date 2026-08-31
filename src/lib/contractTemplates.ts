@@ -603,7 +603,7 @@ export const RANCHO_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'DÉCIMA PRIMEIRA',
     title: 'DAS PROIBIÇÕES E MULTA',
     content:
-      'É expressamente proibido: o uso de ski paper (chuva de papel picado) e qualquer outro tipo de papel, sendo laminado ou não; queima de fogos de artifício ou indoor, com barulho ou não, em qualquer local das dependências do Rancho Aveiro (sob penas da lei).\n\nParágrafo único: No caso de descumprimento será gerada multa no valor de R$ 5.000,00 (cinco mil reais).',
+      'É expressamente proibido, em qualquer local das dependências do RANCHO AVEIRO (sob penas da lei): o uso de sky paper (chuva de papel picado), lança confetes, serpentinas e qualquer outro tipo de papel, sendo laminado ou não; e a queima de fogos de artifício ou indoor, com barulho ou não, bem como o uso de artefatos pirotécnicos, sinalizadores, lanternas ou balões de qualquer espécie.\n\nParágrafo único: No caso de descumprimento será gerada multa no valor de R$ 5.000,00 (cinco mil reais), sem prejuízo da responsabilidade do LOCATÁRIO pelos danos causados e da dedução dos valores na forma da Cláusula Quarta.',
   },
   {
     id: 'decima-primeira',
@@ -709,29 +709,36 @@ export const ESTANCIA_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
       'É expressamente proibido entrar na piscina com copo de vidro, garrafas, latas e qualquer outra coisa que possa a vir a danificar a piscina. Sendo de responsabilidade do Locatário arcar com os custos de manutenção se danificar a piscina no período de locação.',
   },
   {
-    id: 'energia_agua',
+    id: 'proibicoes',
     number: 'DÉCIMA',
+    title: 'DAS PROIBIÇÕES E MULTA',
+    content:
+      'É expressamente proibido, em qualquer local das dependências da ESTÂNCIA AVEIRO (sob penas da lei): o uso de sky paper (chuva de papel picado), lança confetes, serpentinas e qualquer outro tipo de papel, sendo laminado ou não; e a queima de fogos de artifício ou indoor, com barulho ou não, bem como o uso de artefatos pirotécnicos, sinalizadores, lanternas ou balões de qualquer espécie.\n\nParágrafo Único: No caso de descumprimento será gerada multa no valor de R$ 800,00 (oitocentos reais), sem prejuízo da responsabilidade do LOCATÁRIO pelos danos causados e da dedução dos valores na forma da Cláusula Quinta.',
+  },
+  {
+    id: 'energia_agua',
+    number: 'DÉCIMA PRIMEIRA',
     title: 'DA ENERGIA ELÉTRICA E ÁGUA',
     content:
       'Se houver falta de fornecimento de água e/ou fornecimento de energia elétrica no imóvel locado durante o período de ocupação, por motivo que não tenha causa no sistema hidráulico ou no sistema elétrico do imóvel, não caberá ao LOCATÁRIO o direito de fazer reclamação, pedir ressarcimento ou indenização, de qualquer natureza, ao LOCADOR (ou seu representante), e sim aos órgãos responsáveis.',
   },
   {
     id: 'gas',
-    number: 'DÉCIMA PRIMEIRA',
+    number: 'DÉCIMA SEGUNDA',
     title: 'DO BOTIJÃO DE GÁS',
     content:
       'Se por acaso o botijão de gás vier a acabar, o Locatário deverá comprar um novo botijão, sendo devolvido pelo locador o dinheiro pago pelo botijão em até 15 (quinze) dias após a saída da chácara.',
   },
   {
     id: 'toldos',
-    number: 'DÉCIMA SEGUNDA',
+    number: 'DÉCIMA TERCEIRA',
     title: 'DOS TOLDOS',
     content:
       'Os toldos sempre que forem manuseados utilizarão duas pessoas. Em caso de chuva, baixá-los para não fazer bolsa de água.',
   },
   {
     id: 'imagem',
-    number: 'DÉCIMA TERCEIRA',
+    number: 'DÉCIMA QUARTA',
     title: 'DA CAPTAÇÃO E UTILIZAÇÃO DE IMAGEM, VOZ E CONTEÚDO AUDIOVISUAL',
     content:
       'O LOCATÁRIO declara estar expressamente ciente de que a ESTÂNCIA AVEIRO realiza registros fotográficos e audiovisuais de eventos realizados em suas dependências, destinados à apresentação institucional e comercial do espaço, divulgação de sua estrutura, ambientação, decoração e experiências realizadas no local.\n\nParágrafo Primeiro: Mediante a assinatura física ou eletrônica deste instrumento, o LOCATÁRIO autoriza expressamente, de forma gratuita, o LOCADOR a captar, reproduzir, editar e utilizar sua imagem e voz eventualmente registradas durante o evento objeto deste contrato, exclusivamente para fins institucionais, publicitários e promocionais relacionados à ESTÂNCIA AVEIRO, inclusive em seu website, portfólio, materiais institucionais e comerciais e em seus perfis oficiais em redes sociais, incluindo, sem limitação, Instagram, Facebook, TikTok e YouTube.\n\nParágrafo Segundo: A presente autorização compreende fotografias, vídeos e demais registros audiovisuais produzidos nas dependências da ESTÂNCIA AVEIRO durante a preparação, montagem, realização e desmontagem do evento, podendo tais conteúdos ser editados, cortados, legendados, sonorizados e adaptados aos diferentes formatos de divulgação, desde que sua utilização não exponha o LOCATÁRIO a situação vexatória, ilícita, depreciativa ou incompatível com a finalidade prevista nesta cláusula.\n\nParágrafo Terceiro: A presente autorização constitui condição expressa e essencial para a celebração deste contrato nos termos aqui apresentados. O LOCATÁRIO declara que teve acesso prévio ao inteiro teor desta cláusula e que sua assinatura ou aceite eletrônico representa manifestação inequívoca de ciência e concordância com suas disposições. Caso não concorde com esta condição, o interessado deverá comunicar o LOCADOR antes da conclusão da contratação e não deverá proceder à assinatura ou ao aceite eletrônico deste instrumento, não se considerando concluída a contratação nos termos nele propostos.\n\nParágrafo Quarto: A conclusão da assinatura eletrônica do presente contrato, mediante plataforma eletrônica capaz de identificar o signatário e registrar sua manifestação de vontade, será considerada, para todos os fins, manifestação expressa de concordância com esta cláusula, dispensada a necessidade de formulário, termo ou marcação adicional de autorização, sem prejuízo dos direitos assegurados pela legislação aplicável.\n\nParágrafo Quinto: A autorização concedida pelo LOCATÁRIO refere-se exclusivamente à sua própria imagem e voz, não constituindo autorização, pelo LOCATÁRIO, para utilização individualizada da imagem de terceiros, convidados, fornecedores ou demais participantes do evento. O LOCADOR poderá realizar registros gerais e ambientais do evento, devendo observar os direitos de personalidade e de proteção de dados das demais pessoas eventualmente identificáveis.\n\nParágrafo Sexto: Eventual exercício posterior dos direitos legalmente assegurados ao titular da imagem ou dos dados pessoais não prejudicará, por si só, a licitude dos tratamentos e utilizações realizados durante a vigência da autorização, observadas as disposições da legislação aplicável.',

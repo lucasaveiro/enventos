@@ -5,17 +5,11 @@
 //   1. clicar num evento abre o painel lateral, não navega para outra página
 //   2. o filtro de espaço vira chip colorido — a cor do espaço é a mesma no
 //      calendário, na lista e nos gráficos, então dá para ler sem legenda
-//   3. no celular a visão vira lista por dia, porque grade de 7 colunas em
-//      tela de 390px não é legível
+//   3. eventos, visitas, datas de interesse e serviços aparecem juntos, porque
+//      na cabeça de quem opera é tudo "o que acontece nesse dia"
 
-import { useMemo, useState } from 'react'
-import {
-  ChevronLeft,
-  ChevronRight,
-  CalendarDays,
-  List,
-  Plus,
-} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, CalendarDays, List } from 'lucide-react'
 import {
   addMonths,
   eachDayOfInterval,
@@ -29,26 +23,19 @@ import {
   subMonths,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import {
-  AGENDA_EXTRAS,
-  EVENTS,
-  SPACES,
-  brl,
-  today,
-  type AgendaItem,
-  type SpaceSlug,
-  type V2Event,
-} from '@/lib/v2/mock'
+import { loadAgenda, loadSpaces } from '@/lib/v2/data'
+import { brl } from '@/lib/v2/format'
+import type { V2AgendaItem, V2Space } from '@/lib/v2/types'
 import { EventDrawer } from '@/components/v2/EventDrawer'
-import { FilterChip, PaymentPill, SpaceDot } from '@/components/v2/ui'
+import { EmptyState, FilterChip, Skeleton, SpaceDot } from '@/components/v2/ui'
 import { cn } from '@/lib/utils'
 
 const WEEKDAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 
-// Cada tipo de item da agenda tem um tratamento visual distinto: eventos são
-// blocos cheios (dinheiro travado na data), visitas e interesses são contornos
-// (data ainda disponível), serviços são discretos.
-const KIND_STYLE: Record<AgendaItem['kind'], { label: string; filled: boolean; dashed: boolean }> = {
+// Cada tipo de item tem tratamento visual distinto: eventos são blocos cheios
+// (data vendida), visitas e serviços são contornos, interesse é tracejado
+// (data segurada, mas sem sinal).
+const KIND_STYLE: Record<V2AgendaItem['kind'], { label: string; filled: boolean; dashed: boolean }> = {
   evento: { label: 'Evento', filled: true, dashed: false },
   visita: { label: 'Visita', filled: false, dashed: false },
   interesse: { label: 'Interesse', filled: false, dashed: true },
@@ -56,30 +43,14 @@ const KIND_STYLE: Record<AgendaItem['kind'], { label: string; filled: boolean; d
 }
 
 export default function AgendaPage() {
-  const now = today()
-  const [cursor, setCursor] = useState(startOfMonth(now))
+  const now = useMemo(() => new Date(), [])
+  const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
   const [view, setView] = useState<'mes' | 'lista'>('mes')
-  const [spaceFilter, setSpaceFilter] = useState<SpaceSlug | 'all'>('all')
-  const [selected, setSelected] = useState<V2Event | null>(null)
-
-  // Une eventos e itens extras num único fluxo — na v1 eles moram em telas
-  // diferentes, mas na cabeça de quem opera é tudo "o que acontece nesse dia".
-  const items = useMemo<AgendaItem[]>(() => {
-    const fromEvents: AgendaItem[] = EVENTS.map((e) => ({
-      id: `e${e.id}`,
-      kind: 'evento',
-      title: e.title,
-      subtitle: `${e.guests} convidados · ${brl(e.value)}`,
-      space: e.space,
-      start: e.start,
-      end: e.end,
-      eventId: e.id,
-    }))
-    const all = [...fromEvents, ...AGENDA_EXTRAS]
-    return (spaceFilter === 'all' ? all : all.filter((i) => i.space === spaceFilter)).sort(
-      (a, b) => +a.start - +b.start,
-    )
-  }, [spaceFilter])
+  const [spaceFilter, setSpaceFilter] = useState<number | 'all'>('all')
+  const [openId, setOpenId] = useState<number | null>(null)
+  const [items, setItems] = useState<V2AgendaItem[]>([])
+  const [spaces, setSpaces] = useState<V2Space[]>([])
+  const [loading, setLoading] = useState(true)
 
   const days = useMemo(
     () =>
@@ -90,26 +61,30 @@ export default function AgendaPage() {
     [cursor],
   )
 
-  const itemsOf = (day: Date) => items.filter((i) => isSameDay(i.start, day))
+  const fetchAgenda = useCallback(async () => {
+    setLoading(true)
+    const start = days[0]
+    const end = new Date(days[days.length - 1])
+    end.setHours(23, 59, 59, 999)
+    const [data, sp] = await Promise.all([loadAgenda(start, end), loadSpaces()])
+    setItems(data)
+    setSpaces(sp)
+    setLoading(false)
+  }, [days])
 
-  const monthItems = useMemo(
-    () => items.filter((i) => isSameMonth(i.start, cursor)),
-    [items, cursor],
+  useEffect(() => {
+    fetchAgenda()
+  }, [fetchAgenda])
+
+  const visible = useMemo(
+    () => (spaceFilter === 'all' ? items : items.filter((i) => i.space.id === spaceFilter)),
+    [items, spaceFilter],
   )
 
-  const monthRevenue = useMemo(
-    () =>
-      EVENTS.filter((e) => isSameMonth(e.start, cursor) && (spaceFilter === 'all' || e.space === spaceFilter)).reduce(
-        (s, e) => s + e.value,
-        0,
-      ),
-    [cursor, spaceFilter],
-  )
-
-  const open = (item: AgendaItem) => {
-    const e = EVENTS.find((x) => x.id === item.eventId)
-    if (e) setSelected(e)
-  }
+  const itemsOf = (day: Date) => visible.filter((i) => isSameDay(i.start, day))
+  const monthItems = useMemo(() => visible.filter((i) => isSameMonth(i.start, cursor)), [visible, cursor])
+  const monthEvents = monthItems.filter((i) => i.kind === 'evento')
+  const monthRevenue = monthEvents.reduce((s, i) => s + (i.value ?? 0), 0)
 
   return (
     <div className="v2-fade">
@@ -147,10 +122,7 @@ export default function AgendaPage() {
           )}
         </div>
 
-        <div
-          className="flex items-center gap-0.5 rounded-lg border p-0.5"
-          style={{ borderColor: 'var(--v2-line-2)' }}
-        >
+        <div className="flex items-center gap-0.5 rounded-lg border p-0.5" style={{ borderColor: 'var(--v2-line-2)' }}>
           {(
             [
               { k: 'mes' as const, icon: CalendarDays, label: 'Mês' },
@@ -178,25 +150,25 @@ export default function AgendaPage() {
         <FilterChip active={spaceFilter === 'all'} onClick={() => setSpaceFilter('all')}>
           Todos os espaços
         </FilterChip>
-        {(Object.keys(SPACES) as SpaceSlug[]).map((slug) => (
+        {spaces.map((s) => (
           <FilterChip
-            key={slug}
-            active={spaceFilter === slug}
-            onClick={() => setSpaceFilter(slug)}
-            dot={SPACES[slug].color}
+            key={s.id}
+            active={spaceFilter === s.id}
+            onClick={() => setSpaceFilter(s.id)}
+            dot={s.color}
           >
-            {SPACES[slug].name}
+            {s.name}
           </FilterChip>
         ))}
         <span className="ml-auto text-[13px]" style={{ color: 'var(--v2-text-2)' }}>
-          <strong style={{ color: 'var(--v2-text)' }}>{monthItems.filter((i) => i.kind === 'evento').length}</strong>{' '}
-          eventos ·{' '}
+          <strong style={{ color: 'var(--v2-text)' }}>{monthEvents.length}</strong> eventos ·{' '}
           <strong style={{ color: 'var(--v2-text)' }}>{brl(monthRevenue)}</strong> no mês
         </span>
       </div>
 
-      {/* ── Visão de mês ──────────────────────────────────────────────────── */}
-      {view === 'mes' ? (
+      {loading ? (
+        <Skeleton className="h-[520px] w-full" />
+      ) : view === 'mes' ? (
         <div className="v2-card overflow-hidden">
           <div className="grid grid-cols-7 border-b" style={{ borderColor: 'var(--v2-line)' }}>
             {WEEKDAYS.map((d) => (
@@ -218,17 +190,17 @@ export default function AgendaPage() {
               return (
                 <div
                   key={idx}
-                  className="group relative min-h-[104px] border-b border-r p-1.5 sm:min-h-[118px]"
+                  className="relative min-h-[104px] border-b border-r p-1.5 sm:min-h-[118px]"
                   style={{
                     borderColor: 'var(--v2-line)',
                     background: inMonth ? 'var(--v2-surface)' : 'var(--v2-surface-2)',
                   }}
                 >
-                  <div className="mb-1 flex items-center justify-between">
+                  <div className="mb-1">
                     <span
                       className={cn(
                         'v2-tabnum flex h-6 w-6 items-center justify-center rounded-full text-[12.5px]',
-                        isToday ? 'font-bold text-white' : 'font-medium',
+                        isToday ? 'font-bold' : 'font-medium',
                       )}
                       style={{
                         background: isToday ? 'var(--v2-accent)' : 'transparent',
@@ -237,30 +209,23 @@ export default function AgendaPage() {
                     >
                       {format(day, 'd')}
                     </span>
-                    <button
-                      type="button"
-                      className="hidden h-5 w-5 items-center justify-center rounded transition-colors group-hover:flex hover:bg-[var(--v2-surface-3)]"
-                      aria-label={`Adicionar em ${format(day, 'dd/MM')}`}
-                    >
-                      <Plus className="h-3.5 w-3.5" style={{ color: 'var(--v2-text-3)' }} />
-                    </button>
                   </div>
 
                   <div className="space-y-1">
                     {dayItems.slice(0, 3).map((item) => {
-                      const c = SPACES[item.space].color
                       const st = KIND_STYLE[item.kind]
                       return (
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => open(item)}
+                          onClick={() => item.eventId && setOpenId(item.eventId)}
+                          disabled={!item.eventId}
                           title={`${item.title} — ${item.subtitle}`}
-                          className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-opacity hover:opacity-80"
+                          className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-opacity hover:opacity-80 disabled:cursor-default"
                           style={{
-                            background: st.filled ? c : SPACES[item.space].soft,
-                            color: st.filled ? '#fff' : c,
-                            border: st.dashed ? `1px dashed ${c}` : '1px solid transparent',
+                            background: st.filled ? item.space.color : item.space.soft,
+                            color: st.filled ? '#fff' : item.space.color,
+                            border: st.dashed ? `1px dashed ${item.space.color}` : '1px solid transparent',
                           }}
                         >
                           <span className="hidden sm:inline">
@@ -282,21 +247,17 @@ export default function AgendaPage() {
           </div>
         </div>
       ) : (
-        /* ── Visão de lista ─────────────────────────────────────────────── */
         <div className="v2-card divide-y overflow-hidden" style={{ borderColor: 'var(--v2-line)' }}>
-          {monthItems.length === 0 && (
-            <p className="px-4 py-12 text-center text-[13.5px]" style={{ color: 'var(--v2-text-3)' }}>
-              Nenhum compromisso neste mês.
-            </p>
-          )}
-          {monthItems.map((item) => {
-            const ev = EVENTS.find((e) => e.id === item.eventId)
-            return (
+          {monthItems.length === 0 ? (
+            <EmptyState title="Nenhum compromisso neste mês" />
+          ) : (
+            monthItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => open(item)}
-                className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-[var(--v2-surface-2)]"
+                onClick={() => item.eventId && setOpenId(item.eventId)}
+                disabled={!item.eventId}
+                className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-[var(--v2-surface-2)] disabled:cursor-default"
               >
                 <div className="w-24 shrink-0">
                   <p className="v2-cap text-[12.5px] font-semibold" style={{ color: 'var(--v2-text)' }}>
@@ -306,30 +267,41 @@ export default function AgendaPage() {
                     {format(item.start, 'HH:mm')}
                   </p>
                 </div>
-                <span className="h-9 w-[3px] shrink-0 rounded-full" style={{ background: SPACES[item.space].color }} />
+                <span className="h-9 w-[3px] shrink-0 rounded-full" style={{ background: item.space.color }} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-medium" style={{ color: 'var(--v2-text)' }}>
                     {item.title}
                   </p>
                   <p className="flex items-center gap-1.5 truncate text-[12.5px]" style={{ color: 'var(--v2-text-3)' }}>
                     <SpaceDot space={item.space} />
-                    {KIND_STYLE[item.kind].label} · {item.subtitle}
+                    {KIND_STYLE[item.kind].label}
+                    {item.subtitle ? ` · ${item.subtitle}` : ''}
                   </p>
                 </div>
-                {ev && <PaymentPill status={ev.payment} compact />}
+                {item.value != null && (
+                  <span className="v2-tabnum shrink-0 text-[13px] font-semibold" style={{ color: 'var(--v2-text)' }}>
+                    {brl(item.value)}
+                  </span>
+                )}
               </button>
-            )
-          })}
+            ))
+          )}
         </div>
       )}
 
       {/* ── Legenda ───────────────────────────────────────────────────────── */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
+      <div
+        className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-[12px]"
+        style={{ color: 'var(--v2-text-3)' }}
+      >
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-5 rounded" style={{ background: 'var(--v2-text-3)' }} /> Evento confirmado
+          <span className="h-3 w-5 rounded" style={{ background: 'var(--v2-text-3)' }} /> Evento
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-5 rounded border" style={{ borderColor: 'var(--v2-text-3)', background: 'var(--v2-surface-2)' }} />{' '}
+          <span
+            className="h-3 w-5 rounded border"
+            style={{ borderColor: 'var(--v2-text-3)', background: 'var(--v2-surface-2)' }}
+          />{' '}
           Visita / serviço
         </span>
         <span className="flex items-center gap-1.5">
@@ -339,10 +311,10 @@ export default function AgendaPage() {
           />{' '}
           Data de interesse (sem sinal)
         </span>
-        <span className="ml-auto hidden sm:block">Clique em qualquer item para abrir o painel do evento</span>
+        <span className="ml-auto hidden sm:block">Clique num evento para abrir o painel</span>
       </div>
 
-      <EventDrawer event={selected} onClose={() => setSelected(null)} />
+      <EventDrawer eventId={openId} onClose={() => setOpenId(null)} />
     </div>
   )
 }

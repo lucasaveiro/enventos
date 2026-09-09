@@ -9,7 +9,8 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { brl } from '@/lib/v2/mock'
+import { brl } from '@/lib/v2/format'
+import type { V2MonthPoint } from '@/lib/v2/types'
 
 const RECEITA = '#1B5EDB'
 const DESPESA = '#B54708'
@@ -27,15 +28,11 @@ function barPath(x: number, y: number, w: number, h: number, r = 3) {
   return `M${x},${y + h} L${x},${y + rr} Q${x},${y} ${x + rr},${y} L${x + w - rr},${y} Q${x + w},${y} ${x + w},${y + rr} L${x + w},${y + h} Z`
 }
 
-export function RevenueChart({
-  data,
-}: {
-  data: { date: Date; income: number; expense: number }[]
-}) {
+export function RevenueChart({ data }: { data: V2MonthPoint[] }) {
   const [hover, setHover] = useState<number | null>(null)
 
-  const max = Math.max(...data.flatMap((d) => [d.income, d.expense]))
-  const step = Math.ceil(max / 3 / 5000) * 5000
+  const max = Math.max(1, ...data.flatMap((d) => [d.income, d.expense]))
+  const step = Math.max(1000, Math.ceil(max / 3 / 5000) * 5000)
   const top = step * 3
   const plotH = H - PAD_T - PAD_B
   const plotW = W - PAD_L - PAD_R

@@ -5,52 +5,53 @@
 // /financeiro/calendario) e a tela de resumo abre com ONZE cartões de valor,
 // todos com o mesmo peso visual. Aqui:
 //   • três números respondem a tudo: entrou, falta entrar, está atrasado
-//   • os outros oito viram detalhe dentro da lista, não manchete
-//   • lançamentos e vencimentos são a mesma lista, com um seletor — porque são
-//     a mesma coisa vista antes ou depois da data de hoje
+//   • movimento e vencimentos são a mesma lista, com um seletor — porque são a
+//     mesma coisa vista antes ou depois de hoje
+//
+// FASE A: os três números vêm das MESMAS actions da v1 (o summary de
+// getFinancialLedger e getInstallmentsForCalendar status=overdue), então batem
+// com o /financial e com o card "Em Atraso" da versão atual.
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownRight,
   ArrowUpRight,
   AlertTriangle,
-  Plus,
   Check,
   Clock3,
+  Lock,
 } from 'lucide-react'
-import { format, isAfter, isSameMonth, subMonths } from 'date-fns'
+import { endOfMonth, format, startOfMonth, startOfYear, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import {
-  LEDGER,
-  MONTHLY,
-  SPACES,
-  EVENTS,
-  brl,
-  brlExact,
-  today,
-  type Ledger,
-} from '@/lib/v2/mock'
+import { loadFinanceTotals, loadLedger, loadMonthly, loadUpcoming } from '@/lib/v2/data'
+import { brl, brlExact } from '@/lib/v2/format'
+import type { V2Ledger, V2MonthPoint } from '@/lib/v2/types'
 import { RevenueChart } from '@/components/v2/RevenueChart'
 import { EventDrawer } from '@/components/v2/EventDrawer'
-import { FilterChip, SectionHeader, SpaceDot } from '@/components/v2/ui'
+import { EmptyState, FilterChip, SectionHeader, Skeleton } from '@/components/v2/ui'
 import { cn } from '@/lib/utils'
 
-type Period = 'mes' | '3meses' | 'tudo'
+type Period = 'mes' | '3meses' | 'ano'
 type Tab = 'movimento' | 'vencimentos'
 
 const PERIODS: { key: Period; label: string }[] = [
   { key: 'mes', label: 'Este mês' },
   { key: '3meses', label: 'Últimos 3 meses' },
-  { key: 'tudo', label: 'Tudo' },
+  { key: 'ano', label: 'Este ano' },
 ]
 
-function inPeriod(d: Date, p: Period, now: Date) {
-  if (p === 'tudo') return true
-  if (p === 'mes') return isSameMonth(d, now)
-  return isAfter(d, subMonths(now, 3))
+function rangeOf(period: Period) {
+  const now = new Date()
+  switch (period) {
+    case '3meses':
+      return { start: startOfMonth(subMonths(now, 2)), end: endOfMonth(now) }
+    case 'ano':
+      return { start: startOfYear(now), end: endOfMonth(now) }
+    default:
+      return { start: startOfMonth(now), end: endOfMonth(now) }
+  }
 }
 
-// ── Número grande ──────────────────────────────────────────────────────────
 function BigNumber({
   label,
   value,
@@ -58,6 +59,7 @@ function BigNumber({
   tone,
   active,
   onClick,
+  loading,
 }: {
   label: string
   value: string
@@ -65,20 +67,26 @@ function BigNumber({
   tone: string
   active?: boolean
   onClick?: () => void
+  loading?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={!onClick}
       className={cn('flex-1 rounded-xl p-4 text-left transition-colors', onClick && 'hover:bg-[var(--v2-surface-2)]')}
       style={{ background: active ? 'var(--v2-surface-2)' : 'transparent' }}
     >
       <p className="text-[12.5px] font-medium" style={{ color: 'var(--v2-text-2)' }}>
         {label}
       </p>
-      <p className="v2-num mt-1" style={{ color: tone }}>
-        {value}
-      </p>
+      {loading ? (
+        <Skeleton className="my-1.5 h-8 w-32" />
+      ) : (
+        <p className="v2-num mt-1" style={{ color: tone }}>
+          {value}
+        </p>
+      )}
       <p className="mt-1 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
         {detail}
       </p>
@@ -86,17 +94,16 @@ function BigNumber({
   )
 }
 
-// ── Linha de lançamento ────────────────────────────────────────────────────
-function LedgerRow({ entry, onOpenEvent }: { entry: Ledger; onOpenEvent: (id?: number) => void }) {
+function LedgerRow({ entry, onOpenEvent }: { entry: V2Ledger; onOpenEvent: (id?: number | null) => void }) {
   const income = entry.kind === 'income'
-  const now = today()
-  const late = entry.status === 'pending' && entry.date < now
+  const late = entry.status === 'overdue'
 
   return (
     <button
       type="button"
       onClick={() => onOpenEvent(entry.eventId)}
-      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[var(--v2-surface-2)]"
+      disabled={!entry.eventId}
+      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[var(--v2-surface-2)] disabled:cursor-default"
     >
       <span
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
@@ -113,9 +120,9 @@ function LedgerRow({ entry, onOpenEvent }: { entry: Ledger; onOpenEvent: (id?: n
         <span className="block truncate text-[13.5px] font-medium" style={{ color: 'var(--v2-text)' }}>
           {entry.description}
         </span>
-        <span className="flex items-center gap-1.5 truncate text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
-          {entry.space && <SpaceDot space={entry.space} />}
+        <span className="block truncate text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
           {entry.category} · {format(entry.date, "d 'de' MMM", { locale: ptBR })}
+          {entry.spaceName ? ` · ${entry.spaceName}` : ''}
         </span>
       </span>
 
@@ -130,7 +137,11 @@ function LedgerRow({ entry, onOpenEvent }: { entry: Ledger; onOpenEvent: (id?: n
           className="v2-pill mt-0.5"
           style={{
             color: late ? 'var(--v2-red)' : entry.status === 'paid' ? 'var(--v2-green)' : 'var(--v2-text-2)',
-            background: late ? 'var(--v2-red-soft)' : entry.status === 'paid' ? 'var(--v2-green-soft)' : 'var(--v2-surface-2)',
+            background: late
+              ? 'var(--v2-red-soft)'
+              : entry.status === 'paid'
+                ? 'var(--v2-green-soft)'
+                : 'var(--v2-surface-2)',
           }}
         >
           {entry.status === 'paid' ? (
@@ -153,42 +164,49 @@ function LedgerRow({ entry, onOpenEvent }: { entry: Ledger; onOpenEvent: (id?: n
 }
 
 export default function FinanceiroPage() {
-  const now = today()
   const [period, setPeriod] = useState<Period>('mes')
   const [tab, setTab] = useState<Tab>('movimento')
   const [onlyLate, setOnlyLate] = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState<(typeof EVENTS)[number] | null>(null)
+  const [openId, setOpenId] = useState<number | null>(null)
 
-  const totals = useMemo(() => {
-    const scope = LEDGER.filter((l) => inPeriod(l.date, period, now))
-    const received = scope.filter((l) => l.kind === 'income' && l.status === 'paid').reduce((s, l) => s + l.amount, 0)
-    const spent = scope.filter((l) => l.kind === 'expense' && l.status === 'paid').reduce((s, l) => s + l.amount, 0)
-    const toReceive = LEDGER.filter((l) => l.kind === 'income' && l.status === 'pending' && l.date >= now).reduce(
-      (s, l) => s + l.amount,
-      0,
-    )
-    const late = LEDGER.filter((l) => l.kind === 'income' && l.status === 'pending' && l.date < now)
-    return {
-      received,
-      spent,
-      toReceive,
-      lateTotal: late.reduce((s, l) => s + l.amount, 0),
-      lateCount: late.length,
-      scopeCount: scope.length,
-    }
-  }, [period, now])
+  const [loading, setLoading] = useState(true)
+  const [totals, setTotals] = useState({ received: 0, spent: 0, toReceive: 0, lateTotal: 0, lateCount: 0 })
+  const [ledger, setLedger] = useState<V2Ledger[]>([])
+  const [upcoming, setUpcoming] = useState<V2Ledger[]>([])
+  const [monthly, setMonthly] = useState<V2MonthPoint[]>([])
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    const range = rangeOf(period)
+    const [fin, led, up, mon] = await Promise.all([
+      loadFinanceTotals(range),
+      loadLedger(range),
+      loadUpcoming(),
+      loadMonthly(12),
+    ])
+    setTotals(fin)
+    setLedger(led)
+    setUpcoming(up)
+    setMonthly(mon)
+    setLoading(false)
+  }, [period])
+
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   const rows = useMemo(() => {
-    let list = LEDGER.filter((l) => (tab === 'movimento' ? l.status === 'paid' : l.status === 'pending'))
-    if (tab === 'movimento') list = list.filter((l) => inPeriod(l.date, period, now))
-    if (onlyLate) list = list.filter((l) => l.date < now && l.status === 'pending')
-    return list.sort((a, b) => (tab === 'movimento' ? +b.date - +a.date : +a.date - +b.date))
-  }, [tab, period, onlyLate, now])
+    if (tab === 'movimento') {
+      return ledger.filter((l) => l.status === 'paid').sort((a, b) => +b.date - +a.date)
+    }
+    const list = onlyLate ? upcoming.filter((u) => u.status === 'overdue') : upcoming
+    return [...list].sort((a, b) => +a.date - +b.date)
+  }, [tab, ledger, upcoming, onlyLate])
 
-  const openEvent = (id?: number) => {
-    const e = EVENTS.find((x) => x.id === id)
-    if (e) setSelectedEvent(e)
-  }
+  const nextDue = useMemo(
+    () => upcoming.filter((u) => u.status !== 'overdue').sort((a, b) => +a.date - +b.date).slice(0, 5),
+    [upcoming],
+  )
 
   return (
     <div className="v2-fade">
@@ -204,12 +222,16 @@ export default function FinanceiroPage() {
       </div>
 
       {/* ── Os três números que importam ──────────────────────────────────── */}
-      <div className="v2-card mb-4 flex flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0" style={{ borderColor: 'var(--v2-line)' }}>
+      <div
+        className="v2-card mb-4 flex flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0"
+        style={{ borderColor: 'var(--v2-line)' }}
+      >
         <BigNumber
           label="Entrou"
           value={brl(totals.received)}
           detail={`${brl(totals.spent)} de despesas · saldo ${brl(totals.received - totals.spent)}`}
           tone="var(--v2-text)"
+          loading={loading}
         />
         <BigNumber
           label="Falta entrar"
@@ -217,6 +239,7 @@ export default function FinanceiroPage() {
           detail="parcelas a vencer, já contratadas"
           tone="var(--v2-amber)"
           active={tab === 'vencimentos' && !onlyLate}
+          loading={loading}
           onClick={() => {
             setTab('vencimentos')
             setOnlyLate(false)
@@ -225,9 +248,10 @@ export default function FinanceiroPage() {
         <BigNumber
           label="Em atraso"
           value={brl(totals.lateTotal)}
-          detail={`${totals.lateCount} parcela${totals.lateCount === 1 ? '' : 's'} vencida${totals.lateCount === 1 ? '' : 's'} — clique para ver`}
+          detail={`${totals.lateCount} ${totals.lateCount === 1 ? 'parcela vencida' : 'parcelas vencidas'} — clique para ver`}
           tone="var(--v2-red)"
           active={onlyLate}
+          loading={loading}
           onClick={() => {
             setTab('vencimentos')
             setOnlyLate(true)
@@ -236,7 +260,6 @@ export default function FinanceiroPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        {/* ── Lista unificada ────────────────────────────────────────────── */}
         <div>
           <div className="mb-3 flex items-center gap-1 border-b" style={{ borderColor: 'var(--v2-line)' }}>
             {(
@@ -265,68 +288,44 @@ export default function FinanceiroPage() {
               <button
                 type="button"
                 onClick={() => setOnlyLate(false)}
-                className="ml-auto mb-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                className="mb-1 ml-auto rounded-full px-2.5 py-1 text-[12px] font-semibold"
                 style={{ background: 'var(--v2-red-soft)', color: 'var(--v2-red)' }}
               >
                 só atrasadas ✕
               </button>
             )}
-            <button
-              type="button"
-              className={cn('mb-1 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[12.5px] font-semibold', !onlyLate && 'ml-auto')}
-              style={{ color: 'var(--v2-accent)' }}
-            >
-              <Plus className="h-3.5 w-3.5" /> Lançar
-            </button>
           </div>
 
           <div className="v2-card divide-y" style={{ borderColor: 'var(--v2-line)' }}>
-            {rows.length === 0 ? (
-              <p className="px-4 py-12 text-center text-[13.5px]" style={{ color: 'var(--v2-text-3)' }}>
-                Nenhum lançamento neste filtro.
-              </p>
+            {loading ? (
+              <div className="space-y-2 p-3">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : rows.length === 0 ? (
+              <EmptyState
+                title="Nenhum lançamento neste filtro"
+                hint={tab === 'movimento' ? 'Tente ampliar o período.' : 'Nada a vencer no momento.'}
+              />
             ) : (
-              rows.map((r) => <LedgerRow key={r.id} entry={r} onOpenEvent={openEvent} />)
+              rows.map((r) => <LedgerRow key={r.id} entry={r} onOpenEvent={(id) => id && setOpenId(id)} />)
             )}
           </div>
         </div>
 
-        {/* ── Coluna lateral ─────────────────────────────────────────────── */}
         <div className="space-y-4">
           <div className="v2-card p-5">
-            <SectionHeader title="Receita por espaço" />
-            {(Object.keys(SPACES) as (keyof typeof SPACES)[]).map((slug) => {
-              const total = EVENTS.filter((e) => e.space === slug).reduce((s, e) => s + e.value, 0)
-              const grand = EVENTS.reduce((s, e) => s + e.value, 0) || 1
-              return (
-                <div key={slug} className="mb-3 last:mb-0">
-                  <div className="mb-1.5 flex items-center justify-between text-[13px]">
-                    <span className="flex items-center gap-1.5" style={{ color: 'var(--v2-text-2)' }}>
-                      <SpaceDot space={slug} />
-                      {SPACES[slug].name}
-                    </span>
-                    <span className="v2-tabnum font-semibold" style={{ color: 'var(--v2-text)' }}>
-                      {brl(total)}
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--v2-surface-3)' }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${(total / grand) * 100}%`, background: SPACES[slug].color }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="v2-card p-5">
-            <SectionHeader title="Próximos 30 dias" />
-            <ul className="space-y-2.5">
-              {LEDGER.filter((l) => l.status === 'pending' && l.date >= now)
-                .sort((a, b) => +a.date - +b.date)
-                .slice(0, 5)
-                .map((l) => (
+            <SectionHeader title="Próximos vencimentos" />
+            {loading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : nextDue.length === 0 ? (
+              <p className="text-[13px]" style={{ color: 'var(--v2-text-3)' }}>
+                Nada a vencer.
+              </p>
+            ) : (
+              <ul className="space-y-2.5">
+                {nextDue.map((l) => (
                   <li key={l.id} className="flex items-center gap-2.5 text-[12.5px]">
                     <span className="v2-tabnum w-11 shrink-0 font-semibold" style={{ color: 'var(--v2-text-2)' }}>
                       {format(l.date, 'dd/MM')}
@@ -343,18 +342,29 @@ export default function FinanceiroPage() {
                     </span>
                   </li>
                 ))}
-            </ul>
+              </ul>
+            )}
+          </div>
+
+          <div className="flex items-start gap-2 px-1 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Somente leitura. Para lançar receita ou despesa e dar baixa em parcela, use a versão atual.
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ── Gráfico ───────────────────────────────────────────────────────── */}
       <div className="v2-card mt-5 p-5">
         <SectionHeader title="Receita e despesa por mês" />
-        <RevenueChart data={MONTHLY} />
+        {loading || monthly.length === 0 ? (
+          <Skeleton className="h-48 w-full" />
+        ) : (
+          <RevenueChart data={monthly} />
+        )}
       </div>
 
-      <EventDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      <EventDrawer eventId={openId} onClose={() => setOpenId(null)} />
     </div>
   )
 }

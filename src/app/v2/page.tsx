@@ -6,43 +6,46 @@
 // 8h da manhã: "o que eu preciso resolver?".
 // Espelha o "Hoje" do painel de anfitrião do Airbnb: primeiro o que trava
 // dinheiro ou contrato, depois o que vem pela frente.
+//
+// FASE A: dados reais, só leitura. Cada número vem da mesma action que a v1 usa.
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   PenLine,
   AlertTriangle,
-  ClipboardCheck,
-  Send,
+  ClipboardList,
+  FileQuestion,
   ArrowRight,
   ChevronRight,
   CalendarDays,
   TrendingUp,
+  Lock,
   type LucideIcon,
 } from 'lucide-react'
-import { format, isSameDay, isSameMonth } from 'date-fns'
+import { endOfMonth, format, isSameDay, isSameMonth, startOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
-  EVENTS,
-  LEDGER,
-  AGENDA_EXTRAS,
-  SPACES,
-  brl,
-  today,
-  type V2Event,
-} from '@/lib/v2/mock'
+  loadAgenda,
+  loadEvents,
+  loadFinanceTotals,
+  loadUnscheduledTasks,
+} from '@/lib/v2/data'
+import { brl } from '@/lib/v2/format'
+import type { V2AgendaItem, V2Event } from '@/lib/v2/types'
 import { EventDrawer } from '@/components/v2/EventDrawer'
 import {
   ContractPill,
   DateBlock,
+  EmptyState,
   PaymentPill,
   Progress,
   SectionHeader,
+  Skeleton,
   SpaceDot,
   relativeDay,
 } from '@/components/v2/ui'
 
-// ── Cartão de pendência ────────────────────────────────────────────────────
 function AttentionCard({
   icon: Icon,
   value,
@@ -64,13 +67,17 @@ function AttentionCard({
     <button
       type="button"
       onClick={onClick}
-      className="v2-card v2-card-hover group flex w-full items-start gap-3 p-4 text-left"
+      disabled={!onClick}
+      className="v2-card v2-card-hover group flex w-full items-start gap-3 p-4 text-left disabled:cursor-default"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: soft }}>
         <Icon className="h-[18px] w-[18px]" style={{ color: tone }} strokeWidth={2.2} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="v2-tabnum block text-[19px] font-semibold leading-tight tracking-[-0.02em]" style={{ color: 'var(--v2-text)' }}>
+        <span
+          className="v2-tabnum block text-[19px] font-semibold leading-tight tracking-[-0.02em]"
+          style={{ color: 'var(--v2-text)' }}
+        >
           {value}
         </span>
         <span className="block text-[13px] font-medium" style={{ color: 'var(--v2-text)' }}>
@@ -80,39 +87,36 @@ function AttentionCard({
           {detail}
         </span>
       </span>
-      <ChevronRight
-        className="mt-0.5 h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5"
-        style={{ color: 'var(--v2-text-3)' }}
-      />
+      {onClick && (
+        <ChevronRight
+          className="mt-0.5 h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+          style={{ color: 'var(--v2-text-3)' }}
+        />
+      )}
     </button>
   )
 }
 
-// ── Linha de evento ────────────────────────────────────────────────────────
 function EventRow({ event, onOpen }: { event: V2Event; onOpen: () => void }) {
-  const soon = relativeDay(event.start)
   return (
     <button
       type="button"
       onClick={onOpen}
       className="group flex w-full items-center gap-3.5 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-[var(--v2-surface-2)]"
     >
-      <DateBlock date={event.start} tone={isSameDay(event.start, today()) ? 'accent' : 'neutral'} />
+      <DateBlock date={event.start} tone={isSameDay(event.start, new Date()) ? 'accent' : 'neutral'} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[14.5px] font-semibold" style={{ color: 'var(--v2-text)' }}>
           {event.title}
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12.5px]" style={{ color: 'var(--v2-text-3)' }}>
           <SpaceDot space={event.space} />
-          {SPACES[event.space].short} · {soon} · {format(event.start, 'HH:mm')} · {event.guests} pessoas
+          {event.space.short} · {relativeDay(event.start)} · {format(event.start, 'HH:mm')}
+          {event.guests != null && ` · ${event.guests} pessoas`}
         </p>
       </div>
       <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-        <ContractPill
-          status={event.contract}
-          signedBy={event.contractSignedBy}
-          totalSigners={event.contractTotalSigners}
-        />
+        <ContractPill status={event.contract} />
         <PaymentPill status={event.payment} compact />
       </div>
       <ChevronRight
@@ -124,58 +128,60 @@ function EventRow({ event, onOpen }: { event: V2Event; onOpen: () => void }) {
 }
 
 export default function HojePage() {
-  const [selected, setSelected] = useState<V2Event | null>(null)
-  const now = today()
+  const [openId, setOpenId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [events, setEvents] = useState<V2Event[]>([])
+  const [todayItems, setTodayItems] = useState<V2AgendaItem[]>([])
+  const [tasks, setTasks] = useState<Awaited<ReturnType<typeof loadUnscheduledTasks>>>([])
+  const [totals, setTotals] = useState({ received: 0, spent: 0, toReceive: 0, lateTotal: 0, lateCount: 0 })
 
-  const data = useMemo(() => {
-    const upcoming = EVENTS.filter((e) => e.start >= now).sort((a, b) => +a.start - +b.start)
+  const now = useMemo(() => new Date(), [])
 
-    const awaitingSignature = EVENTS.filter((e) => e.contract === 'sent' || e.contract === 'partial')
-
-    const overdue = EVENTS.flatMap((e) =>
-      e.installments.filter((i) => !i.paidAt && i.dueDate < now).map((i) => ({ event: e, inst: i })),
-    )
-    const overdueTotal = overdue.reduce((s, o) => s + o.inst.amount, 0)
-
-    const inspections = EVENTS.filter((e) => e.stage === 'realizado' && e.notes?.includes('Vistoria'))
-
-    const proposals = EVENTS.filter((e) => e.stage === 'proposta' || e.stage === 'visita' || e.stage === 'interesse')
-
-    const monthLedger = LEDGER.filter((l) => isSameMonth(l.date, now))
-    const received = monthLedger.filter((l) => l.kind === 'income' && l.status === 'paid').reduce((s, l) => s + l.amount, 0)
-    const toReceive = monthLedger.filter((l) => l.kind === 'income' && l.status === 'pending').reduce((s, l) => s + l.amount, 0)
-    const spent = monthLedger.filter((l) => l.kind === 'expense' && l.status === 'paid').reduce((s, l) => s + l.amount, 0)
-
-    const monthEvents = EVENTS.filter((e) => isSameMonth(e.start, now))
-
-    const todayItems = [
-      ...AGENDA_EXTRAS.filter((a) => isSameDay(a.start, now)),
-      ...EVENTS.filter((e) => isSameDay(e.start, now)).map((e) => ({
-        id: `e${e.id}`,
-        kind: 'evento' as const,
-        title: e.title,
-        subtitle: `${e.guests} convidados`,
-        space: e.space,
-        start: e.start,
-        end: e.end,
-        eventId: e.id,
-      })),
-    ].sort((a, b) => +a.start - +b.start)
-
-    return {
-      upcoming,
-      awaitingSignature,
-      overdue,
-      overdueTotal,
-      inspections,
-      proposals,
-      received,
-      toReceive,
-      spent,
-      monthEvents,
-      todayItems,
-    }
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    const monthStart = startOfMonth(now)
+    const monthEnd = endOfMonth(now)
+    const [ev, agenda, unscheduled, fin] = await Promise.all([
+      loadEvents(),
+      loadAgenda(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0), new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)),
+      loadUnscheduledTasks(),
+      loadFinanceTotals({ start: monthStart, end: monthEnd }),
+    ])
+    setEvents(ev)
+    setTodayItems(agenda)
+    setTasks(unscheduled)
+    setTotals(fin)
+    setLoading(false)
   }, [now])
+
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  const upcoming = useMemo(
+    () => events.filter((e) => e.start >= now).sort((a, b) => +a.start - +b.start),
+    [events, now],
+  )
+  const awaitingSignature = useMemo(
+    () => events.filter((e) => e.contract === 'sent' || e.contract === 'partial'),
+    [events],
+  )
+  const noContract = useMemo(
+    () => upcoming.filter((e) => e.contract === 'none' || e.contract === 'draft'),
+    [upcoming],
+  )
+  const monthEvents = useMemo(() => events.filter((e) => isSameMonth(e.start, now)), [events, now])
+  const spaces = useMemo(() => {
+    const map = new Map<number, { name: string; color: string; count: number }>()
+    for (const e of monthEvents) {
+      const cur = map.get(e.space.id) ?? { name: e.space.name, color: e.space.color, count: 0 }
+      cur.count += 1
+      map.set(e.space.id, cur)
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count)
+  }, [monthEvents])
+
+  const pendingTotal = awaitingSignature.length + totals.lateCount + tasks.length + noContract.length
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -184,14 +190,8 @@ export default function HojePage() {
     return 'Boa noite'
   })()
 
-  const openEvent = (id?: number) => {
-    const e = EVENTS.find((x) => x.id === id)
-    if (e) setSelected(e)
-  }
-
   return (
     <div className="v2-fade">
-      {/* Saudação */}
       <div className="mb-6">
         <h1 className="v2-h1">{greeting}, Lucas</h1>
         <p className="v2-cap mt-1 text-[14px]" style={{ color: 'var(--v2-text-2)' }}>
@@ -199,52 +199,54 @@ export default function HojePage() {
         </p>
       </div>
 
-      {/* ── Precisa de você ───────────────────────────────────────────────── */}
-      <SectionHeader
-        title="Precisa de você"
-        count={data.awaitingSignature.length + data.overdue.length + data.inspections.length + data.proposals.length}
-      />
+      <SectionHeader title="Precisa de você" count={loading ? undefined : pendingTotal} />
       <div className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AttentionCard
-          icon={PenLine}
-          value={String(data.awaitingSignature.length)}
-          label="Aguardando assinatura"
-          detail={data.awaitingSignature.map((e) => e.client.name.split(' ')[0]).join(', ') || 'nada pendente'}
-          tone="var(--v2-amber)"
-          soft="var(--v2-amber-soft)"
-          onClick={() => setSelected(data.awaitingSignature[0] ?? null)}
-        />
-        <AttentionCard
-          icon={AlertTriangle}
-          value={brl(data.overdueTotal)}
-          label="Parcelas em atraso"
-          detail={`${data.overdue.length} parcela${data.overdue.length === 1 ? '' : 's'} de ${new Set(data.overdue.map((o) => o.event.id)).size} evento(s)`}
-          tone="var(--v2-red)"
-          soft="var(--v2-red-soft)"
-          onClick={() => setSelected(data.overdue[0]?.event ?? null)}
-        />
-        <AttentionCard
-          icon={ClipboardCheck}
-          value={String(data.inspections.length)}
-          label="Vistoria pendente"
-          detail={data.inspections[0]?.title ?? 'nenhuma'}
-          tone="var(--v2-violet)"
-          soft="var(--v2-violet-soft)"
-          onClick={() => setSelected(data.inspections[0] ?? null)}
-        />
-        <AttentionCard
-          icon={Send}
-          value={String(data.proposals.length)}
-          label="Propostas em aberto"
-          detail="sem contrato fechado"
-          tone="var(--v2-accent)"
-          soft="var(--v2-accent-soft)"
-          onClick={() => setSelected(data.proposals[0] ?? null)}
-        />
+        {loading ? (
+          [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[88px] w-full" />)
+        ) : (
+          <>
+            <AttentionCard
+              icon={PenLine}
+              value={String(awaitingSignature.length)}
+              label="Aguardando assinatura"
+              detail={
+                awaitingSignature.map((e) => e.client?.name.split(' ')[0] ?? e.title).slice(0, 3).join(', ') ||
+                'nada pendente'
+              }
+              tone="var(--v2-amber)"
+              soft="var(--v2-amber-soft)"
+              onClick={awaitingSignature.length ? () => setOpenId(awaitingSignature[0].id) : undefined}
+            />
+            <AttentionCard
+              icon={AlertTriangle}
+              value={brl(totals.lateTotal)}
+              label="Parcelas em atraso"
+              detail={`${totals.lateCount} ${totals.lateCount === 1 ? 'parcela vencida' : 'parcelas vencidas'}`}
+              tone="var(--v2-red)"
+              soft="var(--v2-red-soft)"
+            />
+            <AttentionCard
+              icon={ClipboardList}
+              value={String(tasks.length)}
+              label="Serviços sem data"
+              detail={tasks[0] ? `${tasks[0].name} · ${tasks[0].spaceName}` : 'nenhum'}
+              tone="var(--v2-violet)"
+              soft="var(--v2-violet-soft)"
+            />
+            <AttentionCard
+              icon={FileQuestion}
+              value={String(noContract.length)}
+              label="Sem contrato fechado"
+              detail="eventos futuros sem contrato"
+              tone="var(--v2-accent)"
+              soft="var(--v2-accent-soft)"
+              onClick={noContract.length ? () => setOpenId(noContract[0].id) : undefined}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
-        {/* ── Coluna principal ───────────────────────────────────────────── */}
         <div>
           <SectionHeader
             title="Próximos eventos"
@@ -258,36 +260,41 @@ export default function HojePage() {
               </Link>
             }
           />
-          <div className="v2-card mb-8 divide-y p-1.5" style={{ borderColor: 'var(--v2-line)' }}>
-            {data.upcoming.slice(0, 6).map((e) => (
-              <EventRow key={e.id} event={e} onOpen={() => setSelected(e)} />
-            ))}
+          <div className="v2-card mb-8 p-1.5">
+            {loading ? (
+              <div className="space-y-2 p-2">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : upcoming.length === 0 ? (
+              <EmptyState title="Nenhum evento futuro" hint="Os próximos eventos aparecem aqui." />
+            ) : (
+              upcoming.slice(0, 6).map((e) => <EventRow key={e.id} event={e} onOpen={() => setOpenId(e.id)} />)
+            )}
           </div>
 
-          <SectionHeader title="Agenda de hoje" count={data.todayItems.length} />
+          <SectionHeader title="Agenda de hoje" count={loading ? undefined : todayItems.length} />
           <div className="v2-card p-1.5">
-            {data.todayItems.length === 0 ? (
-              <p className="px-3 py-8 text-center text-[13.5px]" style={{ color: 'var(--v2-text-3)' }}>
-                Nada marcado para hoje.
-              </p>
+            {loading ? (
+              <div className="space-y-2 p-2">
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : todayItems.length === 0 ? (
+              <EmptyState title="Nada marcado para hoje" />
             ) : (
-              data.todayItems.map((item) => (
+              todayItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => openEvent(item.eventId)}
-                  className="flex w-full items-center gap-3.5 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--v2-surface-2)]"
+                  onClick={() => item.eventId && setOpenId(item.eventId)}
+                  disabled={!item.eventId}
+                  className="flex w-full items-center gap-3.5 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--v2-surface-2)] disabled:cursor-default"
                 >
-                  <span
-                    className="v2-tabnum w-12 shrink-0 text-[13px] font-semibold"
-                    style={{ color: 'var(--v2-text-2)' }}
-                  >
+                  <span className="v2-tabnum w-12 shrink-0 text-[13px] font-semibold" style={{ color: 'var(--v2-text-2)' }}>
                     {format(item.start, 'HH:mm')}
                   </span>
-                  <span
-                    className="h-8 w-[3px] shrink-0 rounded-full"
-                    style={{ background: SPACES[item.space].color }}
-                  />
+                  <span className="h-8 w-[3px] shrink-0 rounded-full" style={{ background: item.space.color }} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-medium" style={{ color: 'var(--v2-text)' }}>
                       {item.title}
@@ -302,16 +309,11 @@ export default function HojePage() {
           </div>
         </div>
 
-        {/* ── Coluna lateral ─────────────────────────────────────────────── */}
         <div className="space-y-4">
           <div className="v2-card p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="v2-h2 v2-cap">{format(now, 'MMMM', { locale: ptBR })}</h2>
-              <Link
-                href="/v2/financeiro"
-                className="text-[12.5px] font-semibold"
-                style={{ color: 'var(--v2-accent)' }}
-              >
+              <Link href="/v2/financeiro" className="text-[12.5px] font-semibold" style={{ color: 'var(--v2-accent)' }}>
                 Financeiro
               </Link>
             </div>
@@ -320,11 +322,11 @@ export default function HojePage() {
               Recebido
             </p>
             <p className="v2-num mb-1" style={{ color: 'var(--v2-text)' }}>
-              {brl(data.received)}
+              {brl(totals.received)}
             </p>
-            <Progress value={(data.received / (data.received + data.toReceive || 1)) * 100} />
+            <Progress value={(totals.received / (totals.received + totals.toReceive || 1)) * 100} />
             <p className="mt-2 text-[12.5px]" style={{ color: 'var(--v2-text-2)' }}>
-              Falta receber <strong style={{ color: 'var(--v2-amber)' }}>{brl(data.toReceive)}</strong> este mês
+              Falta receber <strong style={{ color: 'var(--v2-amber)' }}>{brl(totals.toReceive)}</strong>
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3 border-t pt-4" style={{ borderColor: 'var(--v2-line)' }}>
@@ -333,40 +335,45 @@ export default function HojePage() {
                   Despesas
                 </p>
                 <p className="v2-tabnum text-[16px] font-semibold" style={{ color: 'var(--v2-text)' }}>
-                  {brl(data.spent)}
+                  {brl(totals.spent)}
                 </p>
               </div>
               <div>
                 <p className="text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
                   Saldo
                 </p>
-                <p className="v2-tabnum text-[16px] font-semibold" style={{ color: 'var(--v2-green)' }}>
-                  {brl(data.received - data.spent)}
+                <p
+                  className="v2-tabnum text-[16px] font-semibold"
+                  style={{ color: totals.received - totals.spent >= 0 ? 'var(--v2-green)' : 'var(--v2-red)' }}
+                >
+                  {brl(totals.received - totals.spent)}
                 </p>
               </div>
             </div>
           </div>
 
           <div className="v2-card p-5">
-            <h2 className="v2-h2 mb-3">Ocupação</h2>
-            {(Object.keys(SPACES) as (keyof typeof SPACES)[]).map((slug) => {
-              const count = data.monthEvents.filter((e) => e.space === slug).length
-              const total = data.monthEvents.length || 1
-              return (
-                <div key={slug} className="mb-3 last:mb-0">
+            <h2 className="v2-h2 mb-3">Eventos do mês</h2>
+            {spaces.length === 0 ? (
+              <p className="text-[13px]" style={{ color: 'var(--v2-text-3)' }}>
+                Nenhum evento neste mês.
+              </p>
+            ) : (
+              spaces.map((s) => (
+                <div key={s.name} className="mb-3 last:mb-0">
                   <div className="mb-1.5 flex items-center justify-between text-[13px]">
                     <span className="flex items-center gap-1.5" style={{ color: 'var(--v2-text-2)' }}>
-                      <SpaceDot space={slug} />
-                      {SPACES[slug].name}
+                      <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+                      {s.name}
                     </span>
                     <span className="v2-tabnum font-semibold" style={{ color: 'var(--v2-text)' }}>
-                      {count} evento{count === 1 ? '' : 's'}
+                      {s.count} evento{s.count === 1 ? '' : 's'}
                     </span>
                   </div>
-                  <Progress value={(count / total) * 100} tone={SPACES[slug].color} />
+                  <Progress value={(s.count / monthEvents.length) * 100} tone={s.color} />
                 </div>
-              )
-            })}
+              ))
+            )}
             <Link
               href="/v2/agenda"
               className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-semibold"
@@ -382,17 +389,23 @@ export default function HojePage() {
               <h2 className="v2-h2">Já contratado</h2>
             </div>
             <p className="v2-num" style={{ color: 'var(--v2-text)' }}>
-              {brl(EVENTS.filter((e) => e.start >= now).reduce((s, e) => s + e.value, 0))}
+              {brl(upcoming.reduce((s, e) => s + e.value, 0))}
             </p>
             <p className="mt-1 text-[12.5px]" style={{ color: 'var(--v2-text-2)' }}>
-              em {data.upcoming.length} eventos futuros, dos quais{' '}
-              {brl(EVENTS.filter((e) => e.start >= now).reduce((s, e) => s + e.paid, 0))} já entraram no caixa
+              em {upcoming.length} evento{upcoming.length === 1 ? '' : 's'} ainda por acontecer
             </p>
+          </div>
+
+          <div className="flex items-start gap-2 px-1 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Versão 2.0 em teste, somente leitura. Os dados são os mesmos da versão atual, em tempo real.
+            </span>
           </div>
         </div>
       </div>
 
-      <EventDrawer event={selected} onClose={() => setSelected(null)} />
+      <EventDrawer eventId={openId} onClose={() => setOpenId(null)} />
     </div>
   )
 }

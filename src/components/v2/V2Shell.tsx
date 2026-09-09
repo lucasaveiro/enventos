@@ -10,7 +10,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Home,
   CalendarDays,
@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CommandPalette } from './CommandPalette'
-import { pendingSummary } from '@/lib/v2/mock'
+import { loadPendingCount } from '@/lib/v2/data'
 
 type NavItem = { name: string; short: string; href: string; icon: LucideIcon }
 
@@ -43,10 +43,17 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   // Mesma contagem que a tela "Hoje" mostra em "Precisa de você".
-  // Dentro do componente, e não no escopo do módulo: no escopo do módulo a
-  // chamada acontece antes de mock.ts terminar de inicializar suas constantes
-  // e o render no servidor quebra com "EVENTS is not defined".
-  const pendingCount = useMemo(() => pendingSummary().total, [])
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    let alive = true
+    loadPendingCount().then((n) => {
+      if (alive) setPendingCount(n)
+    })
+    return () => {
+      alive = false
+    }
+  }, [pathname])
 
   const isActive = (href: string) => (href === '/v2' ? pathname === '/v2' : pathname.startsWith(href))
 
@@ -191,14 +198,16 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
               )}
             </button>
 
-            <button
-              type="button"
+            {/* A 2.0 ainda é somente leitura: criar evento acontece na v1. */}
+            <Link
+              href="/events"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-white transition-colors"
               style={{ background: 'var(--v2-accent)' }}
+              title="Criar evento na versão atual"
             >
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               <span className="hidden sm:inline">Novo evento</span>
-            </button>
+            </Link>
           </div>
         </header>
 

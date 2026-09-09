@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { computeEventPaid } from '@/lib/eventPaid'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -41,31 +42,11 @@ export function FinancialSummaryCard({
   const overdueInstallments = installments.filter((i) => i.status === 'overdue')
   const pendingInstallments = installments.filter((i) => i.status === 'pending')
 
-  const paidFromInstallments = paidInstallments.reduce(
-    (sum, i) => sum + (i.paidAmount ?? i.amount),
-    0
-  )
-
-  // Standalone (non-installment) income transactions that were paid.
-  // We exclude transactions already linked to an installment to avoid
-  // double counting — those are represented by the installment itself.
-  const linkedTransactionIds = new Set(
-    installments.map((i) => i.transactionId).filter((id): id is number => id != null),
-  )
-  const paidFromTransactions = transactions
-    .filter(
-      (tx) =>
-        tx.type === 'income' &&
-        tx.status === 'paid' &&
-        !linkedTransactionIds.has(tx.id),
-    )
-    .reduce((sum, tx) => sum + tx.amount, 0)
-
-  const totalPaid = paidFromInstallments + paidFromTransactions
-
-  // If no installments at all, fall back to deposit + standalone transactions
-  const effectivePaid =
-    installments.length > 0 ? totalPaid : deposit + paidFromTransactions
+  // Quanto já foi pago: regra única em src/lib/eventPaid.ts, compartilhada com
+  // a versão 2.0. Antes o cálculo estava escrito aqui e de novo no servidor
+  // (recalculateEventPaymentStatus), e os dois precisavam ser mantidos iguais
+  // na unha. O comportamento é o mesmo de antes.
+  const effectivePaid = computeEventPaid({ deposit, installments, transactions })
   const remaining = Math.max(totalValue - effectivePaid, 0)
   const overpaid = Math.max(effectivePaid - totalValue, 0)
   const progressPercent = totalValue > 0 ? Math.min((effectivePaid / totalValue) * 100, 100) : 0

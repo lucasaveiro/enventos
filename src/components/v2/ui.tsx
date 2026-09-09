@@ -1,6 +1,6 @@
 'use client'
 
-// ── Peças visuais compartilhadas do protótipo v2 ───────────────────────────
+// ── Peças visuais compartilhadas da v2 ─────────────────────────────────────
 // Pílulas de status, cabeçalho de seção e etiquetas de espaço. Tudo pequeno e
 // sem estado — a ideia é que cada tela seja composta destas peças em vez de
 // repetir markup, que é o que faz as telas atuais divergirem entre si.
@@ -8,73 +8,62 @@
 import { format, isSameDay, isTomorrow, isToday, differenceInCalendarDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { CheckCircle2, Clock, AlertTriangle, FileText, PenLine, MinusCircle } from 'lucide-react'
-import type { ContractStatus, PaymentStatus, SpaceSlug } from '@/lib/v2/mock'
-import { SPACES } from '@/lib/v2/mock'
+import type { V2ContractStatus, V2PaymentStatus, V2Space } from '@/lib/v2/types'
 import { cn } from '@/lib/utils'
 
 // ── Status de pagamento ────────────────────────────────────────────────────
-const PAYMENT: Record<PaymentStatus, { label: string; fg: string; bg: string; icon: typeof CheckCircle2 }> = {
-  paid: { label: 'Pago', fg: 'var(--v2-green)', bg: 'var(--v2-green-soft)', icon: CheckCircle2 },
-  partial: { label: 'Parcial', fg: 'var(--v2-amber)', bg: 'var(--v2-amber-soft)', icon: Clock },
-  unpaid: { label: 'Sem pagamento', fg: 'var(--v2-red)', bg: 'var(--v2-red-soft)', icon: AlertTriangle },
+const PAYMENT: Record<V2PaymentStatus, { label: string; short: string; fg: string; bg: string; icon: typeof CheckCircle2 }> = {
+  paid: { label: 'Pago', short: 'Pago', fg: 'var(--v2-green)', bg: 'var(--v2-green-soft)', icon: CheckCircle2 },
+  partial: { label: 'Parcial', short: 'Parcial', fg: 'var(--v2-amber)', bg: 'var(--v2-amber-soft)', icon: Clock },
+  unpaid: { label: 'Sem pagamento', short: 'Sem pgto.', fg: 'var(--v2-red)', bg: 'var(--v2-red-soft)', icon: AlertTriangle },
 }
 
-export function PaymentPill({ status, compact = false }: { status: PaymentStatus; compact?: boolean }) {
+export function PaymentPill({ status, compact = false }: { status: V2PaymentStatus; compact?: boolean }) {
   const s = PAYMENT[status]
   const Icon = s.icon
   return (
     <span className="v2-pill" style={{ color: s.fg, background: s.bg }}>
       <Icon className="h-3 w-3" strokeWidth={2.4} />
-      {compact ? s.label.split(' ')[0] : s.label}
+      {compact ? s.short : s.label}
     </span>
   )
 }
 
 // ── Status do contrato ─────────────────────────────────────────────────────
-const CONTRACT: Record<ContractStatus, { label: string; fg: string; bg: string; icon: typeof FileText }> = {
+const CONTRACT: Record<V2ContractStatus, { label: string; fg: string; bg: string; icon: typeof FileText }> = {
   none: { label: 'Sem contrato', fg: 'var(--v2-text-2)', bg: 'var(--v2-surface-2)', icon: MinusCircle },
   draft: { label: 'Rascunho', fg: 'var(--v2-text-2)', bg: 'var(--v2-surface-2)', icon: FileText },
   sent: { label: 'Aguardando assinatura', fg: 'var(--v2-amber)', bg: 'var(--v2-amber-soft)', icon: PenLine },
-  partial: { label: 'Assinado parcialmente', fg: 'var(--v2-amber)', bg: 'var(--v2-amber-soft)', icon: PenLine },
+  partial: { label: 'Assinado em parte', fg: 'var(--v2-amber)', bg: 'var(--v2-amber-soft)', icon: PenLine },
   signed: { label: 'Assinado', fg: 'var(--v2-green)', bg: 'var(--v2-green-soft)', icon: CheckCircle2 },
 }
 
-export function ContractPill({
-  status,
-  signedBy,
-  totalSigners,
-}: {
-  status: ContractStatus
-  signedBy?: number
-  totalSigners?: number
-}) {
+export function ContractPill({ status }: { status: V2ContractStatus }) {
   const s = CONTRACT[status]
   const Icon = s.icon
-  const showCount = (status === 'sent' || status === 'partial') && totalSigners
   return (
     <span className="v2-pill" style={{ color: s.fg, background: s.bg }}>
       <Icon className="h-3 w-3" strokeWidth={2.4} />
-      {showCount ? `Assinatura ${signedBy ?? 0}/${totalSigners}` : s.label}
+      {s.label}
     </span>
   )
 }
 
 // ── Etiqueta do espaço ─────────────────────────────────────────────────────
-export function SpaceTag({ space, dense = false }: { space: SpaceSlug; dense?: boolean }) {
-  const s = SPACES[space]
+export function SpaceTag({ space, dense = false }: { space: V2Space; dense?: boolean }) {
   return (
-    <span className="v2-pill" style={{ color: s.color, background: s.soft }}>
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />
-      {dense ? s.short : s.name}
+    <span className="v2-pill" style={{ color: space.color, background: space.soft }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: space.color }} />
+      {dense ? space.short : space.name}
     </span>
   )
 }
 
-export function SpaceDot({ space, className }: { space: SpaceSlug; className?: string }) {
+export function SpaceDot({ space, className }: { space: V2Space; className?: string }) {
   return (
     <span
       className={cn('inline-block h-2 w-2 shrink-0 rounded-full', className)}
-      style={{ background: SPACES[space].color }}
+      style={{ background: space.color }}
     />
   )
 }
@@ -141,8 +130,7 @@ export function dayLabel(date: Date): string {
 }
 
 export function timeRange(start: Date, end: Date): string {
-  const sameDay = isSameDay(start, end)
-  return sameDay
+  return isSameDay(start, end)
     ? `${format(start, 'HH:mm')} às ${format(end, 'HH:mm')}`
     : `${format(start, 'HH:mm')} às ${format(end, 'HH:mm')} do dia seguinte`
 }
@@ -189,5 +177,42 @@ export function FilterChip({
       {dot && <span className="h-2 w-2 rounded-full" style={{ background: dot }} />}
       {children}
     </button>
+  )
+}
+
+// ── Estados de carregamento e vazio ────────────────────────────────────────
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn('animate-pulse rounded-lg', className)}
+      style={{ background: 'var(--v2-surface-3)' }}
+    />
+  )
+}
+
+export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="px-4 py-12 text-center">
+      <p className="text-[14px] font-medium" style={{ color: 'var(--v2-text)' }}>
+        {title}
+      </p>
+      {hint && (
+        <p className="mt-1 text-[13px]" style={{ color: 'var(--v2-text-3)' }}>
+          {hint}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Selo de somente leitura ────────────────────────────────────────────────
+// Na Fase A a v2 não grava nada. Em vez de esconder as ações (o que faria
+// parecer que a função não existe), elas aparecem desabilitadas com o motivo,
+// e o caminho para executá-las de verdade é a v1.
+export function ReadOnlyNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
+      {children}
+    </p>
   )
 }

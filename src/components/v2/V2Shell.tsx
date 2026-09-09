@@ -45,6 +45,9 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
   // Mesma contagem que a tela "Hoje" mostra em "Precisa de você".
   const [pendingCount, setPendingCount] = useState(0)
 
+  // Uma vez por carregamento de página, e não a cada navegação: o layout não
+  // remonta na troca de rota, então [pathname] refaria três consultas a cada
+  // clique no menu sem que o número mude na prática.
   useEffect(() => {
     let alive = true
     loadPendingCount().then((n) => {
@@ -53,7 +56,7 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false
     }
-  }, [pathname])
+  }, [])
 
   const isActive = (href: string) => (href === '/v2' ? pathname === '/v2' : pathname.startsWith(href))
 

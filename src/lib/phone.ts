@@ -25,3 +25,29 @@ export function checkBrazilianPhone(phone: string | null | undefined): Brazilian
   if (digits === BR_PHONE_DIGITS) return 'ok'
   return digits > BR_PHONE_DIGITS ? 'too_long' : 'too_short'
 }
+
+/**
+ * Converte o telefone do cadastro para o formato do link wa.me: só dígitos e
+ * com código do país. Números de 10/11 dígitos (fixo ou celular brasileiro)
+ * recebem o 55 na frente; números que já vêm com o país são mantidos.
+ * Retorna null quando não há dígitos suficientes para montar o link.
+ */
+export function toWhatsAppNumber(phone: string | null | undefined): string | null {
+  const digits = (phone || '').replace(/\D/g, '')
+  if (digits.length < 10) return null
+  return digits.length <= BR_PHONE_DIGITS ? `55${digits}` : digits
+}
+
+/**
+ * Link do WhatsApp com a mensagem já preenchida (o app abre a conversa com o
+ * texto no campo de digitação — quem envia é sempre o usuário).
+ * Retorna null se o cliente não tiver telefone utilizável.
+ */
+export function whatsAppLink(
+  phone: string | null | undefined,
+  message: string,
+): string | null {
+  const number = toWhatsAppNumber(phone)
+  if (!number) return null
+  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`
+}

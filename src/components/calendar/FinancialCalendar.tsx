@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Calendar as BigCalendar, dateFnsLocalizer, Views, View } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, startOfMonth, endOfMonth, addDays, isBefore } from 'date-fns'
@@ -32,7 +33,6 @@ import {
   ExternalLink,
   Undo2,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 const locales = { 'pt-BR': ptBR }
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales })
@@ -94,9 +94,6 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
   const [selectedItem, setSelectedItem] = useState<CalendarInstallment | null>(null)
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false)
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false)
-  const [isOverdueOpen, setIsOverdueOpen] = useState(false)
-  const [overdueItems, setOverdueItems] = useState<CalendarInstallment[]>([])
-  const [overdueLoading, setOverdueLoading] = useState(false)
 
   useEffect(() => {
     if (window.innerWidth < 768) setView(Views.AGENDA)
@@ -171,26 +168,6 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
     setIsQuickViewOpen(true)
   }
 
-  // Abre a lista com TODAS as parcelas em atraso — mesmo critério do card
-  // "Em Atraso" (status overdue, sem recorte de mês). Respeita o filtro de espaço.
-  const handleOpenOverdue = useCallback(async () => {
-    setIsOverdueOpen(true)
-    setOverdueLoading(true)
-    const res = await getInstallmentsForCalendar({ status: 'overdue', spaceId: spaceFilter })
-    if (res.success && res.data) {
-      const items: CalendarInstallment[] = res.data.map((item) => ({
-        ...item,
-        start: new Date(item.dueDate),
-        end: new Date(item.dueDate),
-        dueDate: new Date(item.dueDate),
-      }))
-      setOverdueItems(items)
-    } else {
-      setOverdueItems([])
-    }
-    setOverdueLoading(false)
-  }, [spaceFilter])
-
   const statusConfig: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' }> = {
     paid: { label: 'Pago', variant: 'success' },
     pending: { label: 'Pendente', variant: 'warning' },
@@ -230,47 +207,37 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
               </div>
             </CardContent>
           </Card>
-          <Card
-            className={cn(
-              summary.overdue.count > 0 &&
-                'cursor-pointer transition-colors hover:border-red-400 hover:bg-red-500/5'
-            )}
-            role={summary.overdue.count > 0 ? 'button' : undefined}
-            tabIndex={summary.overdue.count > 0 ? 0 : undefined}
-            onClick={summary.overdue.count > 0 ? handleOpenOverdue : undefined}
-            onKeyDown={
-              summary.overdue.count > 0
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      handleOpenOverdue()
-                    }
-                  }
-                : undefined
-            }
-            title={summary.overdue.count > 0 ? 'Ver parcelas em atraso' : undefined}
-            aria-label={summary.overdue.count > 0 ? 'Ver parcelas em atraso' : undefined}
+          {/* O total em atraso e um link para a tela de cobranca, onde cada
+              parcela aparece identificada por cliente e pode ser cobrada,
+              renegociada ou marcada como paga. */}
+          <Link
+            href="/financeiro/atrasadas"
+            aria-label="Ver e cobrar as parcelas em atraso"
+            title="Ver e cobrar as parcelas em atraso"
+            className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
           >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
+            <Card className="h-full cursor-pointer transition-colors hover:border-red-400 hover:bg-red-500/5">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Em Atraso</p>
+                    <p className="text-lg font-bold text-destructive">
+                      {formatCurrency(summary.overdue.amount)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {summary.overdue.count} parcela(s)
+                      <span className="ml-1 font-medium text-red-600 underline">
+                        {summary.overdue.count > 0 ? 'cobrar' : 'ver'}
+                      </span>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Em Atraso</p>
-                  <p className="text-lg font-bold text-destructive">
-                    {formatCurrency(summary.overdue.amount)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {summary.overdue.count} parcela(s)
-                    {summary.overdue.count > 0 && (
-                      <span className="ml-1 font-medium text-red-600 underline">ver</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -492,91 +459,6 @@ export function FinancialCalendar({ spaces }: FinancialCalendarProps) {
                   Ver Evento
                 </Button>
               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Overdue List Dialog */}
-      <Dialog
-        open={isOverdueOpen}
-        onOpenChange={(open) => {
-          if (!open) setIsOverdueOpen(false)
-        }}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-              Parcelas em Atraso
-            </DialogTitle>
-            <DialogDescription>
-              {summary
-                ? `${summary.overdue.count} parcela(s) - ${formatCurrency(summary.overdue.amount)} no total`
-                : ''}
-            </DialogDescription>
-          </DialogHeader>
-
-          {overdueLoading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Carregando...</p>
-          ) : overdueItems.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma parcela em atraso.
-            </p>
-          ) : (
-            <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
-              {overdueItems.map((item) => (
-                <div key={item.id} className="rounded-lg border border-border p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {item.isTransaction
-                          ? item.title
-                          : item.isSinal
-                            ? 'Sinal'
-                            : `Parcela ${item.installmentNumber}`}
-                        {' - '}
-                        {item.clientName || item.eventTitle}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.spaceName} - venc.{' '}
-                        {format(new Date(item.dueDate), 'dd/MM/yyyy', { locale: ptBR })}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-bold text-destructive">
-                        {formatCurrency(item.amount)}
-                      </p>
-                      <Badge variant="destructive">Vencido</Badge>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    {!item.isTransaction && (
-                      <Button
-                        size="sm"
-                        className="gap-1"
-                        onClick={() => {
-                          setSelectedItem(item)
-                          setIsOverdueOpen(false)
-                          setIsMarkPaidOpen(true)
-                        }}
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        Marcar pago
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1"
-                      onClick={() => router.push(`/events/${item.eventId}`)}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Ver evento
-                    </Button>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </DialogContent>

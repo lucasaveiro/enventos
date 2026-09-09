@@ -16,6 +16,7 @@ function revalidateAll() {
   revalidatePath('/events')
   revalidatePath('/financial')
   revalidatePath('/financeiro/calendario')
+  revalidatePath('/financeiro/atrasadas')
   revalidatePath('/dashboard')
 }
 
@@ -327,6 +328,14 @@ export async function updateInstallment(
     if (data.paidAmount !== undefined) installmentUpdate.paidAmount = data.paidAmount
     if (data.paidAt !== undefined) installmentUpdate.paidAt = data.paidAt
 
+    // Renegociar o vencimento reclassifica a parcela: adiar para uma data
+    // futura tira ela da lista de atrasadas e puxar para tras marca como
+    // vencida. Parcela ja paga mantem o status.
+    if (data.dueDate !== undefined && installment.status !== 'paid') {
+      installmentUpdate.status =
+        data.dueDate < startOfDay(new Date()) ? 'overdue' : 'pending'
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.paymentInstallment.update({
         where: { id: installmentId },
@@ -579,6 +588,106 @@ export async function getInstallmentsForCalendar(filters?: {
   } catch (error) {
     console.error('Error fetching installments for calendar:', error)
     return { success: false, error: 'Failed to fetch installments' }
+  }
+}
+
+// Lista das cobrancas vencidas com o cliente identificado (nome, telefone,
+// e-mail), usada pela tela /financeiro/atrasadas. Mesmo criterio do card
+// "Em Atraso" do calendario financeiro: parcelas com status 'overdue' mais as
+// transacoes avulsas pendentes com data anterior a hoje.
+export async function getOverdueItems() {
+  await requireAuth()
+  try {
+    const todayStart = startOfDay(new Date())
+
+    const clientSelect = { select: { id: true, name: true, phone: true, email: true } }
+    const spaceSelect = { select: { id: true, name: true } }
+
+    const installments = await prisma.paymentInstallment.findMany({
+      where: { status: 'overdue' },
+      include: {
+        event: {
+          include: { client: clientSelect, space: spaceSelect },
+        },
+      },
+      orderBy: { dueDate: 'asc' },
+    })
+
+    const items: any[] = installments.map((inst) => ({
+      key: `inst-${inst.id}`,
+      kind: 'installment',
+      id: inst.id,
+      direction: 'income',
+      label: inst.isSinal ? 'Sinal' : `Parcela ${inst.installmentNumber}`,
+      installmentNumber: inst.installmentNumber,
+      isSinal: inst.isSinal,
+      amount: toNumber(inst.amount),
+      paidAmount: null,
+      paidAt: null,
+      status: inst.status,
+      dueDate: inst.dueDate,
+      paymentMethod: inst.paymentMethod,
+      notes: inst.notes,
+      eventId: inst.eventId,
+      eventTitle: inst.event.title,
+      eventStart: inst.event.start,
+      spaceId: inst.event.space.id,
+      spaceName: inst.event.space.name,
+      clientId: inst.event.client?.id ?? null,
+      clientName: inst.event.client?.name ?? null,
+      clientPhone: inst.event.client?.phone ?? null,
+      clientEmail: inst.event.client?.email ?? null,
+    }))
+
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        status: 'pending',
+        installment: { is: null },
+        date: { lt: todayStart },
+      },
+      include: {
+        event: {
+          include: { client: clientSelect, space: spaceSelect },
+        },
+      },
+      orderBy: { date: 'asc' },
+    })
+
+    for (const tx of transactions) {
+      items.push({
+        key: `tx-${tx.id}`,
+        kind: 'transaction',
+        id: tx.id,
+        direction: tx.type === 'expense' ? 'expense' : 'income',
+        label: tx.description,
+        installmentNumber: 0,
+        isSinal: false,
+        amount: toNumber(tx.amount),
+        paidAmount: null,
+        paidAt: null,
+        status: 'overdue',
+        dueDate: tx.date,
+        paymentMethod: null,
+        notes: tx.notes,
+        eventId: tx.eventId,
+        eventTitle: tx.event?.title ?? null,
+        eventStart: tx.event?.start ?? null,
+        spaceId: tx.event?.space?.id ?? null,
+        spaceName: tx.event?.space?.name ?? null,
+        clientId: tx.event?.client?.id ?? null,
+        clientName: tx.event?.client?.name ?? null,
+        clientPhone: tx.event?.client?.phone ?? null,
+        clientEmail: tx.event?.client?.email ?? null,
+      })
+    }
+
+    // Mais antigas primeiro — a ordem em que a cobranca costuma ser feita
+    items.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+
+    return { success: true, data: items }
+  } catch (error) {
+    console.error('Error fetching overdue items:', error)
+    return { success: false, error: 'Failed to fetch overdue items' }
   }
 }
 

@@ -1,0 +1,225 @@
+/* ── Tema do protótipo v2 ──────────────────────────────────────────────────
+   Escopado em .v2-root: redefine os mesmos tokens usados pelos componentes
+   atuais (Button, Card, Badge...), então eles herdam a cara nova sem precisar
+   ser reescritos. Fora de /v2 nada muda. Sem @media dark: o protótipo é claro
+   e neutro por decisão de projeto — o dark mode entra depois da aprovação. */
+
+/* Os tokens moram em .v2-vars para que camadas levadas ao <body> por portal
+   (painel lateral, busca) recebam as mesmas variáveis sem herdar o fundo
+   opaco da página. .v2-root é .v2-vars + a pintura da página. */
+.v2-root,
+.v2-vars {
+  /* Superfícies */
+  --v2-bg: #f7f7f8;
+  --v2-surface: #ffffff;
+  --v2-surface-2: #f2f3f5;
+  --v2-surface-3: #eaecef;
+
+  /* Texto */
+  --v2-text: #16181d;
+  --v2-text-2: #5c6472;
+  --v2-text-3: #8b93a1;
+
+  /* Linhas */
+  --v2-line: #e6e8ec;
+  --v2-line-2: #d5d9e0;
+
+  /* Destaque único */
+  --v2-accent: #1b5edb;
+  --v2-accent-hover: #1750ba;
+  --v2-accent-soft: #e9f0fe;
+
+  /* Semânticas */
+  --v2-green: #0e7a4f;
+  --v2-green-soft: #e4f4ec;
+  --v2-amber: #96660b;
+  --v2-amber-soft: #fdf1da;
+  --v2-red: #b42318;
+  --v2-red-soft: #fdeceb;
+  --v2-violet: #6740c4;
+  --v2-violet-soft: #efeafc;
+
+  /* Sombras discretas: a hierarquia vem da linha, não da sombra */
+  --v2-shadow: 0 1px 2px rgb(16 24 40 / 0.04);
+  --v2-shadow-md: 0 4px 14px -4px rgb(16 24 40 / 0.1), 0 2px 4px -2px rgb(16 24 40 / 0.05);
+  --v2-shadow-lg: 0 20px 40px -12px rgb(16 24 40 / 0.18);
+
+  /* ── Reescrita dos tokens do app, para reaproveitar os componentes ────── */
+  --background: var(--v2-bg);
+  --foreground: var(--v2-text);
+  --card: var(--v2-surface);
+  --card-foreground: var(--v2-text);
+  --border: var(--v2-line);
+  --border-hover: var(--v2-line-2);
+  --muted: var(--v2-surface-2);
+  --muted-foreground: var(--v2-text-2);
+  --secondary: var(--v2-surface-2);
+  --secondary-foreground: var(--v2-text);
+  --secondary-hover: var(--v2-surface-3);
+  --primary: var(--v2-accent);
+  --primary-hover: var(--v2-accent-hover);
+  --primary-foreground: #ffffff;
+  --primary-light: var(--v2-accent-soft);
+  --accent: var(--v2-accent);
+  --accent-foreground: #ffffff;
+  --ring: var(--v2-accent);
+  --input-bg: #ffffff;
+  --input-text: var(--v2-text);
+  --input-placeholder: var(--v2-text-3);
+  --input-border: var(--v2-line-2);
+  --input-focus: var(--v2-accent);
+  --success: var(--v2-green);
+  --success-light: var(--v2-green-soft);
+  --success-foreground: #0a5537;
+  --warning: var(--v2-amber);
+  --warning-light: var(--v2-amber-soft);
+  --warning-foreground: #6b4907;
+  --destructive: var(--v2-red);
+  --destructive-light: var(--v2-red-soft);
+  --destructive-foreground: #8a1b12;
+  --info: var(--v2-accent);
+  --info-light: var(--v2-accent-soft);
+  --info-foreground: #133f92;
+
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+}
+
+.v2-root {
+  background: var(--v2-bg);
+  color: var(--v2-text);
+}
+
+/* ── Tipografia ─────────────────────────────────────────────────────────── */
+.v2-h1 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  color: var(--v2-text);
+}
+.v2-h2 {
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+  color: var(--v2-text);
+}
+.v2-num {
+  font-size: 1.875rem;
+  line-height: 1.1;
+  font-weight: 650;
+  letter-spacing: -0.028em;
+  font-variant-numeric: tabular-nums;
+}
+.v2-tabnum {
+  font-variant-numeric: tabular-nums;
+}
+/* Datas em português vêm minúsculas do date-fns. `capitalize` do Tailwind
+   deixaria "Terça-Feira, 8 De Setembro"; aqui só a primeira letra sobe. */
+.v2-cap::first-letter {
+  text-transform: uppercase;
+}
+
+/* ── Superfícies ────────────────────────────────────────────────────────── */
+.v2-card {
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-line);
+  border-radius: 14px;
+}
+.v2-card-hover {
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.v2-card-hover:hover {
+  border-color: var(--v2-line-2);
+  box-shadow: var(--v2-shadow-md);
+}
+
+/* ── Pílulas de status ──────────────────────────────────────────────────── */
+.v2-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+}
+
+/* ── Barra de rolagem discreta ──────────────────────────────────────────── */
+.v2-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.v2-scroll::-webkit-scrollbar-thumb {
+  background: #d7dae0;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+.v2-scroll::-webkit-scrollbar-thumb:hover {
+  background: #bfc4cd;
+  background-clip: content-box;
+  border: 3px solid transparent;
+}
+.v2-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Animações ──────────────────────────────────────────────────────────── */
+@keyframes v2-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Sem fill-mode (o padrão, `none`) nas três animações de entrada — de propósito:
+   • `both` deixa um transform identidade depois de terminar, e qualquer
+     transform (mesmo identidade) faz o elemento virar containing block de
+     descendentes `position: fixed` — foi o que jogou o painel lateral para
+     dentro da coluna de conteúdo;
+   • `backwards` prende o elemento no primeiro keyframe se a timeline não roda
+     (aba em segundo plano, janela oculta), e o painel fica fora da tela.
+   Com `none`, a posição final é a posição natural do elemento: a animação
+   enfeita a entrada, mas nada depende dela para o layout ficar certo. */
+.v2-fade {
+  animation: v2-fade-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes v2-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.v2-drawer-panel {
+  animation: v2-slide-in 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes v2-backdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.v2-backdrop {
+  animation: v2-backdrop 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-fade,
+  .v2-drawer-panel,
+  .v2-backdrop {
+    animation: none;
+  }
+}

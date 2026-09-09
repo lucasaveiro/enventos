@@ -21,8 +21,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [sidebarOpen])
 
-  // Rotas sem layout (login, etc.) — renderiza apenas o conteúdo
-  if (pathname === '/login') {
+  // Rotas sem este layout — renderiza apenas o conteúdo.
+  // /v2 é o protótipo da versão 2.0: tem casca própria (V2Shell) e não deve
+  // herdar o sidebar atual. Remover o prefixo aqui desliga o protótipo inteiro.
+  if (pathname === '/login' || pathname.startsWith('/v2')) {
     return <>{children}</>
   }
 

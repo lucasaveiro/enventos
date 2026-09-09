@@ -1,10 +1,12 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { createClientSchema, updateClientSchema } from '@/lib/validations'
 
 export async function getClients() {
+  await requireAuth()
   try {
     const clients = await prisma.client.findMany({
       orderBy: {
@@ -36,6 +38,7 @@ export async function createClient(data: {
   state?: string | null
   notes?: string | null
 }) {
+  await requireAuth()
   try {
     const parsed = createClientSchema.safeParse(data)
     if (!parsed.success) {
@@ -64,6 +67,7 @@ export async function updateClient(id: number, data: {
   state?: string | null
   notes?: string | null
 }) {
+  await requireAuth()
   try {
     const parsed = updateClientSchema.safeParse(data)
     if (!parsed.success) {
@@ -83,6 +87,7 @@ export async function updateClient(id: number, data: {
 }
 
 export async function deleteClient(id: number) {
+  await requireAuth()
   try {
     await prisma.client.delete({
       where: { id }
@@ -96,6 +101,7 @@ export async function deleteClient(id: number) {
 }
 
 export async function searchClients(query: string) {
+  await requireAuth()
     try {
       const clients = await prisma.client.findMany({
         where: {

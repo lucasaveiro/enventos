@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { recalculateEventPaymentStatus } from './transactions'
 import { addMonths, startOfMonth, endOfMonth, addDays, startOfDay } from 'date-fns'
@@ -19,6 +20,7 @@ function revalidateAll() {
 }
 
 export async function getInstallmentsByEventId(eventId: number) {
+  await requireAuth()
   try {
     const installments = await prisma.paymentInstallment.findMany({
       where: { eventId },
@@ -52,6 +54,7 @@ export async function createPaymentPlan(data: {
   paymentMethod?: string
   customInstallments?: { dueDate: Date; amount: number; isSinal: boolean }[]
 }) {
+  await requireAuth()
   try {
     const parsed = createPaymentPlanSchema.safeParse(data)
     if (!parsed.success) {
@@ -170,6 +173,7 @@ export async function markInstallmentAsPaid(
     paidAt?: Date
   }
 ) {
+  await requireAuth()
   try {
     const installment = await prisma.paymentInstallment.findUnique({
       where: { id: installmentId },
@@ -250,6 +254,7 @@ export async function markInstallmentAsPaid(
 }
 
 export async function revertInstallmentPayment(installmentId: number) {
+  await requireAuth()
   try {
     const installment = await prisma.paymentInstallment.findUnique({
       where: { id: installmentId },
@@ -305,6 +310,7 @@ export async function updateInstallment(
     paidAt: Date
   }>
 ) {
+  await requireAuth()
   try {
     const installment = await prisma.paymentInstallment.findUnique({
       where: { id: installmentId },
@@ -355,6 +361,7 @@ export async function updateInstallment(
 }
 
 export async function deleteInstallment(installmentId: number) {
+  await requireAuth()
   try {
     const installment = await prisma.paymentInstallment.findUnique({
       where: { id: installmentId },
@@ -393,6 +400,7 @@ export async function addInstallment(data: {
   paymentMethod?: string
   notes?: string
 }) {
+  await requireAuth()
   try {
     // Get max installment number
     const maxInstallment = await prisma.paymentInstallment.findFirst({
@@ -429,6 +437,7 @@ export async function getInstallmentsForCalendar(filters?: {
   status?: string
   spaceId?: number
 }) {
+  await requireAuth()
   try {
     const where: any = {}
 
@@ -577,6 +586,7 @@ export async function getFinancialCalendarSummary(filters?: {
   start?: Date
   end?: Date
 }) {
+  await requireAuth()
   try {
     const now = new Date()
     const todayStart = startOfDay(now)
@@ -700,6 +710,7 @@ export async function getFinancialCalendarSummary(filters?: {
 }
 
 export async function checkOverdueInstallments() {
+  await requireAuth()
   try {
     const todayStart = startOfDay(new Date())
 

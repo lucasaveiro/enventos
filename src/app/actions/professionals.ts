@@ -1,10 +1,12 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { createProfessionalSchema, updateProfessionalSchema } from '@/lib/validations'
 
 export async function getProfessionals() {
+  await requireAuth()
   try {
     const professionals = await prisma.professional.findMany({
       orderBy: {
@@ -24,6 +26,7 @@ export async function createProfessional(data: {
   phone?: string | null
   notes?: string | null
 }) {
+  await requireAuth()
   try {
     const parsed = createProfessionalSchema.safeParse(data)
     if (!parsed.success) {
@@ -47,6 +50,7 @@ export async function updateProfessional(id: number, data: {
   phone?: string | null
   notes?: string | null
 }) {
+  await requireAuth()
   try {
     const parsed = updateProfessionalSchema.safeParse(data)
     if (!parsed.success) {
@@ -66,6 +70,7 @@ export async function updateProfessional(id: number, data: {
 }
 
 export async function deleteProfessional(id: number) {
+  await requireAuth()
   try {
     await prisma.professional.delete({
       where: { id }

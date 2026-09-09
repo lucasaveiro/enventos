@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 import { put, del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
@@ -24,6 +25,7 @@ interface SaveGeneratedContractParams {
 }
 
 export async function saveGeneratedContract(params: SaveGeneratedContractParams) {
+  await requireAuth()
   try {
     const {
       eventId,
@@ -96,6 +98,7 @@ export async function saveGeneratedContract(params: SaveGeneratedContractParams)
 }
 
 export async function getGeneratedContracts(eventId: number) {
+  await requireAuth()
   try {
     const contracts = await prisma.generatedContract.findMany({
       where: { eventId },
@@ -120,6 +123,7 @@ export async function getGeneratedContracts(eventId: number) {
 }
 
 export async function getEventDataForContract(eventId: number) {
+  await requireAuth()
   try {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -142,6 +146,7 @@ export async function getEventDataForContract(eventId: number) {
 }
 
 export async function getLatestGeneratedContractForEvent(eventId: number) {
+  await requireAuth()
   try {
     const contract = await prisma.generatedContract.findFirst({
       where: { eventId },
@@ -160,6 +165,7 @@ export async function getLatestGeneratedContractForEvent(eventId: number) {
 }
 
 export async function getGeneratedContractById(id: number) {
+  await requireAuth()
   try {
     const contract = await prisma.generatedContract.findUnique({
       where: { id },
@@ -177,6 +183,7 @@ export async function getGeneratedContractById(id: number) {
 }
 
 export async function deleteGeneratedContract(id: number) {
+  await requireAuth()
   try {
     const contract = await prisma.generatedContract.findUnique({
       where: { id },

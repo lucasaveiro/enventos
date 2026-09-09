@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { SPACES } from '@/lib/contractTemplates'
@@ -26,6 +27,7 @@ export interface InventoryItemData {
 }
 
 export async function getInventoryItems(spaceSlug?: string) {
+  await requireAuth()
   try {
     const items = await prisma.inventoryItem.findMany({
       where: spaceSlug ? { spaceSlug } : undefined,
@@ -44,6 +46,7 @@ export async function createInventoryItem(data: {
   quantity: number
   package: string | null
 }) {
+  await requireAuth()
   try {
     const parsed = itemSchema.safeParse(data)
     if (!parsed.success) {
@@ -62,6 +65,7 @@ export async function updateInventoryItem(
   id: number,
   data: { spaceSlug: string; name: string; quantity: number; package: string | null }
 ) {
+  await requireAuth()
   try {
     const parsed = itemSchema.safeParse(data)
     if (!parsed.success) {
@@ -77,6 +81,7 @@ export async function updateInventoryItem(
 }
 
 export async function deleteInventoryItem(id: number) {
+  await requireAuth()
   try {
     await prisma.inventoryItem.delete({ where: { id } })
     revalidatePath('/inventario')
@@ -112,6 +117,7 @@ const DEFAULT_ESTANCIA_ITEMS: Array<{ name: string; quantity: number; package: s
 ]
 
 export async function seedDefaultInventory(spaceSlug: string) {
+  await requireAuth()
   try {
     if (spaceSlug !== 'estancia-aveiro') {
       return { success: false as const, error: 'Itens padrão disponíveis apenas para a Estância Aveiro' }

@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { createInterestDateSchema, updateInterestDateSchema } from '@/lib/validations'
 
@@ -11,6 +12,7 @@ export async function getInterestDates(filters?: {
   startDate?: Date
   endDate?: Date
 }) {
+  await requireAuth()
   try {
     const where: any = {}
     if (filters?.clientId) where.clientId = filters.clientId
@@ -35,6 +37,7 @@ export async function getInterestDates(filters?: {
 }
 
 export async function getInterestDatesByClient(clientId: number) {
+  await requireAuth()
   try {
     const interestDates = await prisma.clientInterestDate.findMany({
       where: { clientId },
@@ -49,6 +52,7 @@ export async function getInterestDatesByClient(clientId: number) {
 }
 
 export async function getInterestDatesForCalendar() {
+  await requireAuth()
   try {
     // Only "interest" status — confirmed (turned into events) and cancelled
     // are hidden from the main calendar to avoid duplication with the event
@@ -74,6 +78,7 @@ export async function createInterestDate(data: {
   numberOfPeople?: number
   eventType?: string
 }) {
+  await requireAuth()
   try {
     const parsed = createInterestDateSchema.safeParse(data)
     if (!parsed.success) {
@@ -106,6 +111,7 @@ export async function createManyInterestDates(dates: Array<{
   date: Date
   notes?: string
 }>) {
+  await requireAuth()
   try {
     const results = await prisma.$transaction(
       dates.map((d) =>
@@ -137,6 +143,7 @@ export async function updateInterestDate(id: number, data: {
   numberOfPeople?: number
   eventType?: string
 }) {
+  await requireAuth()
   try {
     const parsed = updateInterestDateSchema.safeParse(data)
     if (!parsed.success) {
@@ -157,6 +164,7 @@ export async function updateInterestDate(id: number, data: {
 }
 
 export async function deleteInterestDate(id: number) {
+  await requireAuth()
   try {
     await prisma.clientInterestDate.delete({
       where: { id },

@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
 
@@ -11,6 +12,7 @@ function revalidateAll(eventId?: number) {
 }
 
 export async function getManualContracts(eventId: number) {
+  await requireAuth()
   try {
     const contracts = await prisma.manualContract.findMany({
       where: { eventId },
@@ -25,6 +27,7 @@ export async function getManualContracts(eventId: number) {
 }
 
 export async function deleteManualContract(id: number) {
+  await requireAuth()
   try {
     const contract = await prisma.manualContract.findUnique({
       where: { id },

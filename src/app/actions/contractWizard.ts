@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { addMonths } from 'date-fns'
 import { resolveContractSpaceSlug } from '@/lib/contractTemplates'
@@ -52,6 +53,7 @@ function revalidateAll() {
 }
 
 export async function createClosedContract(data: ClosedContractData) {
+  await requireAuth()
   try {
     // Validate required fields
     if (!data.clientName?.trim()) return { success: false, error: 'Nome do cliente é obrigatório' }
@@ -237,6 +239,7 @@ export async function createClosedContract(data: ClosedContractData) {
 }
 
 export async function getSpacesForWizard() {
+  await requireAuth()
   try {
     const spaces = await prisma.space.findMany({
       where: { active: true },
@@ -250,6 +253,7 @@ export async function getSpacesForWizard() {
 }
 
 export async function getProfessionalsForWizard() {
+  await requireAuth()
   try {
     const professionals = await prisma.professional.findMany({
       orderBy: { name: 'asc' },
@@ -262,6 +266,7 @@ export async function getProfessionalsForWizard() {
 }
 
 export async function searchClientsForWizard(query: string) {
+  await requireAuth()
   try {
     if (!query || query.length < 2) return { success: true, data: [] }
     const clients = await prisma.client.findMany({

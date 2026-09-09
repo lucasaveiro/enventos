@@ -5,6 +5,11 @@ import {
   recordLoginAttempt,
   clearLoginAttempts,
 } from "@/lib/rateLimit";
+import {
+  AUTH_COOKIE_NAME,
+  readSessionToken,
+  signSessionCookie,
+} from "@/lib/session";
 
 const SESSION_MAX_AGE_DAYS = 30;
 
@@ -60,6 +65,17 @@ export async function POST(request: NextRequest) {
     Date.now() + SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000
   );
 
+  // O cookie carrega o token assinado (HMAC) para que o middleware consiga
+  // rejeitar cookie forjado no Edge, sem banco. Assina antes de mexer no banco:
+  // se o segredo não estiver configurado, nada é gravado.
+  let cookieValue: string;
+  try {
+    cookieValue = await signSessionCookie(token, expiresAt);
+  } catch (error) {
+    console.error("Login: falha ao assinar a sessão", error);
+    return redirectAfterPost(new URL("/login?error=config", request.url));
+  }
+
   // Delete all previous sessions (single-admin app)
   await prisma.adminSession.deleteMany({});
 
@@ -69,7 +85,7 @@ export async function POST(request: NextRequest) {
   });
 
   const response = redirectAfterPost(new URL("/", request.url));
-  response.cookies.set("auth_session", token, {
+  response.cookies.set(AUTH_COOKIE_NAME, cookieValue, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
@@ -81,13 +97,17 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const token = request.cookies.get("auth_session")?.value;
+  // O cookie é assinado, então o valor bruto não é o token: extrai o token
+  // (ignorando a expiração — logout de sessão vencida também deve limpar).
+  const token = await readSessionToken(
+    request.cookies.get(AUTH_COOKIE_NAME)?.value
+  );
 
   if (token) {
     await prisma.adminSession.deleteMany({ where: { token } });
   }
 
   const response = NextResponse.json({ success: true });
-  response.cookies.delete("auth_session");
+  response.cookies.delete(AUTH_COOKIE_NAME);
   return response;
 }

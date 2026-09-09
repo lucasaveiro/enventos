@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import type { Prisma } from '@prisma/client'
 import { addDays, endOfDay, startOfDay } from 'date-fns'
@@ -61,6 +62,7 @@ function buildBaseTransactionWhere(filters?: FinancialFilters): Prisma.Transacti
 }
 
 export async function recalculateEventPaymentStatus(eventId: number) {
+  await requireAuth()
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { totalValue: true, deposit: true, category: true },
@@ -119,6 +121,7 @@ export async function recalculateEventPaymentStatus(eventId: number) {
 }
 
 export async function getTransactions(start?: Date, end?: Date) {
+  await requireAuth()
   try {
     const where = buildBaseTransactionWhere({ start, end })
     const transactions = await prisma.transaction.findMany({
@@ -162,6 +165,7 @@ export async function getTransactions(start?: Date, end?: Date) {
 }
 
 export async function getFinancialLedger(filters: FinancialFilters = {}) {
+  await requireAuth()
   try {
     const where = buildBaseTransactionWhere(filters)
     const transactions = await prisma.transaction.findMany({
@@ -230,6 +234,7 @@ export async function getFinancialLedger(filters: FinancialFilters = {}) {
 }
 
 export async function getFinancialForecastSummary(start: Date, end: Date) {
+  await requireAuth()
   try {
     const where: Prisma.TransactionWhereInput = {
       status: 'pending',
@@ -276,6 +281,7 @@ export async function getFinancialForecastSummary(start: Date, end: Date) {
 }
 
 export async function getFinancialCalendarItems(start?: Date, end?: Date) {
+  await requireAuth()
   try {
     const where: Prisma.TransactionWhereInput = {
       status: 'pending',
@@ -331,6 +337,7 @@ export async function getFinancialCalendarItems(start?: Date, end?: Date) {
 
 // Get all financial data including events and transactions
 export async function getAllFinancialData(start?: Date, end?: Date) {
+  await requireAuth()
   try {
     const eventWhere: Prisma.EventWhereInput = { category: 'event' }
     const transactionWhere: Prisma.TransactionWhereInput = buildBaseTransactionWhere({ start, end })
@@ -428,6 +435,7 @@ export async function getAllFinancialData(start?: Date, end?: Date) {
 
 // Get comprehensive financial summary including event balances + transaction status
 export async function getFinancialSummary(start?: Date, end?: Date) {
+  await requireAuth()
   try {
     const eventWhere: Prisma.EventWhereInput = { category: 'event' }
     const transactionWhere: Prisma.TransactionWhereInput = {}
@@ -605,6 +613,7 @@ export async function getFinancialSummary(start?: Date, end?: Date) {
 }
 
 export async function getTransactionsSummary(start?: Date, end?: Date) {
+  await requireAuth()
   try {
     const where = buildBaseTransactionWhere({ start, end, status: 'paid' })
     const transactions = await prisma.transaction.findMany({
@@ -671,6 +680,7 @@ export async function createTransaction(data: {
   eventId?: number | null
   serviceTaskId?: number | null
 }) {
+  await requireAuth()
   try {
     const parsed = createTransactionSchema.safeParse(data)
     if (!parsed.success) {
@@ -725,6 +735,7 @@ export async function updateTransaction(
     serviceTaskId?: number | null
   }>
 ) {
+  await requireAuth()
   try {
     const parsed = updateTransactionSchema.safeParse(data)
     if (!parsed.success) {
@@ -782,6 +793,7 @@ export async function updateTransaction(
 }
 
 export async function updateTransactionStatus(id: number, status: TransactionStatus) {
+  await requireAuth()
   try {
     const existingTransaction = await prisma.transaction.findUnique({
       where: { id },
@@ -817,6 +829,7 @@ export async function updateTransactionStatus(id: number, status: TransactionSta
 }
 
 export async function deleteTransaction(id: number) {
+  await requireAuth()
   try {
     const existingTransaction = await prisma.transaction.findUnique({
       where: { id },
@@ -845,6 +858,7 @@ export async function deleteTransaction(id: number) {
 // ── Transactions by Event ────────────────────────────────────────────────────
 
 export async function getTransactionsByEventId(eventId: number) {
+  await requireAuth()
   try {
     const transactions = await prisma.transaction.findMany({
       where: {
@@ -869,6 +883,7 @@ export async function getTransactionsByEventId(eventId: number) {
 // ── Unlinked Transactions (no event associated) ──────────────────────────────
 
 export async function getUnlinkedTransactions() {
+  await requireAuth()
   try {
     const transactions = await prisma.transaction.findMany({
       where: { eventId: null },

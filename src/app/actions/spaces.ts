@@ -1,10 +1,12 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { createSpaceSchema, updateSpaceSchema } from '@/lib/validations'
 
 export async function getSpaces() {
+  await requireAuth()
   try {
     const spaces = await prisma.space.findMany({
       orderBy: { name: 'asc' }
@@ -17,6 +19,7 @@ export async function getSpaces() {
 }
 
 export async function createSpace(data: { name: string; address?: string; active?: boolean }) {
+  await requireAuth()
   try {
     const parsed = createSpaceSchema.safeParse(data)
     if (!parsed.success) {
@@ -39,6 +42,7 @@ export async function createSpace(data: { name: string; address?: string; active
 }
 
 export async function updateSpace(id: number, data: { name?: string; address?: string; active?: boolean }) {
+  await requireAuth()
   try {
     const parsed = updateSpaceSchema.safeParse(data)
     if (!parsed.success) {
@@ -58,6 +62,7 @@ export async function updateSpace(id: number, data: { name?: string; address?: s
 }
 
 export async function deleteSpace(id: number) {
+  await requireAuth()
   try {
     // Soft delete by setting active to false, or hard delete?
     // Let's hard delete for now, or check if it has relations.

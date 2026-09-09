@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import * as clicksign from '@/lib/clicksign'
 import { SPACES, resolveContractSpaceSlug } from '@/lib/contractTemplates'
@@ -39,6 +40,7 @@ interface SendContractParams {
 }
 
 export async function sendContractToClicksign(params: SendContractParams) {
+  await requireAuth()
   // Verifica se o evento existe
   const event = await prisma.event.findUnique({ where: { id: params.eventId } })
   if (!event) return { success: false, error: 'Evento não encontrado' }
@@ -204,6 +206,7 @@ export async function sendContractToClicksign(params: SendContractParams) {
 // ── Cancelar contrato no Clicksign ──────────────────────────────────────────
 
 export async function cancelContractSignature(eventId: number) {
+  await requireAuth()
   try {
     const signature = await prisma.contractSignature.findFirst({
       where: {
@@ -255,6 +258,7 @@ export async function cancelContractSignature(eventId: number) {
 // ── Reenviar link de assinatura (sem cancelar/recriar) ──────────────────────
 
 export async function resendSignatureLink(eventId: number) {
+  await requireAuth()
   try {
     const signature = await prisma.contractSignature.findFirst({
       where: {
@@ -375,6 +379,7 @@ export async function resendSignatureLink(eventId: number) {
 // a signatário (campo `signature` presente = assinou) e, de quebra, reconciliamos
 // o status local quando ele ficou defasado (ex.: webhook `close` perdido).
 export async function getSignatureProgress(eventId: number) {
+  await requireAuth()
   try {
     const signature = await prisma.contractSignature.findFirst({
       where: { eventId, status: { notIn: ['cancelled'] } },
@@ -468,6 +473,7 @@ export async function getSignatureProgress(eventId: number) {
 // ── Buscar assinatura do contrato ───────────────────────────────────────────
 
 export async function getContractSignature(eventId: number) {
+  await requireAuth()
   try {
     const signature = await prisma.contractSignature.findFirst({
       where: {
@@ -487,6 +493,7 @@ export async function getContractSignature(eventId: number) {
 // ── Listar eventos para vincular ao contrato ────────────────────────────────
 
 export async function getEventsForContractLinking(spaceSlug?: string) {
+  await requireAuth()
   try {
     // Quando um espaço é informado, restringe a lista APENAS aos eventos daquele
     // espaço. Isso impede vincular, por engano, um contrato de um espaço a um

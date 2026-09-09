@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { validateSession } from '@/lib/auth'
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!(await validateSession())) {
+    return NextResponse.json({ error: 'Nao autenticado' }, { status: 401 })
+  }
+
   try {
     const { id } = await params
     const contractId = Number(id)
@@ -22,7 +27,7 @@ export async function GET(
       return NextResponse.json({ error: 'Contrato nao encontrado' }, { status: 404 })
     }
 
-    // Proxy the blob — this route is auth-protected by middleware
+    // Proxy the blob — sessao ja validada acima (middleware + AdminSession)
     const blobResponse = await fetch(contract.fileUrl)
     if (!blobResponse.ok) {
       return NextResponse.json({ error: 'Arquivo indisponivel' }, { status: 502 })

@@ -1,10 +1,12 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { createServiceTaskSchema, updateServiceTaskSchema } from '@/lib/validations'
 
 export async function getServiceTypes() {
+  await requireAuth()
   try {
     const types = await prisma.serviceType.findMany()
     return { success: true, data: types }
@@ -15,6 +17,7 @@ export async function getServiceTypes() {
 }
 
 export async function getServiceTasks(start?: Date, end?: Date) {
+  await requireAuth()
   try {
     const where: any = {
       start: { not: null }, // Exclude unscheduled (pending) tasks
@@ -46,6 +49,7 @@ export async function getServiceTasks(start?: Date, end?: Date) {
 }
 
 export async function getPendingServiceTasks() {
+  await requireAuth()
   try {
     const tasks = await prisma.serviceTask.findMany({
       where: {
@@ -77,6 +81,7 @@ export async function createServiceTask(data: {
   serviceTypeId: number
   eventId?: number | null
 }) {
+  await requireAuth()
   try {
     const parsed = createServiceTaskSchema.safeParse(data)
     if (!parsed.success) {
@@ -108,6 +113,7 @@ export async function updateServiceTask(
     eventId?: number | null
   }
 ) {
+  await requireAuth()
   try {
     const parsed = updateServiceTaskSchema.safeParse(data)
     if (!parsed.success) {
@@ -128,6 +134,7 @@ export async function updateServiceTask(
 }
 
 export async function updateServiceTaskStatus(id: number, status: string) {
+  await requireAuth()
   try {
     const task = await prisma.serviceTask.update({
       where: { id },

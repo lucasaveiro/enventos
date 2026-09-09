@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 import { del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
 import { startOfDay, endOfDay } from 'date-fns'
@@ -39,6 +40,7 @@ export async function getEvents(
   end?: Date,
   options?: { categories?: EventCategory[] }
 ) {
+  await requireAuth()
   try {
     const where: any = {}
     if (start && end) {
@@ -97,6 +99,7 @@ export async function createEvent(data: {
   clientId?: number | null
   professionalIds?: number[]
 }) {
+  await requireAuth()
   try {
     const parsed = createEventSchema.safeParse(data)
     if (!parsed.success) {
@@ -155,6 +158,7 @@ export async function updateEvent(id: number, data: Partial<{
     clientId?: number | null
     professionalIds?: number[]
 }>) {
+  await requireAuth()
     try {
         const parsed = updateEventSchema.safeParse(data)
         if (!parsed.success) {
@@ -211,6 +215,7 @@ export async function updateEvent(id: number, data: Partial<{
 }
 
 export async function getEventById(id: number) {
+  await requireAuth()
   try {
     const event = await prisma.event.findUnique({
       where: { id },
@@ -277,6 +282,7 @@ export async function getEventsForList(filters?: {
   startDate?: Date
   endDate?: Date
 }) {
+  await requireAuth()
   try {
     const where: any = { category: 'event' }
 
@@ -347,6 +353,7 @@ export async function getSpaceOccupationByMonth(
   year: number,
   monthZeroIndexed: number,
 ) {
+  await requireAuth()
   try {
     const start = new Date(year, monthZeroIndexed, 1, 0, 0, 0, 0)
     const end = new Date(year, monthZeroIndexed + 1, 0, 23, 59, 59, 999)
@@ -394,6 +401,7 @@ export async function getSpaceOccupationByMonth(
 }
 
 export async function deleteEvent(id: number) {
+  await requireAuth()
   try {
     // Trava de segurança: evento com contrato (gerado, anexado manualmente ou
     // com assinatura não-cancelada no Clicksign) não pode ser excluído — a

@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { validateSession } from '@/lib/auth'
 import { put } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
 
 export async function POST(request: NextRequest) {
+  if (!(await validateSession())) {
+    return NextResponse.json(
+      { success: false, error: 'Nao autenticado' },
+      { status: 401 }
+    )
+  }
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null

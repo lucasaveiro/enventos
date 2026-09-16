@@ -11,6 +11,9 @@
 // aplica a mudança de process.env.TZ imediatamente às operações de Date.
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const before = new Date().getTimezoneOffset()
     process.env.TZ = 'America/Sao_Paulo'
+    // (diagnóstico temporário)
+    console.log('[tz] register(): offset antes', before, 'depois', new Date().getTimezoneOffset(), 'TZ=', process.env.TZ)
   }
 }

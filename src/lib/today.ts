@@ -14,6 +14,13 @@
 
 const TZ = 'America/Sao_Paulo'
 
+// (diagnóstico temporário) o processo já está no fuso do negócio?
+if (typeof process !== 'undefined' && process.env.NEXT_RUNTIME === 'nodejs') {
+  const before = new Date().getTimezoneOffset()
+  if (process.env.TZ !== TZ) process.env.TZ = TZ
+  console.log('[tz] today.ts: offset antes', before, 'depois', new Date().getTimezoneOffset(), 'TZ=', process.env.TZ)
+}
+
 /** Deslocamento do fuso (em ms) no instante dado — hoje sempre -3h, mas medido. */
 function offsetMs(date: Date): number {
   const dtf = new Intl.DateTimeFormat('en-US', {

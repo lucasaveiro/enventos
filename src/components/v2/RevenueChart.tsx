@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { brl } from '@/lib/v2/format'
+import { brl, monthFromKey } from '@/lib/v2/format'
 import type { V2MonthPoint } from '@/lib/v2/types'
 
 const RECEITA = '#1B5EDB'
@@ -111,7 +111,7 @@ export function RevenueChart({ data }: { data: V2MonthPoint[] }) {
                 fill={isLast ? 'var(--v2-text)' : 'var(--v2-text-3)'}
                 fontWeight={isLast ? 600 : 400}
               >
-                {format(d.date, 'MMM', { locale: ptBR }).replace('.', '')}
+                {format(monthFromKey(d.month), 'MMM', { locale: ptBR }).replace('.', '')}
               </text>
             </g>
           )
@@ -128,7 +128,7 @@ export function RevenueChart({ data }: { data: V2MonthPoint[] }) {
         ) : (
           <>
             <strong className="v2-cap" style={{ color: 'var(--v2-text)' }}>
-              {format(data[hover].date, 'MMMM yyyy', { locale: ptBR })}
+              {format(monthFromKey(data[hover].month), 'MMMM yyyy', { locale: ptBR })}
             </strong>{' '}
             — receita <strong style={{ color: RECEITA }}>{brl(data[hover].income)}</strong>, despesa{' '}
             <strong style={{ color: DESPESA }}>{brl(data[hover].expense)}</strong>, saldo{' '}

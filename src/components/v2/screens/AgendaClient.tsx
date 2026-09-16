@@ -9,7 +9,9 @@
 //      na cabeça de quem opera é tudo "o que acontece nesse dia"
 //
 // O mês navegado mora na URL (?mes=2026-09): trocar de mês é uma navegação, e o
-// servidor devolve a tela já com os dados do mês novo.
+// servidor devolve a tela já com os dados do mês novo. O mês chega como texto e
+// vira Date aqui, no fuso do navegador: um Date de "1º do mês" montado no
+// servidor (UTC) chegava a Brasília como 21h do último dia do mês anterior.
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -27,7 +29,7 @@ import {
   subMonths,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { brl } from '@/lib/v2/format'
+import { brl, monthFromKey } from '@/lib/v2/format'
 import type { V2AgendaItem, V2Space } from '@/lib/v2/types'
 import { EventDrawer } from '@/components/v2/EventDrawer'
 import { useEventForm } from '@/components/v2/EventFormProvider'
@@ -49,14 +51,16 @@ const KIND_STYLE: Record<V2AgendaItem['kind'], { label: string; filled: boolean;
 const monthHref = (date: Date) => `/v2/agenda?mes=${format(date, 'yyyy-MM')}`
 
 export function AgendaClient({
-  cursor,
+  month,
   items,
   spaces,
 }: {
-  cursor: Date
+  /** "yyyy-MM" — ver monthKeyOf/monthFromKey em lib/v2/format.ts. */
+  month: string
   items: V2AgendaItem[]
   spaces: V2Space[]
 }) {
+  const cursor = useMemo(() => monthFromKey(month), [month])
   const now = useMemo(() => new Date(), [])
   const { novoEvento } = useEventForm()
   const [view, setView] = useState<'mes' | 'lista'>('mes')

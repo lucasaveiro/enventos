@@ -95,4 +95,5 @@ export type V2Ledger = {
   spaceName?: string | null
 }
 
-export type V2MonthPoint = { date: Date; income: number; expense: number }
+/** `month` é "yyyy-MM" (ver monthKeyOf em format.ts): um Date atravessando servidor → navegador mudava de mês. */
+export type V2MonthPoint = { month: string; income: number; expense: number }

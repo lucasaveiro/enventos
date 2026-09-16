@@ -1,4 +1,4 @@
-import { endOfMonth, startOfMonth, startOfYear, subMonths } from 'date-fns'
+import { spEndOfMonth, spParts, spStartOfMonth } from '@/lib/today'
 import { getFinanceiroScreen } from '@/lib/v2/screens'
 import { FinanceiroClient, type Period } from '@/components/v2/screens/FinanceiroClient'
 
@@ -6,15 +6,17 @@ function parsePeriod(value?: string): Period {
   return value === '3meses' || value === 'ano' ? value : 'mes'
 }
 
+/** Limites do período no calendário de São Paulo — o servidor roda em UTC. */
 function rangeOf(period: Period) {
-  const now = new Date()
+  const { year, month } = spParts()
+  const end = spEndOfMonth(year, month)
   switch (period) {
     case '3meses':
-      return { start: startOfMonth(subMonths(now, 2)), end: endOfMonth(now) }
+      return { start: spStartOfMonth(year, month - 2), end }
     case 'ano':
-      return { start: startOfYear(now), end: endOfMonth(now) }
+      return { start: spStartOfMonth(year, 0), end }
     default:
-      return { start: startOfMonth(now), end: endOfMonth(now) }
+      return { start: spStartOfMonth(year, month), end }
   }
 }
 

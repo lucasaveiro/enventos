@@ -22,7 +22,8 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { computeEventPaid } from '@/lib/eventPaid'
-import { startOfToday, endOfToday } from '@/lib/today'
+import { startOfToday, endOfToday, spParts, spStartOfMonth, spEndOfMonth } from '@/lib/today'
+import { monthKeyOf } from './format'
 import {
   categoryLabel,
   eventTypeLabel,
@@ -375,11 +376,11 @@ async function loadLedgerWithSummary(range: Range) {
 
 /** Receita x despesa por mês, para o gráfico. Só o que já foi pago. */
 async function loadMonthly(months = 12): Promise<V2MonthPoint[]> {
-  const cursor = new Date()
-  cursor.setDate(1)
-  cursor.setHours(0, 0, 0, 0)
-  cursor.setMonth(cursor.getMonth() - (months - 1))
-  const from = new Date(cursor)
+  // Meses no calendário de São Paulo: o servidor roda em UTC, e "primeiro dia
+  // do mês" pelo relógio dele é 21h do dia anterior em Brasília.
+  const today = spParts()
+  const firstMonth = today.month - (months - 1)
+  const from = spStartOfMonth(today.year, firstMonth)
 
   const rows = await prisma.transaction.findMany({
     where: { status: 'paid', date: { gte: from } },
@@ -388,9 +389,8 @@ async function loadMonthly(months = 12): Promise<V2MonthPoint[]> {
 
   const points: V2MonthPoint[] = []
   for (let i = 0; i < months; i++) {
-    const monthStart = new Date(cursor)
-    const monthEnd = new Date(cursor)
-    monthEnd.setMonth(monthEnd.getMonth() + 1)
+    const monthStart = spStartOfMonth(today.year, firstMonth + i)
+    const monthEnd = spStartOfMonth(today.year, firstMonth + i + 1)
 
     let income = 0
     let expense = 0
@@ -400,8 +400,7 @@ async function loadMonthly(months = 12): Promise<V2MonthPoint[]> {
       else income += num(t.amount)
     }
 
-    points.push({ date: monthStart, income, expense })
-    cursor.setMonth(cursor.getMonth() + 1)
+    points.push({ month: monthKeyOf(today.year, firstMonth + i), income, expense })
   }
 
   return points
@@ -439,9 +438,10 @@ function totalsFrom(
 
 export async function getHojeScreen() {
   await requireAuth()
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+  // Mês corrente no calendário de São Paulo, não no relógio do servidor (UTC).
+  const { year, month } = spParts()
+  const monthStart = spStartOfMonth(year, month)
+  const monthEnd = spEndOfMonth(year, month)
 
   const [events, todayItems, tasks, ledger, upcoming] = await Promise.all([
     loadEvents(),

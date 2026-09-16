@@ -368,7 +368,8 @@ export function HojeClient({
           <div className="flex items-start gap-2 px-1 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              Versão 2.0 em teste, somente leitura. Os dados são os mesmos da versão atual, em tempo real.
+              Versão 2.0 em teste. Eventos e clientes já se cadastram por aqui; parcelas, lançamentos e
+              contratos ainda acontecem na versão atual. Os dados são os mesmos, em tempo real.
             </span>
           </div>
         </div>

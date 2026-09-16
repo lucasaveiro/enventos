@@ -26,6 +26,7 @@ import {
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { loadEventsForSearch } from '@/app/actions/v2'
+import { useEventForm } from './EventFormProvider'
 import { brl } from '@/lib/v2/format'
 import type { V2Event } from '@/lib/v2/types'
 import { Portal } from './Portal'
@@ -36,7 +37,10 @@ type Row = {
   icon: LucideIcon
   label: string
   hint?: string
-  href: string
+  /** Destino da navegação; ausente quando a linha executa uma ação local. */
+  href?: string
+  /** Ação executada na própria v2 (abre um formulário, por exemplo). */
+  run?: () => void
   color?: string
 }
 
@@ -48,15 +52,13 @@ const NAV_ROWS: Row[] = [
   { id: 'n5', group: 'Ir para', icon: Settings2, label: 'Cadastros', href: '/v2/cadastros' },
 ]
 
-// A v2 ainda não grava: as ações de criação levam para a versão atual.
-const ACTION_ROWS: Row[] = [
-  { id: 'a1', group: 'Ações', icon: Plus, label: 'Novo evento', hint: 'abre na versão atual', href: '/events' },
-  { id: 'a2', group: 'Ações', icon: FileSignature, label: 'Novo contrato fechado', hint: 'abre na versão atual', href: '/contracts/new' },
-  { id: 'a3', group: 'Ações', icon: Wallet, label: 'Lançar receita ou despesa', hint: 'abre na versão atual', href: '/financial' },
-]
+// Criar evento já acontece na v2; contrato e lançamento ainda levam para a v1.
+const CONTRACT_ROW: Row = { id: 'a2', group: 'Ações', icon: FileSignature, label: 'Novo contrato fechado', hint: 'abre na versão atual', href: '/contracts/new' }
+const LEDGER_ROW: Row = { id: 'a3', group: 'Ações', icon: Wallet, label: 'Lançar receita ou despesa', hint: 'abre na versão atual', href: '/financial' }
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter()
+  const { novoEvento } = useEventForm()
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)
   const [events, setEvents] = useState<V2Event[]>([])
@@ -73,6 +75,19 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const rows = useMemo<Row[]>(() => {
     const term = q.trim().toLowerCase()
+
+    const actionRows: Row[] = [
+      {
+        id: 'a1',
+        group: 'Ações',
+        icon: Plus,
+        label: 'Novo evento',
+        hint: 'evento, visita ou proposta',
+        run: () => novoEvento(),
+      },
+      CONTRACT_ROW,
+      LEDGER_ROW,
+    ]
 
     const eventRows: Row[] = events.map((e) => ({
       id: `e${e.id}`,
@@ -95,11 +110,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         href: `/v2/eventos?id=${e.id}`,
       }))
 
-    const all = [...ACTION_ROWS, ...NAV_ROWS, ...eventRows, ...clientRows]
-    if (!term) return [...ACTION_ROWS, ...NAV_ROWS, ...eventRows.slice(0, 4)]
+    const all = [...actionRows, ...NAV_ROWS, ...eventRows, ...clientRows]
+    if (!term) return [...actionRows, ...NAV_ROWS, ...eventRows.slice(0, 4)]
 
     return all.filter((r) => `${r.label} ${r.hint ?? ''}`.toLowerCase().includes(term)).slice(0, 12)
-  }, [q, events])
+  }, [q, events, novoEvento])
 
   useEffect(() => {
     setCursor(0)
@@ -118,7 +133,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const go = (row: Row) => {
     onClose()
-    router.push(row.href)
+    if (row.run) row.run()
+    else if (row.href) router.push(row.href)
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {

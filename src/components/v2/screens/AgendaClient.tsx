@@ -30,6 +30,7 @@ import { ptBR } from 'date-fns/locale'
 import { brl } from '@/lib/v2/format'
 import type { V2AgendaItem, V2Space } from '@/lib/v2/types'
 import { EventDrawer } from '@/components/v2/EventDrawer'
+import { useEventForm } from '@/components/v2/EventFormProvider'
 import { EmptyState, FilterChip, SpaceDot } from '@/components/v2/ui'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +58,7 @@ export function AgendaClient({
   spaces: V2Space[]
 }) {
   const now = useMemo(() => new Date(), [])
+  const { novoEvento } = useEventForm()
   const [view, setView] = useState<'mes' | 'lista'>('mes')
   const [spaceFilter, setSpaceFilter] = useState<number | 'all'>('all')
   const [openId, setOpenId] = useState<number | null>(null)
@@ -185,50 +187,63 @@ export function AgendaClient({
                     background: inMonth ? 'var(--v2-surface)' : 'var(--v2-surface-2)',
                   }}
                 >
-                  <div className="mb-1">
-                    <span
-                      className={cn(
-                        'v2-tabnum flex h-6 w-6 items-center justify-center rounded-full text-[12.5px]',
-                        isToday ? 'font-bold' : 'font-medium',
-                      )}
-                      style={{
-                        background: isToday ? 'var(--v2-accent)' : 'transparent',
-                        color: isToday ? '#fff' : inMonth ? 'var(--v2-text)' : 'var(--v2-text-3)',
-                      }}
-                    >
-                      {format(day, 'd')}
-                    </span>
-                  </div>
+                  {/* Área vazia do dia: marcar um evento naquela data. Fica
+                      atrás dos itens (z-0) para não engolir o clique deles —
+                      botão dentro de botão não é HTML válido. */}
+                  <button
+                    type="button"
+                    onClick={() => novoEvento(day)}
+                    aria-label={`Marcar evento em ${format(day, "d 'de' MMMM", { locale: ptBR })}`}
+                    title="Marcar evento neste dia"
+                    className="absolute inset-0 z-0 transition-colors hover:bg-[var(--v2-surface-2)]"
+                  />
 
-                  <div className="space-y-1">
-                    {dayItems.slice(0, 3).map((item) => {
-                      const st = KIND_STYLE[item.kind]
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => item.eventId && setOpenId(item.eventId)}
-                          disabled={!item.eventId}
-                          title={`${item.title} — ${item.subtitle}`}
-                          className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-opacity hover:opacity-80 disabled:cursor-default"
-                          style={{
-                            background: st.filled ? item.space.color : item.space.soft,
-                            color: st.filled ? '#fff' : item.space.color,
-                            border: st.dashed ? `1px dashed ${item.space.color}` : '1px solid transparent',
-                          }}
-                        >
-                          <span className="hidden sm:inline">
-                            {item.kind === 'evento' ? format(item.start, 'HH:mm') + ' ' : ''}
-                          </span>
-                          {item.title.replace(/^(Visita|Interesse) — /, '')}
-                        </button>
-                      )
-                    })}
-                    {dayItems.length > 3 && (
-                      <p className="px-1.5 text-[11px] font-medium" style={{ color: 'var(--v2-text-3)' }}>
-                        +{dayItems.length - 3} mais
-                      </p>
-                    )}
+                  <div className="pointer-events-none relative z-10">
+                    <div className="mb-1">
+                      <span
+                        className={cn(
+                          'v2-tabnum flex h-6 w-6 items-center justify-center rounded-full text-[12.5px]',
+                          isToday ? 'font-bold' : 'font-medium',
+                        )}
+                        style={{
+                          background: isToday ? 'var(--v2-accent)' : 'transparent',
+                          color: isToday ? '#fff' : inMonth ? 'var(--v2-text)' : 'var(--v2-text-3)',
+                        }}
+                      >
+                        {format(day, 'd')}
+                      </span>
+                    </div>
+
+                    <div className="pointer-events-auto space-y-1">
+                      {dayItems.slice(0, 3).map((item) => {
+                        const st = KIND_STYLE[item.kind]
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => item.eventId && setOpenId(item.eventId)}
+                            disabled={!item.eventId}
+                            title={`${item.title} — ${item.subtitle}`}
+                            className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-opacity hover:opacity-80 disabled:cursor-default"
+                            style={{
+                              background: st.filled ? item.space.color : item.space.soft,
+                              color: st.filled ? '#fff' : item.space.color,
+                              border: st.dashed ? `1px dashed ${item.space.color}` : '1px solid transparent',
+                            }}
+                          >
+                            <span className="hidden sm:inline">
+                              {item.kind === 'evento' ? format(item.start, 'HH:mm') + ' ' : ''}
+                            </span>
+                            {item.title.replace(/^(Visita|Interesse) — /, '')}
+                          </button>
+                        )
+                      })}
+                      {dayItems.length > 3 && (
+                        <p className="px-1.5 text-[11px] font-medium" style={{ color: 'var(--v2-text-3)' }}>
+                          +{dayItems.length - 3} mais
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )

@@ -484,8 +484,22 @@ export async function getFinanceiroScreen(range: Range) {
 export async function getCadastrosScreen() {
   await requireAuth()
   const [clients, professionals, services, events, spaces] = await Promise.all([
+    // Os campos além de nome/telefone/cidade/e-mail não aparecem na tabela, mas
+    // são o que o ClientModal precisa para abrir preenchido na edição — evita
+    // uma segunda consulta a cada clique numa linha.
     prisma.client.findMany({
-      select: { id: true, name: true, phone: true, city: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        city: true,
+        email: true,
+        cpf: true,
+        rg: true,
+        address: true,
+        state: true,
+        notes: true,
+      },
       orderBy: { name: 'asc' },
     }),
     prisma.professional.findMany({

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './v2.css'
 import { V2Shell } from '@/components/v2/V2Shell'
+import { EventFormProvider } from '@/components/v2/EventFormProvider'
 import { getPendingCount } from '@/lib/v2/screens'
 
 export const metadata: Metadata = {
@@ -13,5 +14,11 @@ export default async function V2Layout({ children }: { children: React.ReactNode
   // request, e as leituras são memoizadas com cache() — então a lista de
   // eventos que alimenta a contagem é a mesma que a página já carregou.
   const pendingCount = await getPendingCount()
-  return <V2Shell pendingCount={pendingCount}>{children}</V2Shell>
+  // O provider fica por fora da casca para que o próprio V2Shell (botão "Novo
+  // evento") também consiga abrir o formulário.
+  return (
+    <EventFormProvider>
+      <V2Shell pendingCount={pendingCount}>{children}</V2Shell>
+    </EventFormProvider>
+  )
 }

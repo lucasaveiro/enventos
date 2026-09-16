@@ -6,12 +6,13 @@
 // da tela onde você já estava (agenda ou lista) — você consulta e fecha, sem
 // perder o contexto.
 //
-// FASE A: só leitura. Tudo que grava leva para a versão atual, onde a ação
-// existe de verdade. O valor exato já pago vem de loadEventDetail(), que usa a
-// mesma regra da v1 (computeEventPaid) — as duas versões nunca mostram números
-// diferentes para o mesmo evento.
+// Editar o evento acontece aqui (mesmo formulário da v1, aberto pelo contexto
+// em EventFormProvider). Parcela e contrato ainda levam para a versão atual,
+// onde a ação existe de verdade. O valor exato já pago vem de
+// loadEventDetail(), que usa a mesma regra da v1 (computeEventPaid) — as duas
+// versões nunca mostram números diferentes para o mesmo evento.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   X,
@@ -26,9 +27,11 @@ import {
   ArrowRight,
   Check,
   Lock,
+  PenLine,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { loadEventDetail } from '@/app/actions/v2'
+import { useEventForm } from './EventFormProvider'
 import { brl, brlExact } from '@/lib/v2/format'
 import type { V2Event } from '@/lib/v2/types'
 import { ContractPill, PaymentPill, Progress, Skeleton, SpaceTag, dayLabel, timeRange } from './ui'
@@ -106,6 +109,19 @@ export function EventDrawer({ eventId, onClose }: { eventId: number | null; onCl
   const [event, setEvent] = useState<V2Event | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // `version` sobe quando o formulário grava: o painel guarda estado próprio,
+  // então o router.refresh() das telas não o alcança. Se o evento sumiu (foi
+  // excluído pelo formulário), o painel se fecha.
+  const { editarEvento, version } = useEventForm()
+
+  // Numa ref, e não nas dependências: o pai passa `onClose` como closure nova a
+  // cada render, e na lista de dependências isso refaria a consulta a cada
+  // tecla digitada na busca da tela de trás.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   useEffect(() => {
     if (eventId == null) {
       setEvent(null)
@@ -116,13 +132,17 @@ export function EventDrawer({ eventId, onClose }: { eventId: number | null; onCl
     setEvent(null)
     loadEventDetail(eventId).then((data) => {
       if (!alive) return
+      if (!data && version > 0) {
+        onCloseRef.current()
+        return
+      }
       setEvent(data)
       setLoading(false)
     })
     return () => {
       alive = false
     }
-  }, [eventId])
+  }, [eventId, version])
 
   useEffect(() => {
     if (eventId == null) return
@@ -210,13 +230,24 @@ export function EventDrawer({ eventId, onClose }: { eventId: number | null; onCl
                   Sem telefone
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => event && editarEvento(event.id)}
+                disabled={!event}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium disabled:opacity-50"
+                style={{ borderColor: 'var(--v2-line-2)', color: 'var(--v2-text)' }}
+                title="Editar data, valor, cliente e profissionais"
+              >
+                <PenLine className="h-4 w-4" /> Editar
+              </button>
               <Link
                 href={`/events/${eventId}`}
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border text-[13px] font-medium"
                 style={{ borderColor: 'var(--v2-line-2)', color: 'var(--v2-text)' }}
-                title="Abrir na versão atual, onde dá para editar"
+                title="Abrir na versão atual (contrato, parcelas, serviços)"
+                aria-label="Abrir na versão atual"
               >
-                <ExternalLink className="h-4 w-4" /> Abrir na v1
+                <ExternalLink className="h-4 w-4" />
               </Link>
             </div>
           </div>
@@ -377,8 +408,8 @@ export function EventDrawer({ eventId, onClose }: { eventId: number | null; onCl
               <div className="flex items-start gap-2 px-5 py-4 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
                 <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  A versão 2.0 ainda é somente leitura. Para editar, registrar pagamento ou mexer no contrato, use
-                  &ldquo;Abrir na v1&rdquo;.
+                  Dá para editar o evento por aqui. Registrar pagamento de parcela e mexer no contrato ainda
+                  acontece na versão atual.
                 </span>
               </div>
             </>

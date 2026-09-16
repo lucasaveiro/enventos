@@ -7,14 +7,28 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Phone, MapPin, Search, Lock } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Phone, MapPin, Search, Lock, CalendarHeart, PenLine } from 'lucide-react'
 import { brl } from '@/lib/v2/format'
 import type { V2Event, V2Space } from '@/lib/v2/types'
 import { EmptyState, FilterChip, SpaceTag } from '@/components/v2/ui'
+import { ClientModal } from '@/components/forms/ClientModal'
+import { InterestDatesModal } from '@/components/forms/InterestDatesModal'
 
 type Tab = 'clientes' | 'espacos' | 'equipe' | 'servicos'
 
-type ClientRow = { id: number; name: string; phone: string | null; city: string | null; email: string | null }
+export type ClientRow = {
+  id: number
+  name: string
+  phone: string | null
+  city: string | null
+  email: string | null
+  cpf: string | null
+  rg: string | null
+  address: string | null
+  state: string | null
+  notes: string | null
+}
 type ProfRow = { id: number; name: string; type: string; phone: string | null }
 type ServiceRow = { id: number; name: string; description: string | null }
 
@@ -68,8 +82,14 @@ export function CadastrosClient({
   services: ServiceRow[]
   events: V2Event[]
 }) {
+  const router = useRouter()
   const [tab, setTab] = useState<Tab>('clientes')
   const [q, setQ] = useState('')
+
+  // Clientes e datas de interesse já se cadastram aqui, com os mesmos modais da
+  // v1. Espaços, equipe e serviços continuam mandando para a versão atual.
+  const [clientModal, setClientModal] = useState<{ open: boolean; client?: ClientRow }>({ open: false })
+  const [interestClient, setInterestClient] = useState<{ id: number; name: string } | null>(null)
 
   const term = q.trim().toLowerCase()
 
@@ -112,14 +132,25 @@ export function CadastrosClient({
             O que se cadastra uma vez e raramente muda.
           </p>
         </div>
-        <Link
-          href={V1_ROUTES[tab]}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-white"
-          style={{ background: 'var(--v2-accent)' }}
-          title="Cadastrar na versão atual"
-        >
-          <Plus className="h-4 w-4" strokeWidth={2.5} /> Adicionar
-        </Link>
+        {tab === 'clientes' ? (
+          <button
+            type="button"
+            onClick={() => setClientModal({ open: true })}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-white"
+            style={{ background: 'var(--v2-accent)' }}
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} /> Novo cliente
+          </button>
+        ) : (
+          <Link
+            href={V1_ROUTES[tab]}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-white"
+            style={{ background: 'var(--v2-accent)' }}
+            title="Cadastrar na versão atual"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} /> Adicionar
+          </Link>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -166,6 +197,7 @@ export function CadastrosClient({
                       <Head>Telefone</Head>
                       <Head>Cidade</Head>
                       <Head>E-mail</Head>
+                      <Head> </Head>
                     </>
                   )}
                   {tab === 'espacos' && (
@@ -228,6 +260,26 @@ export function CadastrosClient({
                         )}
                       </Cell>
                       <Cell>{c.email ?? '—'}</Cell>
+                      <Cell className="text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setInterestClient({ id: c.id, name: c.name })}
+                          className="mr-1 inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-medium transition-colors hover:bg-[var(--v2-surface-2)]"
+                          style={{ borderColor: 'var(--v2-line-2)', color: 'var(--v2-text-2)' }}
+                          title="Datas de interesse deste cliente"
+                        >
+                          <CalendarHeart className="h-3.5 w-3.5" /> Datas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClientModal({ open: true, client: c })}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-medium transition-colors hover:bg-[var(--v2-surface-2)]"
+                          style={{ borderColor: 'var(--v2-line-2)', color: 'var(--v2-text-2)' }}
+                          title="Editar cliente"
+                        >
+                          <PenLine className="h-3.5 w-3.5" /> Editar
+                        </button>
+                      </Cell>
                     </tr>
                   ))}
 
@@ -284,12 +336,35 @@ export function CadastrosClient({
         )}
       </div>
 
-      <div className="mt-3 flex items-start gap-2 px-1 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
-        <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>
-          Somente leitura. Cadastrar e editar continua na versão atual — o botão &ldquo;Adicionar&rdquo; leva para lá.
-        </span>
-      </div>
+      {tab !== 'clientes' && (
+        <div className="mt-3 flex items-start gap-2 px-1 text-[12px]" style={{ color: 'var(--v2-text-3)' }}>
+          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Esta aba ainda é somente leitura — o botão &ldquo;Adicionar&rdquo; leva para a versão atual.
+          </span>
+        </div>
+      )}
+
+      <ClientModal
+        isOpen={clientModal.open}
+        onClose={() => setClientModal({ open: false })}
+        initialClient={clientModal.client}
+        onSuccess={() => {
+          setClientModal({ open: false })
+          router.refresh()
+        }}
+      />
+
+      <InterestDatesModal
+        client={interestClient}
+        isOpen={interestClient !== null}
+        onClose={() => {
+          setInterestClient(null)
+          // As datas de interesse aparecem na agenda: a tela toda recarrega
+          // para refletir o que foi criado ou apagado no modal.
+          router.refresh()
+        }}
+      />
     </div>
   )
 }

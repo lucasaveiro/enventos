@@ -5,6 +5,7 @@
 // depois que a página já está na tela — uma action, uma requisição.
 
 import { requireAuth } from '@/lib/auth'
+import { getEventById } from '@/app/actions/events'
 import { getEventDetail, loadEvents } from '@/lib/v2/screens'
 import type { V2Event } from '@/lib/v2/types'
 
@@ -17,4 +18,14 @@ export async function loadEventDetail(id: number): Promise<V2Event | null> {
 export async function loadEventsForSearch(): Promise<V2Event[]> {
   await requireAuth()
   return loadEvents()
+}
+
+/**
+ * Evento no formato do banco, para preencher o EventModal ao editar.
+ * Os tipos de tela da v2 não carregam spaceId, clientId, deposit nem os
+ * profissionais — o formulário precisa deles.
+ */
+export async function loadEventForEdit(id: number) {
+  const res = await getEventById(id)
+  return res.success && 'data' in res ? res.data : null
 }

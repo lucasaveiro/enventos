@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CommandPalette } from './CommandPalette'
+import { useEventForm } from './EventFormProvider'
 
 type NavItem = { name: string; short: string; href: string; icon: LucideIcon }
 
@@ -49,6 +50,7 @@ export function V2Shell({
 }) {
   const pathname = usePathname()
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const { novoEvento } = useEventForm()
 
   const isActive = (href: string) => (href === '/v2' ? pathname === '/v2' : pathname.startsWith(href))
 
@@ -193,16 +195,16 @@ export function V2Shell({
               )}
             </button>
 
-            {/* A 2.0 ainda é somente leitura: criar evento acontece na v1. */}
-            <Link
-              href="/events"
+            <button
+              type="button"
+              onClick={() => novoEvento()}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-white transition-colors"
               style={{ background: 'var(--v2-accent)' }}
-              title="Criar evento na versão atual"
+              title="Criar evento, visita ou proposta"
             >
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               <span className="hidden sm:inline">Novo evento</span>
-            </Link>
+            </button>
           </div>
         </header>
 

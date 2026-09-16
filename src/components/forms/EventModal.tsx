@@ -453,7 +453,10 @@ export function EventModal({
     <Dialog.Root open={isOpen} onOpenChange={onClose}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-[50%] top-[50%] z-[10000] max-h-[85vh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] overflow-y-auto rounded-xl bg-[var(--card)] p-6 shadow-xl focus:outline-none border border-[var(--border)]">
+        {/* `v2-vars`: o portal do Radix renderiza fora de `.v2-root`, então sem
+            isso o modal aberto pela v2 sairia com as cores da v1. Fora de /v2 a
+            classe não tem efeito — v2.css só é carregado por aquele layout. */}
+        <Dialog.Content className="v2-vars fixed left-[50%] top-[50%] z-[10000] max-h-[85vh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] overflow-y-auto rounded-xl bg-[var(--card)] p-6 shadow-xl focus:outline-none border border-[var(--border)]">
           <div className="flex items-center justify-between mb-6">
             <Dialog.Title className="text-xl font-semibold text-[var(--foreground)]">
               {initialEvent ? 'Editar Marcação' : 'Nova Marcação'}

@@ -18,6 +18,7 @@ import {
   FileSearch,
   Settings,
   ChevronDown,
+  ArrowLeftRight,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -35,6 +36,8 @@ import { cn } from '@/lib/utils'
 // pela página de cada Evento ("Gerar Contrato"). O botão secundário "Contrato
 // em Branco (Modelo)" gera a minuta padrão sem dados do cliente, apenas para
 // o cliente conferir as cláusulas antes de fechar a locação.
+// O link "Versão 2.0", acima do rodapé, leva para a nova interface em /v2,
+// que tem casca própria (V2Shell) e devolve para cá pelo "Voltar para a v1".
 
 type NavLeaf = {
   name: string
@@ -278,6 +281,27 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             )
           })}
         </nav>
+
+        {/* Versão 2.0 — nova interface em teste, lendo os mesmos dados */}
+        <div className="px-3 pb-3">
+          <Link
+            href="/v2"
+            onClick={handleLinkClick}
+            className="flex items-center gap-3 rounded-xl border border-dashed border-white/20 px-3 py-2.5 text-sm font-medium text-white/85 transition-all duration-200 hover:bg-white/10 hover:text-white"
+            title="Nova interface, em teste. Os dados são os mesmos da versão atual."
+          >
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.05)' }}
+            >
+              <ArrowLeftRight className="h-4 w-4" style={{ color: 'var(--sidebar-text-muted)' }} aria-hidden="true" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="block">Versão 2.0</span>
+              <span className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>Nova interface, em teste</span>
+            </div>
+          </Link>
+        </div>
 
         {/* Footer */}
         <div className="p-4 mx-3 mb-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.05)' }}>

@@ -1,3 +1,4 @@
+import '@/lib/tz' // fixa o fuso do servidor antes de qualquer render (ver lib/tz.ts)
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";

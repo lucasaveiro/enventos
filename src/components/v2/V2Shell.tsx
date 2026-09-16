@@ -1,6 +1,6 @@
 'use client'
 
-// ── Casca do protótipo v2 ──────────────────────────────────────────────────
+// ── Casca da v2 ──────────────────────────────────────────────────
 // Inspirada no painel de anfitrião do Airbnb:
 //   • 5 destinos fixos, sem grupos escondidos e sem CTAs competindo na sidebar
 //   • sidebar clara e estreita (236px) — a atual tem 288px e fundo carvão
@@ -22,6 +22,7 @@ import {
   Plus,
   LogOut,
   ArrowLeftRight,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -53,6 +54,12 @@ export function V2Shell({
   const { novoEvento } = useEventForm()
 
   const isActive = (href: string) => (href === '/v2' ? pathname === '/v2' : pathname.startsWith(href))
+
+  // Mesmo logout da v1: apaga a sessão no servidor e volta para o login.
+  const sair = async () => {
+    await fetch('/api/auth/login', { method: 'DELETE' })
+    window.location.href = '/login'
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -132,17 +139,31 @@ export function V2Shell({
             <ArrowLeftRight className="h-4 w-4" style={{ color: 'var(--v2-text-3)' }} />
             Voltar para a v1
           </Link>
+          {/* O sistema tem um único login, sem nome cadastrado — por isso "Administrador". */}
           <div className="flex items-center gap-2.5 rounded-lg px-3 py-2">
             <div
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white"
               style={{ background: 'var(--v2-accent)' }}
             >
-              LA
+              <UserRound className="h-4 w-4" strokeWidth={2.2} />
             </div>
-            <span className="flex-1 truncate text-[13px] font-medium" style={{ color: 'var(--v2-text)' }}>
-              Lucas Aveiro
-            </span>
-            <LogOut className="h-4 w-4" style={{ color: 'var(--v2-text-3)' }} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium leading-tight" style={{ color: 'var(--v2-text)' }}>
+                Administrador
+              </p>
+              <p className="text-[11px] leading-tight" style={{ color: 'var(--v2-text-3)' }}>
+                versão 2.0
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={sair}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--v2-surface-2)]"
+              title="Sair"
+              aria-label="Sair do sistema"
+            >
+              <LogOut className="h-4 w-4" style={{ color: 'var(--v2-text-3)' }} />
+            </button>
           </div>
         </div>
       </aside>
@@ -181,9 +202,11 @@ export function V2Shell({
           </button>
 
           <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
+            {/* Sino: leva à seção "Precisa de você" da tela Hoje (âncora no HojeClient). */}
+            <Link
+              href="/v2#precisa-de-voce"
               className="relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--v2-surface-2)]"
+              title={pendingCount > 0 ? `${pendingCount} pendência${pendingCount === 1 ? '' : 's'} precisando de você` : 'Nada pendente'}
               aria-label="Pendências"
             >
               <Bell className="h-[18px] w-[18px]" style={{ color: 'var(--v2-text-2)' }} />
@@ -193,7 +216,7 @@ export function V2Shell({
                   style={{ background: 'var(--v2-red)', ['--tw-ring-color' as string]: 'var(--v2-surface)' }}
                 />
               )}
-            </button>
+            </Link>
 
             <button
               type="button"
@@ -204,6 +227,17 @@ export function V2Shell({
             >
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               <span className="hidden sm:inline">Novo evento</span>
+            </button>
+
+            {/* No celular a sidebar não existe, então o sair fica aqui. */}
+            <button
+              type="button"
+              onClick={sair}
+              className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--v2-surface-2)] lg:hidden"
+              title="Sair"
+              aria-label="Sair do sistema"
+            >
+              <LogOut className="h-[18px] w-[18px]" style={{ color: 'var(--v2-text-2)' }} />
             </button>
           </div>
         </header>

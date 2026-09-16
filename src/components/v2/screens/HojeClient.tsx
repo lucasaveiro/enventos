@@ -178,13 +178,14 @@ export function HojeClient({
   return (
     <div className="v2-fade">
       <div className="mb-6">
-        <h1 className="v2-h1">{greeting}, Lucas</h1>
+        <h1 className="v2-h1">{greeting}</h1>
         <p className="v2-cap mt-1 text-[14px]" style={{ color: 'var(--v2-text-2)' }}>
           {format(now, "EEEE, d 'de' MMMM", { locale: ptBR })}
         </p>
       </div>
 
-      <SectionHeader title="Precisa de você" count={pendingTotal} />
+      {/* O sino da casca (V2Shell) aponta para cá: /v2#precisa-de-voce */}
+      <SectionHeader id="precisa-de-voce" title="Precisa de você" count={pendingTotal} />
       <div className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AttentionCard
           icon={PenLine}

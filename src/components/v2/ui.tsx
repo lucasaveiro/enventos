@@ -72,16 +72,19 @@ export function SpaceDot({ space, className }: { space: V2Space; className?: str
 // Substitui o bloco "caixa de ícone 48px + título + subtítulo" das telas
 // atuais: mesma informação, um terço da altura.
 export function SectionHeader({
+  id,
   title,
   count,
   action,
 }: {
+  /** Âncora para links com hash; scroll-mt compensa a barra superior fixa. */
+  id?: string
   title: string
   count?: string | number
   action?: React.ReactNode
 }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-3">
+    <div id={id} className="mb-3 flex items-end justify-between gap-3 scroll-mt-20">
       <h2 className="v2-h2">
         {title}
         {count !== undefined && (

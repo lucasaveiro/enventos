@@ -5,8 +5,8 @@ import { EventFormProvider } from '@/components/v2/EventFormProvider'
 import { getPendingCount } from '@/lib/v2/screens'
 
 export const metadata: Metadata = {
-  title: 'Espaços Aveiro — versão 2.0 (protótipo)',
-  description: 'Protótipo de interface da versão 2.0, com dados fictícios',
+  title: 'Espaços Aveiro — versão 2.0',
+  description: 'Nova interface do sistema de reservas, em teste. Mesmos dados da versão atual.',
 }
 
 export default async function V2Layout({ children }: { children: React.ReactNode }) {

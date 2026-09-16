@@ -223,7 +223,7 @@ export function AgendaClient({
                             type="button"
                             onClick={() => item.eventId && setOpenId(item.eventId)}
                             disabled={!item.eventId}
-                            title={`${item.title} — ${item.subtitle}`}
+                            title={item.subtitle ? `${item.title} — ${item.subtitle}` : item.title}
                             className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-opacity hover:opacity-80 disabled:cursor-default"
                             style={{
                               background: st.filled ? item.space.color : item.space.soft,

@@ -4,7 +4,11 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { recalculateEventPaymentStatus } from './transactions'
-import { addMonths, startOfMonth, endOfMonth, addDays, startOfDay } from 'date-fns'
+import { addMonths, startOfMonth, endOfMonth, addDays } from 'date-fns'
+// "Hoje" no fuso de São Paulo, e não no fuso do servidor: a Vercel roda em UTC,
+// onde a meia-noite cai às 21:00 de Brasília e uma parcela que vence hoje seria
+// marcada como vencida três horas antes. Mesma conta usada pela v2.
+import { startOfToday } from '@/lib/today'
 import { createPaymentPlanSchema } from '@/lib/validations'
 
 function toNumber(value: { toNumber: () => number }) {
@@ -268,7 +272,7 @@ export async function revertInstallmentPayment(installmentId: number) {
 
     // Volta para "vencida" se o vencimento ja passou, senao "pendente"
     const newStatus =
-      installment.dueDate < startOfDay(new Date()) ? 'overdue' : 'pending'
+      installment.dueDate < startOfToday() ? 'overdue' : 'pending'
 
     await prisma.$transaction(async (tx) => {
       await tx.paymentInstallment.update({
@@ -333,7 +337,7 @@ export async function updateInstallment(
     // vencida. Parcela ja paga mantem o status.
     if (data.dueDate !== undefined && installment.status !== 'paid') {
       installmentUpdate.status =
-        data.dueDate < startOfDay(new Date()) ? 'overdue' : 'pending'
+        data.dueDate < startOfToday() ? 'overdue' : 'pending'
     }
 
     await prisma.$transaction(async (tx) => {
@@ -538,7 +542,7 @@ export async function getInstallmentsForCalendar(filters?: {
       orderBy: { date: 'asc' },
     })
 
-    const todayStart = startOfDay(new Date())
+    const todayStart = startOfToday()
 
     for (const tx of transactions) {
       // Skip transactions without an event
@@ -598,7 +602,7 @@ export async function getInstallmentsForCalendar(filters?: {
 export async function getOverdueItems() {
   await requireAuth()
   try {
-    const todayStart = startOfDay(new Date())
+    const todayStart = startOfToday()
 
     const clientSelect = { select: { id: true, name: true, phone: true, email: true } }
     const spaceSelect = { select: { id: true, name: true } }
@@ -698,7 +702,7 @@ export async function getFinancialCalendarSummary(filters?: {
   await requireAuth()
   try {
     const now = new Date()
-    const todayStart = startOfDay(now)
+    const todayStart = startOfToday()
     const monthStart = filters?.start ?? startOfMonth(now)
     const monthEnd = filters?.end ?? endOfMonth(now)
     const sevenDaysFromNow = addDays(now, 7)
@@ -821,7 +825,7 @@ export async function getFinancialCalendarSummary(filters?: {
 export async function checkOverdueInstallments() {
   await requireAuth()
   try {
-    const todayStart = startOfDay(new Date())
+    const todayStart = startOfToday()
 
     // Step 1: Mark overdue installments (due before today, not just before current time)
     const result = await prisma.paymentInstallment.updateMany({

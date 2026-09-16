@@ -26,7 +26,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CommandPalette } from './CommandPalette'
-import { loadPendingCount } from '@/lib/v2/data'
 
 type NavItem = { name: string; short: string; href: string; icon: LucideIcon }
 
@@ -38,25 +37,18 @@ const NAV: NavItem[] = [
   { name: 'Cadastros', short: 'Mais', href: '/v2/cadastros', icon: Settings2 },
 ]
 
-export function V2Shell({ children }: { children: React.ReactNode }) {
+export function V2Shell({
+  children,
+  pendingCount,
+}: {
+  children: React.ReactNode
+  /** Mesma contagem que a tela "Hoje" mostra em "Precisa de você". Vem do
+      layout (Server Component), junto com o HTML — antes era uma consulta a
+      mais no navegador, refeita a cada carregamento. */
+  pendingCount: number
+}) {
   const pathname = usePathname()
   const [paletteOpen, setPaletteOpen] = useState(false)
-
-  // Mesma contagem que a tela "Hoje" mostra em "Precisa de você".
-  const [pendingCount, setPendingCount] = useState(0)
-
-  // Uma vez por carregamento de página, e não a cada navegação: o layout não
-  // remonta na troca de rota, então [pathname] refaria três consultas a cada
-  // clique no menu sem que o número mude na prática.
-  useEffect(() => {
-    let alive = true
-    loadPendingCount().then((n) => {
-      if (alive) setPendingCount(n)
-    })
-    return () => {
-      alive = false
-    }
-  }, [])
 
   const isActive = (href: string) => (href === '/v2' ? pathname === '/v2' : pathname.startsWith(href))
 

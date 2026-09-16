@@ -28,7 +28,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { format } from 'date-fns'
-import { loadEventDetail } from '@/lib/v2/data'
+import { loadEventDetail } from '@/app/actions/v2'
 import { brl, brlExact } from '@/lib/v2/format'
 import type { V2Event } from '@/lib/v2/types'
 import { ContractPill, PaymentPill, Progress, Skeleton, SpaceTag, dayLabel, timeRange } from './ui'

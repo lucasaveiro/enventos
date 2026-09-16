@@ -234,19 +234,28 @@ export function EventModal({
   const pickerMode: 'event' | 'interest' =
     selectedCategory === 'event' ? 'event' : 'interest'
 
+  // Só quando o modal abre. Antes rodava no mount: toda tela que mantém o
+  // EventModal montado (agenda, lista de eventos) pagava três requisições de
+  // dropdown no carregamento, mesmo que o usuário nunca abrisse o formulário.
   useEffect(() => {
+    if (!isOpen) return
+    let alive = true
     async function loadData() {
       const [spacesRes, clientsRes, professionalsRes] = await Promise.all([
         getSpaces(),
         getClients(),
         getProfessionals()
       ])
+      if (!alive) return
       if (spacesRes.success) setSpaces(spacesRes.data || [])
       if (clientsRes.success) setClients(clientsRes.data || [])
       if (professionalsRes.success) setProfessionals(professionalsRes.data || [])
     }
     loadData()
-  }, [])
+    return () => {
+      alive = false
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return

@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { loadEvents } from '@/lib/v2/data'
+import { loadEventsForSearch } from '@/app/actions/v2'
 import { brl } from '@/lib/v2/format'
 import type { V2Event } from '@/lib/v2/types'
 import { Portal } from './Portal'
@@ -65,7 +65,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   useEffect(() => {
     if (!open || loaded) return
-    loadEvents().then((data) => {
+    loadEventsForSearch().then((data) => {
       setEvents(data)
       setLoaded(true)
     })

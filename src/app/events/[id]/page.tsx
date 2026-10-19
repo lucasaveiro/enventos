@@ -28,6 +28,7 @@ import {
   RefreshCw,
   CheckCircle2,
   Clock,
+  BadgeCheck,
 } from 'lucide-react'
 import { getEventById, updateEvent } from '@/app/actions/events'
 import { getTransactionsByEventId, deleteTransaction } from '@/app/actions/transactions'
@@ -53,6 +54,9 @@ import type { Installment } from '@/components/installments/InstallmentTable'
 import { PaymentPlanModal } from '@/components/installments/PaymentPlanModal'
 import { MarkAsPaidModal } from '@/components/installments/MarkAsPaidModal'
 import { EditInstallmentModal } from '@/components/installments/EditInstallmentModal'
+import { QuitacaoDownloadButton } from '@/components/installments/QuitacaoDownloadButton'
+import { getGeneratedQuitacoes, deleteGeneratedQuitacao } from '@/app/actions/quitacao'
+import { todasParcelasPagas } from '@/lib/quitacao'
 import { UploadContractModal } from '@/components/contracts/UploadContractModal'
 import { ClientModal } from '@/components/forms/ClientModal'
 import { InterestDatesModal } from '@/components/forms/InterestDatesModal'
@@ -142,6 +146,7 @@ export default function EventPage() {
   const [isEditInstallmentModalOpen, setIsEditInstallmentModalOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null)
   const [generatedContracts, setGeneratedContracts] = useState<any[]>([])
+  const [quitacoes, setQuitacoes] = useState<any[]>([])
   const [isUploadContractModalOpen, setIsUploadContractModalOpen] = useState(false)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
   const [isClientEditWarningOpen, setIsClientEditWarningOpen] = useState(false)
@@ -159,6 +164,12 @@ export default function EventPage() {
     if (res.success && res.data) setTransactions(res.data)
   }, [eventId])
 
+  const fetchQuitacoes = useCallback(async () => {
+    if (!eventId || Number.isNaN(eventId)) return
+    const res = await getGeneratedQuitacoes(eventId)
+    if (res.success && res.data) setQuitacoes(res.data)
+  }, [eventId])
+
   useEffect(() => {
     if (!rawId || Number.isNaN(eventId) || eventId <= 0) {
       setErrorMessage('O identificador do evento e invalido.')
@@ -168,11 +179,12 @@ export default function EventPage() {
 
     const loadEvent = async () => {
       await checkOverdueInstallments()
-      const [eventRes, txRes, contractRes, genContractRes] = await Promise.all([
+      const [eventRes, txRes, contractRes, genContractRes, quitacoesRes] = await Promise.all([
         getEventById(eventId),
         getTransactionsByEventId(eventId),
         getContractSignature(eventId),
         getGeneratedContracts(eventId),
+        getGeneratedQuitacoes(eventId),
       ])
       if (!eventRes.success || !eventRes.data) {
         setErrorMessage('Esse evento nao esta mais disponivel.')
@@ -182,6 +194,7 @@ export default function EventPage() {
       if (txRes.success && txRes.data) setTransactions(txRes.data)
       if (contractRes.success && contractRes.data) setContractSignature(contractRes.data)
       if (genContractRes.success && genContractRes.data) setGeneratedContracts(genContractRes.data)
+      if (quitacoesRes.success && quitacoesRes.data) setQuitacoes(quitacoesRes.data)
       setIsLoading(false)
     }
 
@@ -591,6 +604,11 @@ export default function EventPage() {
                 <CardTitle>Plano de Pagamento</CardTitle>
               </div>
               <div className="flex items-center gap-2">
+                {/* Com todas as parcelas pagas, o próximo passo natural é
+                    enviar ao cliente a prova de que está tudo quitado. */}
+                {todasParcelasPagas(event.installments || []) && (
+                  <QuitacaoDownloadButton eventId={eventId} onSaved={fetchQuitacoes} />
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -638,6 +656,62 @@ export default function EventPage() {
                 }
               }}
             />
+
+            {/* Histórico das quitações emitidas: cada PDF entregue ao cliente
+                fica guardado para o negócio provar depois o que declarou. */}
+            {quitacoes.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <h4 className="text-sm font-medium text-foreground">Quitações emitidas</h4>
+                <div className="space-y-2">
+                  {quitacoes.map((q: any) => (
+                    <div
+                      key={q.id}
+                      className="flex items-center gap-3 rounded-lg border border-border bg-secondary/20 p-3"
+                    >
+                      <BadgeCheck className="h-5 w-5 flex-shrink-0 text-green-600" />
+                      <div className="min-w-0 flex-1">
+                        <span className="truncate text-sm font-medium text-foreground flex items-center gap-1">
+                          {q.pdfFileName}
+                          <Badge variant="outline" className="ml-1">v{q.version}</Badge>
+                        </span>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(q.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} ·{' '}
+                          {formatCurrency(q.totalReceived)} · Código {q.verificationCode}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={q.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+                          title="Visualizar PDF"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Excluir quitação emitida"
+                          onClick={async () => {
+                            const msg = `Excluir a quitação v${q.version} (${q.pdfFileName}) do histórico?\n\nUse apenas se ela NÃO foi enviada ao cliente. Esta ação não pode ser desfeita e o PDF também será removido.`
+                            if (!confirm(msg)) return
+                            const result = await deleteGeneratedQuitacao(q.id)
+                            if (result.success) {
+                              await fetchQuitacoes()
+                            } else {
+                              alert(result.error || 'Erro ao excluir quitação')
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

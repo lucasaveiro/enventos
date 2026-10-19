@@ -78,6 +78,7 @@ model Event {
   installments        PaymentInstallment[]
   manualContracts     ManualContract[]
   generatedContracts  GeneratedContract[]
+  generatedQuitacoes  GeneratedQuitacao[]
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -247,6 +248,26 @@ model GeneratedContract {
 
   @@index([eventId])
   @@index([contractNumber])
+}
+
+// Declaração de Quitação emitida para o cliente. Guarda o PDF exatamente como
+// foi entregue (Vercel Blob) e os dados-chave, para o negócio provar depois o
+// que declarou. Uma nova emissão gera uma nova versão; nada é sobrescrito.
+model GeneratedQuitacao {
+  id               Int      @id @default(autoincrement())
+  version          Int      @default(1)
+  contractNumber   String?
+  verificationCode String
+  totalReceived    Decimal
+  pdfUrl           String
+  pdfFileName      String
+
+  eventId          Int
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt        DateTime @default(now())
+
+  @@index([eventId])
 }
 
 model ManualContract {

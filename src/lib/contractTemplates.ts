@@ -1,4 +1,5 @@
 import { paymentMethodLabel } from '@/lib/paymentMethods'
+import { ENTRADA_PERCENT, isEntradaPadrao } from '@/lib/paymentRules'
 
 export interface PaymentInstallment {
   date: string
@@ -266,12 +267,12 @@ export function buildPaymentConditionText(formData: Partial<ContractFormData>): 
     const depositFormatted = formatCurrency(formData.depositValue || '') || '[VALOR ENTRADA]'
     const installments = formData.installments || []
 
-    // Only mention the percentage when the entrada is exactly 20% of the total.
+    // Only mention the percentage when the entrada is exactly the standard 20%.
     const totalNum = parseFloat((formData.totalValue || '').replace(',', '.'))
     const depositNum = parseFloat((formData.depositValue || '').replace(',', '.'))
-    const isTwentyPercent =
-      !isNaN(totalNum) && !isNaN(depositNum) && totalNum > 0 && Math.abs(depositNum - totalNum * 0.2) < 0.01
-    const percentLabel = isTwentyPercent ? ' (20% do valor total)' : ''
+    const isStandard =
+      !isNaN(totalNum) && !isNaN(depositNum) && totalNum > 0 && isEntradaPadrao(totalNum, depositNum)
+    const percentLabel = isStandard ? ` (${ENTRADA_PERCENT}% do valor total)` : ''
 
     let text = `Entrada de ${depositFormatted}${percentLabel} no ato do contrato`
     if (installments.length > 0) {
@@ -311,6 +312,20 @@ export function substituteClause(
   const isSimplePackage = packageType === 'simples'
   const isCompletePackage = packageType === 'completo'
   const clientIsCNPJ = isCNPJ(formData.clientCPF || '')
+
+  // Cláusula de desistência: só afirma os 20% quando a entrada segue o padrão.
+  // Entrada parcelada fora dele vem de plano anterior à trava, mantido como
+  // negociado — o contrato não pode citar um percentual que não cumpre.
+  const totalNum = parseFloat((formData.totalValue || '').replace(',', '.'))
+  const depositNum = parseFloat((formData.depositValue || '').replace(',', '.'))
+  const entradaForaDoPadrao =
+    formData.paymentCondition === 'entrada_parcelas' &&
+    totalNum > 0 &&
+    !isNaN(depositNum) &&
+    !isEntradaPadrao(totalNum, depositNum)
+  const entradaRetencao = entradaForaDoPadrao
+    ? ''
+    : ', correspondente a 20% (vinte por cento) do valor total da locação,'
 
   // Build client qualification text (PF vs PJ)
   let clientQualification: string
@@ -422,6 +437,7 @@ export function substituteClause(
     .replace(/{remainingDueDate}/g, formatDate(formData.remainingDueDate || '') || '[DATA RESTANTE]')
     .replace(/{paymentMethod}/g, paymentMethodLabel(formData.paymentMethod) || '[FORMA DE PAGAMENTO]')
     .replace(/{paymentConditionText}/g, buildPaymentConditionText(formData))
+    .replace(/{entradaRetencao}/g, entradaRetencao)
     .replace(/{cautionValue}/g, formatCurrency(formData.cautionValue || '') || '[VALOR DA CAUÇÃO]')
     .replace(/{chairCount}/g, String(buildFurnitureText(formData).chairs) || '0')
     .replace(/{tableCount}/g, String(buildFurnitureText(formData).tables) || '0')
@@ -533,14 +549,14 @@ export const RANCHO_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'PRIMEIRA',
     title: 'DO PRAZO DA LOCAÇÃO',
     content:
-      'O prazo previsto para a locação à partir {eventStartTime} do dia {eventDate} à {eventEndTime} do dia {eventCheckoutDate}, com tolerância máxima e improrrogável de 15 (quinze) minutos. A partir desse horário o LOCATÁRIO compromete-se a pagar a diferença do preço de R$ 1.000,00 (mil reais) por hora de atraso, cessando de pleno direito, depois de completas 03 (três) horas adicionais, independentes de notificação ou aviso, devendo o LOCATÁRIO entregar ao LOCADOR o imóvel desta locação, completamente desocupado e nas condições que o recebeu. O locatário ou profissionais contratados poderão adentrar no salão somente na data e horário estipulado acima e deverão retirar todo o material usado após o término do evento, no prazo máximo de duas horas (objetos de decoração, utensílios de cozinha, tendas e outros). No caso da não retirada no prazo estipulado será cobrada uma multa diária de R$ 1.000,00.\n\nParágrafo primeiro: O prazo previsto no caput poderá ser alterado, no prazo de 07 (sete) dias, a contar da assinatura do presente contrato, desde que, em comum acordo entre as partes; para data disponível e ainda não contratada com outrem pelo locador; porém, referida alteração não poderá ultrapassar 90 (noventa) dias da data originalmente contratada, sob pena de ser considerado desistente e não cumprido o contrato por parte do locatário.\n\nParágrafo segundo: Alteração do prazo previsto no caput que ultrapasse 90 (noventa) dias caberá ao LOCADOR, se assim lhe convier, alterar a data originalmente contratada para data disponível, ainda não contratada com outrem pelo locador e com a anuência do LOCATÁRIO, incidindo correção no valor da locação pelo Índice Geral de Preços ao Mercado (IGP-M), usando como base o acumulado da quantidade de meses da referida alteração e com percentual não inferior a 10% (dez por cento).',
+      'O prazo previsto para a locação à partir {eventStartTime} do dia {eventDate} à {eventEndTime} do dia {eventCheckoutDate}, com tolerância máxima e improrrogável de 60 (sessenta) minutos. A partir desse horário o LOCATÁRIO compromete-se a pagar a diferença do preço de R$ 1.000,00 (mil reais) por hora de atraso, cessando de pleno direito, depois de completas 03 (três) horas adicionais, independentes de notificação ou aviso, devendo o LOCATÁRIO entregar ao LOCADOR o imóvel desta locação, completamente desocupado e nas condições que o recebeu. O locatário ou profissionais contratados poderão adentrar no salão somente na data e horário estipulado acima e deverão retirar todo o material usado após o término do evento, no prazo máximo de duas horas (objetos de decoração, utensílios de cozinha, tendas e outros). No caso da não retirada no prazo estipulado será cobrada uma multa diária de R$ 1.000,00.\n\nParágrafo primeiro: O prazo previsto no caput poderá ser alterado, no prazo de 07 (sete) dias, a contar da assinatura do presente contrato, desde que, em comum acordo entre as partes; para data disponível e ainda não contratada com outrem pelo locador; porém, referida alteração não poderá ultrapassar 90 (noventa) dias da data originalmente contratada, sob pena de ser considerado desistente e não cumprido o contrato por parte do locatário.\n\nParágrafo segundo: Alteração do prazo previsto no caput que ultrapasse 90 (noventa) dias caberá ao LOCADOR, se assim lhe convier, alterar a data originalmente contratada para data disponível, ainda não contratada com outrem pelo locador e com a anuência do LOCATÁRIO, incidindo correção no valor da locação pelo Índice Geral de Preços ao Mercado (IGP-M), usando como base o acumulado da quantidade de meses da referida alteração e com percentual não inferior a 10% (dez por cento).',
   },
   {
     id: 'segunda',
     number: 'SEGUNDA',
     title: 'DO VALOR E FORMA DE PAGAMENTO',
     content:
-      'O LOCATÁRIO se compromete a pagar ao LOCADOR um aluguel pelo período acima no valor de: {totalValue}.\n\n{paymentConditionText}\n\nConta corrente no banco {bankName} ({bankCode}) — agência {bankAgency} — C/C {bankAccount}\nNome: {bankHolder}. CPF: {bankHolderDoc} (Pix)\n\nOs comprovantes deverão ser enviados com identificação (data do evento) no e-mail: {ownerEmail}.\n\nParágrafo primeiro: Se o LOCATÁRIO desistir da locação ou não for possível acordar a alteração prevista no parágrafo único da cláusula primeira, o valor pago como sinal será retido pelo LOCADOR. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao LOCATÁRIO se a desistência se der até 90 (noventa) dias antes da data da locação; se depois deste prazo, a devolução será pela quarta parte.\n\nParágrafo segundo: Fica acordado entre as partes que caso não seja possível a utilização do imóvel locado na data estabelecida na cláusula primeira, por motivo imputável ao LOCADOR, o LOCADOR fará a devolução do valor pago pelo LOCATÁRIO estabelecido no caput desta cláusula.\n\nParágrafo terceiro: É permitido ao LOCATÁRIO, ou preposto seu com procuração e firma reconhecida, desde a véspera até duas horas antes do início da locação, vistoriar o imóvel, para efeitos do parágrafo anterior e cláusula terceira.',
+      'O LOCATÁRIO se compromete a pagar ao LOCADOR um aluguel pelo período acima no valor de: {totalValue}.\n\n{paymentConditionText}\n\nConta corrente no banco {bankName} ({bankCode}) — agência {bankAgency} — C/C {bankAccount}\nNome: {bankHolder}. CPF: {bankHolderDoc} (Pix)\n\nOs comprovantes deverão ser enviados com identificação (data do evento) no e-mail: {ownerEmail}.\n\nParágrafo primeiro: Se o LOCATÁRIO desistir da locação ou não for possível acordar a alteração prevista no parágrafo único da cláusula primeira, o valor pago como entrada (sinal){entradaRetencao} será retido pelo LOCADOR e não será devolvido. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao LOCATÁRIO se a desistência se der até 90 (noventa) dias antes da data da locação; se depois deste prazo, a devolução será pela quarta parte.\n\nParágrafo segundo: Fica acordado entre as partes que caso não seja possível a utilização do imóvel locado na data estabelecida na cláusula primeira, por motivo imputável ao LOCADOR, o LOCADOR fará a devolução do valor pago pelo LOCATÁRIO estabelecido no caput desta cláusula.\n\nParágrafo terceiro: É permitido ao LOCATÁRIO, ou preposto seu com procuração e firma reconhecida, desde a véspera até duas horas antes do início da locação, vistoriar o imóvel, para efeitos do parágrafo anterior e cláusula terceira.',
   },
   {
     id: 'terceira',
@@ -671,7 +687,7 @@ export const ESTANCIA_AVEIRO_CLAUSES: Omit<ContractClause, 'edited'>[] = [
     number: 'QUARTA',
     title: 'DO PAGAMENTO',
     content:
-      'O Locatário efetuará o pagamento das seguintes formas:\n\n{paymentConditionText}\n\nDados bancários:\nBanco {bankName} ({bankCode}) — Agência: {bankAgency} — C/C: {bankAccount}\nNome: {bankHolder} — CPF: {bankHolderDoc} (Pix: chave CPF)\n\nOu pessoalmente em dinheiro na Chácara {spaceName}.\n\nParágrafo Único: Se o Locatário desistir da locação ou não for possível acordar a alteração prevista neste contrato, o valor pago como sinal será retido pelo locador. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao locatário se a desistência se der até 90 (noventa) dias antes da data da locação.',
+      'O Locatário efetuará o pagamento das seguintes formas:\n\n{paymentConditionText}\n\nDados bancários:\nBanco {bankName} ({bankCode}) — Agência: {bankAgency} — C/C: {bankAccount}\nNome: {bankHolder} — CPF: {bankHolderDoc} (Pix: chave CPF)\n\nOu pessoalmente em dinheiro na Chácara {spaceName}.\n\nParágrafo Único: Se o LOCATÁRIO desistir da locação ou não for possível acordar a alteração prevista neste contrato, o valor pago como entrada (sinal){entradaRetencao} será retido pelo LOCADOR e não será devolvido. E caso já tenha sido paga a totalidade do valor da locação, metade será devolvida ao LOCATÁRIO se a desistência se der até 90 (noventa) dias antes da data da locação; se depois deste prazo, a devolução será pela quarta parte.',
   },
   {
     id: 'caucao',

@@ -10,6 +10,7 @@ import { addMonths, startOfMonth, endOfMonth, addDays } from 'date-fns'
 // marcada como vencida três horas antes. Mesma conta usada pela v2.
 import { startOfToday } from '@/lib/today'
 import { createPaymentPlanSchema } from '@/lib/validations'
+import { isEntradaPadrao, mensagemEntradaPadrao, validarPlanoParcelado } from '@/lib/paymentRules'
 
 function toNumber(value: { toNumber: () => number }) {
   return value.toNumber()
@@ -73,6 +74,71 @@ export async function createPaymentPlan(data: {
 
     if (!event) return { success: false, error: 'Evento nao encontrado' }
 
+    const installments: {
+      installmentNumber: number
+      dueDate: Date
+      amount: number
+      isSinal: boolean
+      paymentMethod: string | null
+      eventId: number
+    }[] = []
+
+    if (data.customInstallments && data.customInstallments.length > 0) {
+      // Use custom values/dates provided by the user
+      data.customInstallments.forEach((item, index) => {
+        installments.push({
+          installmentNumber: index + 1,
+          dueDate: item.dueDate,
+          amount: item.amount,
+          isSinal: item.isSinal,
+          paymentMethod: data.paymentMethod ?? null,
+          eventId: data.eventId,
+        })
+      })
+    } else {
+      let currentNumber = 1
+      const depositAmount = data.depositAmount ?? 0
+
+      // Create deposit installment
+      if (depositAmount > 0) {
+        installments.push({
+          installmentNumber: currentNumber,
+          dueDate: data.depositDueDate ?? data.startDate,
+          amount: depositAmount,
+          isSinal: true,
+          paymentMethod: data.paymentMethod ?? null,
+          eventId: data.eventId,
+        })
+        currentNumber++
+      }
+
+      // Calculate remaining amount and distribute
+      const remaining = data.totalValue - depositAmount
+      if (remaining > 0 && data.numberOfInstallments > 0) {
+        const installmentAmount = Math.floor((remaining / data.numberOfInstallments) * 100) / 100
+        const lastInstallmentAmount = remaining - installmentAmount * (data.numberOfInstallments - 1)
+
+        for (let i = 0; i < data.numberOfInstallments; i++) {
+          const dueDate = addMonths(new Date(data.startDate), i)
+          const isLast = i === data.numberOfInstallments - 1
+          installments.push({
+            installmentNumber: currentNumber + i,
+            dueDate,
+            amount: isLast
+              ? Math.round(lastInstallmentAmount * 100) / 100
+              : installmentAmount,
+            isSinal: false,
+            paymentMethod: data.paymentMethod ?? null,
+            eventId: data.eventId,
+          })
+        }
+      }
+    }
+
+    // Parcelado so com entrada de 20% (validado antes de apagar o plano atual).
+    const planError = validarPlanoParcelado(data.totalValue, installments)
+    if (planError) return { success: false, error: planError }
+
     await prisma.$transaction(async (tx) => {
       // Find existing installments and their linked transactions
       const existingInstallments = await tx.paymentInstallment.findMany({
@@ -96,67 +162,6 @@ export async function createPaymentPlan(data: {
       await tx.paymentInstallment.deleteMany({
         where: { eventId: data.eventId },
       })
-
-      const installments: {
-        installmentNumber: number
-        dueDate: Date
-        amount: number
-        isSinal: boolean
-        paymentMethod: string | null
-        eventId: number
-      }[] = []
-
-      if (data.customInstallments && data.customInstallments.length > 0) {
-        // Use custom values/dates provided by the user
-        data.customInstallments.forEach((item, index) => {
-          installments.push({
-            installmentNumber: index + 1,
-            dueDate: item.dueDate,
-            amount: item.amount,
-            isSinal: item.isSinal,
-            paymentMethod: data.paymentMethod ?? null,
-            eventId: data.eventId,
-          })
-        })
-      } else {
-        let currentNumber = 1
-        const depositAmount = data.depositAmount ?? 0
-
-        // Create deposit installment
-        if (depositAmount > 0) {
-          installments.push({
-            installmentNumber: currentNumber,
-            dueDate: data.depositDueDate ?? data.startDate,
-            amount: depositAmount,
-            isSinal: true,
-            paymentMethod: data.paymentMethod ?? null,
-            eventId: data.eventId,
-          })
-          currentNumber++
-        }
-
-        // Calculate remaining amount and distribute
-        const remaining = data.totalValue - depositAmount
-        if (remaining > 0 && data.numberOfInstallments > 0) {
-          const installmentAmount = Math.floor((remaining / data.numberOfInstallments) * 100) / 100
-          const lastInstallmentAmount = remaining - installmentAmount * (data.numberOfInstallments - 1)
-
-          for (let i = 0; i < data.numberOfInstallments; i++) {
-            const dueDate = addMonths(new Date(data.startDate), i)
-            const isLast = i === data.numberOfInstallments - 1
-            installments.push({
-              installmentNumber: currentNumber + i,
-              dueDate,
-              amount: isLast
-                ? Math.round(lastInstallmentAmount * 100) / 100
-                : installmentAmount,
-              isSinal: false,
-              paymentMethod: data.paymentMethod ?? null,
-              eventId: data.eventId,
-            })
-          }
-        }
-      }
 
       await tx.paymentInstallment.createMany({ data: installments })
     })
@@ -319,10 +324,33 @@ export async function updateInstallment(
   try {
     const installment = await prisma.paymentInstallment.findUnique({
       where: { id: installmentId },
-      select: { status: true, transactionId: true, eventId: true },
+      select: {
+        status: true,
+        transactionId: true,
+        eventId: true,
+        isSinal: true,
+        amount: true,
+        event: { select: { totalValue: true, _count: { select: { installments: true } } } },
+      },
     })
 
     if (!installment) return { success: false, error: 'Parcela nao encontrada' }
+
+    // No parcelado o sinal e fixo em 20% do total: um sinal que esta nos 20%
+    // nao pode sair deles. Sinal fora do padrao vem de plano anterior a trava e
+    // segue editavel como foi negociado.
+    if (
+      installment.isSinal &&
+      data.amount !== undefined &&
+      Math.abs(data.amount - toNumber(installment.amount)) >= 0.01 &&
+      installment.event._count.installments > 1
+    ) {
+      const total = toNumber(installment.event.totalValue)
+      const planoNovo = isEntradaPadrao(total, toNumber(installment.amount))
+      if (planoNovo && !isEntradaPadrao(total, data.amount)) {
+        return { success: false, error: mensagemEntradaPadrao(total) }
+      }
+    }
 
     const installmentUpdate: Record<string, unknown> = {}
     if (data.dueDate !== undefined) installmentUpdate.dueDate = data.dueDate

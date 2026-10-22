@@ -8,8 +8,14 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
+import { ENTRADA_PERCENT, entradaPadrao } from '@/lib/paymentRules'
+
+export type PaymentType = 'parcelado' | 'a_vista'
 
 export interface PaymentData {
+  // Parcelado: entrada travada em 20% do total e saldo nas parcelas.
+  // À vista: a "entrada" é o valor total, sem parcelas.
+  paymentType: PaymentType
   totalValue: string
   depositAmount: string
   depositDueDate: string
@@ -34,6 +40,17 @@ function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+function depositFor(data: PaymentData): string {
+  const total = parseFloat((data.totalValue || '').replace(',', '.'))
+  if (isNaN(total) || total <= 0) return ''
+  return (data.paymentType === 'a_vista' ? total : entradaPadrao(total)).toFixed(2)
+}
+
+const PAYMENT_TYPES: { value: PaymentType; label: string; description: string }[] = [
+  { value: 'parcelado', label: 'Parcelado', description: `Entrada de ${ENTRADA_PERCENT}% e saldo em parcelas` },
+  { value: 'a_vista', label: 'À vista', description: 'Valor total em um único pagamento' },
+]
+
 export function PaymentStep({ data, onChange, errors }: Props) {
   // Sinal herda a forma de pagamento geral do contrato; o select próprio só
   // aparece quando o usuário pede uma forma diferente.
@@ -41,9 +58,15 @@ export function PaymentStep({ data, onChange, errors }: Props) {
   const showDepositMethodSelect = customDepositMethod || Boolean(data.depositPaymentMethod)
 
   const update = (field: keyof PaymentData, value: any) => {
-    onChange({ ...data, [field]: value })
+    const next = { ...data, [field]: value }
+    // A entrada não é digitada: sai do total e do tipo de pagamento.
+    if (field === 'totalValue' || field === 'paymentType') {
+      next.depositAmount = depositFor(next)
+    }
+    onChange(next)
   }
 
+  const isAVista = data.paymentType === 'a_vista'
   const totalValue = parseFloat((data.totalValue || '0').replace(',', '.')) || 0
   const depositAmount = parseFloat((data.depositAmount || '0').replace(',', '.')) || 0
   const remainingValue = Math.max(0, totalValue - depositAmount)
@@ -77,6 +100,24 @@ export function PaymentStep({ data, onChange, errors }: Props) {
         </div>
 
         <div className="p-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PAYMENT_TYPES.map((pt) => (
+              <button
+                key={pt.value}
+                type="button"
+                onClick={() => update('paymentType', pt.value)}
+                className={`text-left p-3 rounded-lg border-2 transition-all ${
+                  data.paymentType === pt.value
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/5'
+                    : 'border-[var(--border)] hover:border-[var(--muted-foreground)]/30'
+                }`}
+              >
+                <p className="text-sm font-medium text-[var(--foreground)]">{pt.label}</p>
+                <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{pt.description}</p>
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Valor Total (R$) *</Label>
@@ -90,14 +131,12 @@ export function PaymentStep({ data, onChange, errors }: Props) {
               {errors.totalValue && <p className="text-xs text-red-500 mt-1">{errors.totalValue}</p>}
             </div>
             <div>
-              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Valor da Entrada (R$) *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={data.depositAmount}
-                onChange={(e) => update('depositAmount', e.target.value)}
-                placeholder="0,00"
-              />
+              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">
+                {isAVista ? 'Valor à Vista' : `Entrada (${ENTRADA_PERCENT}%)`}
+              </Label>
+              <div className="flex h-11 items-center px-4 rounded-lg border border-[var(--input-border)] bg-[var(--secondary)] text-sm font-medium">
+                {formatCurrency(depositAmount)}
+              </div>
               {errors.depositAmount && <p className="text-xs text-red-500 mt-1">{errors.depositAmount}</p>}
             </div>
             <div>
@@ -110,7 +149,9 @@ export function PaymentStep({ data, onChange, errors }: Props) {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Vencimento da Entrada *</Label>
+              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">
+                {isAVista ? 'Data do Pagamento *' : 'Vencimento da Entrada *'}
+              </Label>
               <Input
                 type="date"
                 value={data.depositDueDate}
@@ -159,9 +200,13 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                 onCheckedChange={(checked) => update('depositPaid', Boolean(checked))}
               />
               <div>
-                <span className="font-medium text-[var(--foreground)]">Entrada já foi paga</span>
+                <span className="font-medium text-[var(--foreground)]">
+                  {isAVista ? 'Pagamento já foi feito' : 'Entrada já foi paga'}
+                </span>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  Marque se o cliente já realizou o pagamento da entrada
+                  {isAVista
+                    ? 'Marque se o cliente já realizou o pagamento'
+                    : 'Marque se o cliente já realizou o pagamento da entrada'}
                 </p>
               </div>
             </label>
@@ -228,33 +273,35 @@ export function PaymentStep({ data, onChange, errors }: Props) {
       <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
         <div className="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)]">
           <h3 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">
-            Parcelamento
+            {isAVista ? 'Pagamento' : 'Parcelamento'}
           </h3>
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Nº de Parcelas *</Label>
-              <Input
-                type="number"
-                min="1"
-                max="48"
-                value={data.numberOfInstallments}
-                onChange={(e) => update('numberOfInstallments', e.target.value)}
-              />
-              {errors.numberOfInstallments && <p className="text-xs text-red-500 mt-1">{errors.numberOfInstallments}</p>}
+          {!isAVista && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Nº de Parcelas *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="48"
+                  value={data.numberOfInstallments}
+                  onChange={(e) => update('numberOfInstallments', e.target.value)}
+                />
+                {errors.numberOfInstallments && <p className="text-xs text-red-500 mt-1">{errors.numberOfInstallments}</p>}
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Data da 1ª Parcela *</Label>
+                <Input
+                  type="date"
+                  value={data.firstInstallmentDate}
+                  onChange={(e) => update('firstInstallmentDate', e.target.value)}
+                />
+                {errors.firstInstallmentDate && <p className="text-xs text-red-500 mt-1">{errors.firstInstallmentDate}</p>}
+              </div>
             </div>
-            <div>
-              <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Data da 1ª Parcela *</Label>
-              <Input
-                type="date"
-                value={data.firstInstallmentDate}
-                onChange={(e) => update('firstInstallmentDate', e.target.value)}
-              />
-              {errors.firstInstallmentDate && <p className="text-xs text-red-500 mt-1">{errors.firstInstallmentDate}</p>}
-            </div>
-          </div>
+          )}
 
           {/* Preview */}
           {(depositAmount > 0 || installmentPreview.length > 0) && (
@@ -272,7 +319,9 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                       <DollarSign className="h-4 w-4 text-amber-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--foreground)]">Sinal (Entrada)</p>
+                      <p className="text-sm font-medium text-[var(--foreground)]">
+                        {isAVista ? 'Pagamento à vista' : `Sinal (Entrada ${ENTRADA_PERCENT}%)`}
+                      </p>
                       <p className="text-xs text-[var(--muted-foreground)]">
                         {data.depositDueDate
                           ? format(new Date(data.depositDueDate + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })

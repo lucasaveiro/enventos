@@ -20,12 +20,12 @@ import { Badge } from '@/components/ui/Badge'
 import { createPaymentPlan } from '@/app/actions/installments'
 import { parseLocalDate, toDateInputValue } from '@/lib/utils'
 import { PAYMENT_METHODS } from '@/lib/paymentMethods'
+import { ENTRADA_PERCENT, entradaPadrao, validarPlanoParcelado } from '@/lib/paymentRules'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
 const schema = z.object({
-  depositAmount: z.number().min(0, 'Valor minimo 0'),
   depositDueDate: z.string().min(1, 'Data do sinal obrigatoria'),
   numberOfInstallments: z.number().int().min(1, 'Minimo 1 parcela').max(48, 'Maximo 48 parcelas'),
   startDate: z.string().min(1, 'Data da primeira parcela obrigatoria'),
@@ -33,6 +33,15 @@ const schema = z.object({
 })
 
 type FormValues = z.infer<typeof schema>
+
+// Parcelado: sinal travado em 20% do total e saldo nas parcelas.
+// A vista: um unico pagamento do valor total, na data do sinal.
+type PlanMode = 'parcelado' | 'a_vista'
+
+const PLAN_MODES: { value: PlanMode; label: string; description: string }[] = [
+  { value: 'parcelado', label: 'Parcelado', description: `Entrada de ${ENTRADA_PERCENT}% e saldo em parcelas` },
+  { value: 'a_vista', label: 'A vista', description: 'Valor total em um unico pagamento' },
+]
 
 interface PreviewItem {
   id: string
@@ -103,6 +112,10 @@ export function PaymentPlanModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [items, setItems] = useState<PreviewItem[]>([])
   const [manuallyEdited, setManuallyEdited] = useState(false)
+  const [mode, setMode] = useState<PlanMode>('parcelado')
+  const isAVista = mode === 'a_vista'
+  // A entrada nao e digitada: sai do total e do modo.
+  const entrada = isAVista ? totalValue : entradaPadrao(totalValue)
 
   const {
     register,
@@ -113,7 +126,6 @@ export function PaymentPlanModal({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      depositAmount: deposit,
       depositDueDate: toDateInputValue(new Date()),
       numberOfInstallments: 1,
       startDate: toDateInputValue(addMonths(new Date(), 1)),
@@ -121,7 +133,6 @@ export function PaymentPlanModal({
     },
   })
 
-  const watchDeposit = watch('depositAmount')
   const watchInstallments = watch('numberOfInstallments')
   const watchStartDate = watch('startDate')
   const watchDepositDate = watch('depositDueDate')
@@ -130,30 +141,31 @@ export function PaymentPlanModal({
   useEffect(() => {
     if (isOpen) {
       reset({
-        depositAmount: deposit,
         depositDueDate: toDateInputValue(new Date()),
         numberOfInstallments: 1,
         startDate: toDateInputValue(addMonths(new Date(), 1)),
         paymentMethod: '',
       })
       setManuallyEdited(false)
+      setMode(totalValue > 0 && deposit >= totalValue ? 'a_vista' : 'parcelado')
     }
-  }, [isOpen, deposit, reset])
+  }, [isOpen, deposit, totalValue, reset])
 
   // Regenerate preview whenever inputs change AND no manual edits have happened
   useEffect(() => {
     if (manuallyEdited) return
     setItems(
       computePreview(
-        watchDeposit || 0,
+        entrada,
         watchDepositDate,
-        watchInstallments || 0,
+        isAVista ? 0 : watchInstallments || 0,
         watchStartDate,
         totalValue,
       ),
     )
   }, [
-    watchDeposit,
+    entrada,
+    isAVista,
     watchDepositDate,
     watchInstallments,
     watchStartDate,
@@ -189,9 +201,9 @@ export function PaymentPlanModal({
     setManuallyEdited(false)
     setItems(
       computePreview(
-        watchDeposit || 0,
+        entrada,
         watchDepositDate,
-        watchInstallments || 0,
+        isAVista ? 0 : watchInstallments || 0,
         watchStartDate,
         totalValue,
       ),
@@ -204,6 +216,11 @@ export function PaymentPlanModal({
   const onSubmit = async (data: FormValues) => {
     if (items.length === 0) {
       alert('Adicione pelo menos uma parcela.')
+      return
+    }
+    const planError = validarPlanoParcelado(totalValue, items)
+    if (planError) {
+      alert(planError)
       return
     }
     if (!sumMatches) {
@@ -239,7 +256,7 @@ export function PaymentPlanModal({
           1,
         ),
         startDate: parseLocalDate(data.startDate),
-        depositAmount: data.depositAmount,
+        depositAmount: entrada,
         depositDueDate: parseLocalDate(data.depositDueDate),
         paymentMethod: data.paymentMethod || undefined,
         customInstallments,
@@ -282,24 +299,40 @@ export function PaymentPlanModal({
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Mode */}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {PLAN_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => {
+                  setMode(m.value)
+                  setManuallyEdited(false)
+                }}
+                className={`text-left rounded-lg border-2 p-3 transition-all ${
+                  mode === m.value ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'
+                }`}
+              >
+                <p className="text-sm font-medium text-foreground">{m.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>
+              </button>
+            ))}
+          </div>
+
           {/* Deposit Section */}
           <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">Sinal / Entrada</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {isAVista ? 'Pagamento a vista' : `Sinal / Entrada (${ENTRADA_PERCENT}%)`}
+            </h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label>Valor do Sinal (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  {...register('depositAmount', { valueAsNumber: true })}
-                />
-                {errors.depositAmount && (
-                  <p className="text-xs text-destructive mt-1">{errors.depositAmount.message}</p>
-                )}
+                <Label>{isAVista ? 'Valor (R$)' : 'Valor do Sinal (R$)'}</Label>
+                <div className="flex h-10 items-center rounded-md border border-input bg-secondary/40 px-3 text-sm font-medium">
+                  {formatCurrency(entrada)}
+                </div>
               </div>
               <div>
-                <Label>Data do Sinal</Label>
+                <Label>{isAVista ? 'Data do Pagamento' : 'Data do Sinal'}</Label>
                 <Input type="date" {...register('depositDueDate')} />
                 {errors.depositDueDate && (
                   <p className="text-xs text-destructive mt-1">{errors.depositDueDate.message}</p>
@@ -309,32 +342,34 @@ export function PaymentPlanModal({
           </div>
 
           {/* Installments Section */}
-          <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">Parcelas</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label>Numero de Parcelas</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="48"
-                  {...register('numberOfInstallments', { valueAsNumber: true })}
-                />
-                {errors.numberOfInstallments && (
-                  <p className="text-xs text-destructive mt-1">
-                    {errors.numberOfInstallments.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label>Data 1a Parcela</Label>
-                <Input type="date" {...register('startDate')} />
-                {errors.startDate && (
-                  <p className="text-xs text-destructive mt-1">{errors.startDate.message}</p>
-                )}
+          {!isAVista && (
+            <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">Parcelas</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label>Numero de Parcelas</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="48"
+                    {...register('numberOfInstallments', { valueAsNumber: true })}
+                  />
+                  {errors.numberOfInstallments && (
+                    <p className="text-xs text-destructive mt-1">
+                      {errors.numberOfInstallments.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label>Data 1a Parcela</Label>
+                  <Input type="date" {...register('startDate')} />
+                  {errors.startDate && (
+                    <p className="text-xs text-destructive mt-1">{errors.startDate.message}</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Payment Method */}
           <div>
@@ -369,15 +404,17 @@ export function PaymentPlanModal({
                     Recalcular
                   </Button>
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 text-xs"
-                  onClick={addInstallmentRow}
-                >
-                  + Adicionar
-                </Button>
+                {!isAVista && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    onClick={addInstallmentRow}
+                  >
+                    + Adicionar
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -418,18 +455,24 @@ export function PaymentPlanModal({
                       onChange={(e) =>
                         updateItem(item.id, { amount: Number(e.target.value) })
                       }
-                      className="h-8 text-xs"
+                      readOnly={item.isSinal}
+                      title={item.isSinal ? `Entrada fixa em ${ENTRADA_PERCENT}% do valor total` : undefined}
+                      className={`h-8 text-xs${item.isSinal ? ' bg-secondary/40 cursor-default' : ''}`}
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      onClick={() => removeItem(item.id)}
-                      title="Remover parcela"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {item.isSinal ? (
+                      <span />
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        onClick={() => removeItem(item.id)}
+                        title="Remover parcela"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -455,8 +498,8 @@ export function PaymentPlanModal({
 
             {items.some((it) => it.isSinal && it.amount > 0) && (
               <p className="text-[11px] text-muted-foreground">
-                Dica: edite valores e datas livremente. Use &quot;Recalcular&quot; para voltar
-                ao calculo automatico.
+                Dica: edite datas e valores das parcelas; a entrada fica fixa em {ENTRADA_PERCENT}%.
+                Use &quot;Recalcular&quot; para voltar ao calculo automatico.
               </p>
             )}
           </div>

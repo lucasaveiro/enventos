@@ -10,6 +10,7 @@ import { PaymentStep, type PaymentData } from './PaymentStep'
 import { ContractStep, type ContractData } from './ContractStep'
 import { ReviewStep } from './ReviewStep'
 import { createClosedContract } from '@/app/actions/contractWizard'
+import { isEntradaPadrao, mensagemEntradaPadrao } from '@/lib/paymentRules'
 import { ContractClause, SPACES, generateContractNumber, getInitialClauses, getContractSpaceSlug } from '@/lib/contractTemplates'
 
 const STEPS = [
@@ -51,6 +52,7 @@ export function NewContractWizard() {
 
   // Step 2: Payment
   const [paymentData, setPaymentData] = useState<PaymentData>({
+    paymentType: 'parcelado',
     totalValue: '',
     depositAmount: '',
     depositDueDate: '',
@@ -116,6 +118,9 @@ export function NewContractWizard() {
       const n = parseInt(paymentData.numberOfInstallments || '0')
       if (!n || n < 1) errs.numberOfInstallments = 'Mínimo 1 parcela'
       if (!paymentData.firstInstallmentDate) errs.firstInstallmentDate = 'Data da 1ª parcela é obrigatória'
+      if (totalValue > 0 && !isEntradaPadrao(totalValue, depositAmount)) {
+        errs.depositAmount = mensagemEntradaPadrao(totalValue)
+      }
     }
 
     setErrors(errs)

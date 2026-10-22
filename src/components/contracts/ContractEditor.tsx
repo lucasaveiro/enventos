@@ -52,6 +52,7 @@ import { saveGeneratedContract, getGeneratedContractById, getEventDataForContrac
 import { ContractStatusBadge } from './ContractStatusBadge'
 import { toDateInputValue } from '@/lib/utils'
 import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
+import { ENTRADA_PERCENT, entradaPadrao, formatBRL, isEntradaPadrao, validarPlanoParcelado } from '@/lib/paymentRules'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
 const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
@@ -171,7 +172,7 @@ const EVENT_TYPES = [
 
 const PAYMENT_CONDITIONS: { value: PaymentConditionType; label: string; description: string }[] = [
   { value: 'a_vista', label: 'À Vista', description: 'Pago via Pix/Depósito bancário na data da assinatura do contrato' },
-  { value: 'entrada_parcelas', label: 'Entrada + Parcelas', description: 'Entrada no ato do contrato e restante parcelado no Pix até 10 dias antes do evento' },
+  { value: 'entrada_parcelas', label: 'Entrada + Parcelas', description: `Entrada de ${ENTRADA_PERCENT}% no ato do contrato e restante parcelado no Pix até 10 dias antes do evento` },
   { value: 'cartao_credito', label: 'Cartão de Crédito', description: 'Parcelado no cartão de crédito com juros adicionais da maquininha' },
 ]
 
@@ -243,6 +244,14 @@ type PersistedClauseTemplate = Omit<ContractClause, 'edited'>
 interface PersistedClauseStructure {
   customClauses: PersistedClauseTemplate[]
   removedDefaultClauseIds: string[]
+}
+
+// Contrato salvo antes da trava dos 20%: parcelado com a entrada fora do padrão.
+function savedContractHasLegacyEntrada(formData: Record<string, unknown>): boolean {
+  if (formData.paymentCondition !== 'entrada_parcelas') return false
+  const total = parseFloat(String(formData.totalValue ?? '').replace(',', '.'))
+  const deposit = parseFloat(String(formData.depositValue ?? '').replace(',', '.'))
+  return total > 0 && !isNaN(deposit) && !isEntradaPadrao(total, deposit)
 }
 
 const EMPTY_CLAUSE_STRUCTURE: PersistedClauseStructure = {
@@ -561,33 +570,41 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const depositValue = useWatch({ control, name: 'depositValue' })
   const paymentCondition = useWatch({ control, name: 'paymentCondition' }) as PaymentConditionType
 
-  // Whether the entrada is exactly 20% of the total — drives the "(20%)" label.
-  const depositIsTwentyPercent = useMemo(() => {
-    const total = parseFloat((totalValue || '').replace(',', '.'))
-    const deposit = parseFloat((depositValue || '').replace(',', '.'))
-    if (isNaN(total) || isNaN(deposit) || total <= 0) return false
-    return Math.abs(deposit - total * 0.2) < 0.01
-  }, [totalValue, depositValue])
+  // Evento com plano/contrato anterior à trava dos 20% (entrada negociada
+  // fora do padrão). Só existe em dado antigo — o servidor não aceita mais
+  // plano parcelado assim —, então o contrato dele segue podendo ser gerado
+  // com a entrada original. Definido ao carregar o contrato salvo ou o plano.
+  const [legacyEntrada, setLegacyEntrada] = useState(false)
 
-  // Suggest a 20% entrada ONLY when no plan is configured (empty entrada and no
-  // installments). It's just a pre-fill — once present it's never overwritten,
-  // leaving the user free to edit it.
+  // Pagamento parcelado: entrada travada em 20% do total (regra dos dois
+  // espaços). Recalculada sempre que diverge — inclusive ao carregar um contrato
+  // salvo ou o plano de um evento criado com outra entrada.
   useEffect(() => {
-    if (paymentCondition === 'entrada_parcelas') {
-      const currentDeposit = (getValues('depositValue') || '').trim()
-      if (!currentDeposit && installments.length === 0) {
-        const total = parseFloat((totalValue || '').replace(',', '.'))
-        if (!isNaN(total) && total > 0) {
-          const suggested = (total * 0.2).toFixed(2).replace('.', ',')
-          setValue('depositValue', suggested)
-        }
-      }
+    if (paymentCondition === 'entrada_parcelas' && !legacyEntrada) {
+      const total = parseFloat((totalValue || '').replace(',', '.'))
+      const expected = !isNaN(total) && total > 0 ? entradaPadrao(total).toFixed(2).replace('.', ',') : ''
+      if ((depositValue || '') !== expected) setValue('depositValue', expected)
     }
-    if (paymentCondition === 'a_vista') {
+    if (paymentCondition === 'a_vista' && (depositValue || '') !== (totalValue || '')) {
       setValue('depositValue', totalValue || '')
       setValue('remainingValue', '0,00')
     }
-  }, [paymentCondition, totalValue, setValue, getValues, installments.length])
+  }, [paymentCondition, totalValue, depositValue, setValue, legacyEntrada])
+
+  // Contrato parcelado só sai com as parcelas fechando o saldo de 80%.
+  // Eventos anteriores à trava ficam de fora (ver legacyEntrada).
+  const paymentRuleError = useMemo(() => {
+    if (paymentCondition !== 'entrada_parcelas' || legacyEntrada) return null
+    const total = parseFloat((totalValue || '').replace(',', '.'))
+    if (isNaN(total) || total <= 0) return null
+    if (installments.length === 0) return 'Adicione as parcelas do saldo restante.'
+    const saldo = total - entradaPadrao(total)
+    const soma = installments.reduce((s, inst) => s + (parseFloat((inst.value || '').replace(',', '.')) || 0), 0)
+    if (Math.abs(soma - saldo) >= 0.01) {
+      return `As parcelas somam ${formatBRL(soma)}, mas o saldo após a entrada de ${ENTRADA_PERCENT}% é ${formatBRL(saldo)}. Se o plano de pagamento do evento foi criado com outra entrada, refaça o plano na página do evento.`
+    }
+    return null
+  }, [paymentCondition, totalValue, installments, legacyEntrada])
 
   useEffect(() => {
     const total = parseFloat((totalValue || '').replace(',', '.'))
@@ -627,6 +644,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       const savedFormData = saved.formData as Record<string, unknown>
       const savedClauses = saved.clauses as unknown as ContractClause[]
       const savedOverrides = saved.contractorOverrides as unknown as ContractorOverrides | null
+      setLegacyEntrada(savedContractHasLegacyEntrada(savedFormData))
 
       // Restore form fields
       const formKeys = [
@@ -688,6 +706,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         const savedFormData = saved.formData as Record<string, unknown>
         const savedClauses = saved.clauses as unknown as ContractClause[]
         const savedOverrides = saved.contractorOverrides as unknown as ContractorOverrides | null
+        setLegacyEntrada(savedContractHasLegacyEntrada(savedFormData))
 
         const formKeys = [
           'contractNumber', 'contractDate',
@@ -761,6 +780,14 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         // Payment data from the plan configured on the event page
         const sinal = installmentsList.find((i) => i.isSinal)
         const regularInstallments = installmentsList.filter((i) => !i.isSinal)
+        // Plano parcelado fora dos 20% só pode ser anterior à trava: mantém a
+        // entrada dele no contrato em vez de forçar o padrão.
+        setLegacyEntrada(
+          validarPlanoParcelado(
+            Number(event.totalValue),
+            installmentsList.map((i) => ({ amount: Number(i.amount), isSinal: i.isSinal }))
+          ) !== null
+        )
 
         // Prefer the entrada from the configured plan (sinal installment) over
         // the event's deposit field, so the contract reflects the event page.
@@ -1502,13 +1529,28 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         {paymentCondition === 'entrada_parcelas' && (
           <div className="mt-4 p-4 bg-[var(--secondary)] rounded-lg space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Field label={`Entrada${depositIsTwentyPercent ? ' (20%)' : ''} (R$)`}>
-                <Input
-                  {...register('depositValue', { onChange: () => setClausesApplied(false) })}
-                  placeholder="0,00"
-                  inputMode="decimal"
-                />
-              </Field>
+              {legacyEntrada ? (
+                <Field label="Entrada (R$)">
+                  <Input
+                    {...register('depositValue', { onChange: () => setClausesApplied(false) })}
+                    placeholder="0,00"
+                    inputMode="decimal"
+                  />
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                    Plano anterior à regra dos {ENTRADA_PERCENT}%: entrada mantida como negociada.
+                  </p>
+                </Field>
+              ) : (
+                <Field label={`Entrada (${ENTRADA_PERCENT}%) (R$)`}>
+                  <Input
+                    {...register('depositValue')}
+                    placeholder="auto-calculado"
+                    readOnly
+                    title={`Fixa em ${ENTRADA_PERCENT}% do valor total no pagamento parcelado`}
+                    className="bg-[var(--input-bg)] text-[var(--muted-foreground)] cursor-default"
+                  />
+                </Field>
+              )}
               <Field label="Data da Entrada">
                 <Input type="date" {...register('depositDueDate')} />
               </Field>
@@ -1598,6 +1640,13 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                   </Button>
                 </div>
               ))}
+
+              {paymentRuleError && (
+                <p className="text-xs text-[var(--destructive)] mt-1 flex items-start gap-1">
+                  <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  {paymentRuleError}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1933,6 +1982,12 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               Você tem alterações não salvas em uma cláusula. Salve ou descarte antes de gerar o contrato.
             </p>
           )}
+          {paymentRuleError && (
+            <p className="text-xs text-[var(--destructive)] mt-1 flex items-start gap-1 font-medium">
+              <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              {paymentRuleError}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {requiresExtendedEventData && (
@@ -1946,7 +2001,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
-            isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit}
+            isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit && !paymentRuleError}
             onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterDownload}
           />
@@ -1954,7 +2009,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}
             getFormData={getFormDataForPDF}
-            isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit}
+            isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit && !paymentRuleError}
             eventId={selectedEventId}
             existingSignature={existingSignature}
             onBeforeGenerate={applyFormDataToClauses}

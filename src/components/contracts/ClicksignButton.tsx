@@ -236,7 +236,7 @@ export default function ClicksignButton({
               className="text-xs text-blue-600 hover:underline flex items-center gap-1"
             >
               <ExternalLink className="h-3 w-3" />
-              Link de assinatura
+              Link do cliente
             </a>
           )}
         </div>
@@ -255,7 +255,7 @@ export default function ClicksignButton({
               ) : (
                 <RefreshCw className="h-3 w-3" />
               )}
-              {resending ? 'Reenviando...' : 'Reenviar link de assinatura'}
+              {resending ? 'Reenviando...' : 'Prorrogar prazo e reenviar link'}
             </Button>
           )}
           <Button

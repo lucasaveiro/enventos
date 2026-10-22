@@ -296,16 +296,21 @@ export async function resendSignatureLink(eventId: number) {
       }
     }
 
-    // Prorroga o prazo para 30 dias a partir de hoje (reativa o link)
-    const deadline = new Date()
-    deadline.setDate(deadline.getDate() + 30)
-    await clicksign.updateDocumentDeadline(signature.documentKey, deadline.toISOString())
-
     // Reenvia apenas para quem ainda não assinou
     const pending = doc.signers.filter((s) => !s.signature)
     if (pending.length === 0) {
       return { success: false, error: 'Todos os signatários já assinaram. Nada a reenviar.' }
     }
+
+    // Prorroga o prazo para 30 dias a partir de hoje (reativa o link). É o mesmo
+    // documento: as assinaturas já feitas continuam valendo. Nunca encurta um prazo
+    // que já esteja mais longe que isso.
+    const deadline = new Date()
+    deadline.setDate(deadline.getDate() + 30)
+    if (doc.deadline_at && new Date(doc.deadline_at) > deadline) {
+      deadline.setTime(new Date(doc.deadline_at).getTime())
+    }
+    await clicksign.updateDocumentDeadline(signature.documentKey, deadline.toISOString())
 
     const results = await Promise.all(
       pending.map(async (signer) => {
@@ -339,14 +344,21 @@ export async function resendSignatureLink(eventId: number) {
       newDeadline: deadline.toISOString(),
     })
 
+    // Se alguém já assinou ('signed'), o reenvio não desfaz isso: rebaixar para
+    // 'sent_whatsapp' faria o painel mostrar "Enviado" até a próxima reconciliação.
+    const alreadySigned = signature.status === 'signed'
+
     await prisma.contractSignature.update({
       where: { id: signature.id },
-      data: { status: 'sent_whatsapp', webhookLog: JSON.stringify(log) },
+      data: {
+        status: alreadySigned ? 'signed' : 'sent_whatsapp',
+        webhookLog: JSON.stringify(log),
+      },
     })
 
     await prisma.event.update({
       where: { id: eventId },
-      data: { contractStatus: 'sent' },
+      data: { contractStatus: alreadySigned ? 'signed' : 'sent' },
     })
 
     revalidatePath('/')
@@ -403,11 +415,16 @@ export async function getSignatureProgress(eventId: number) {
       return { success: true as const, data: null }
     }
 
+    // Cada signatário tem o PRÓPRIO link de assinatura. O `signingUrl` salvo no
+    // ContractSignature é só o do cliente (1º signatário): depois que o cliente
+    // assina, ele não serve para a nossa parte. Por isso devolvemos o link de cada
+    // pendente, lido da Clicksign na hora.
     const signers = doc.signers.map((s) => ({
       name: s.name || s.email || 'Signatário',
       email: s.email || '',
       signAs: s.sign_as || '',
       signed: !!s.signature,
+      signingUrl: s.signature ? null : s.url || null,
     }))
 
     const signedCount = signers.filter((s) => s.signed).length
@@ -456,6 +473,7 @@ export async function getSignatureProgress(eventId: number) {
       success: true as const,
       data: {
         docStatus: doc.status,
+        deadlineAt: doc.deadline_at,
         signedCount,
         totalCount,
         allSigned,

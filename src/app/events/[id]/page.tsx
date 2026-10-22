@@ -117,6 +117,10 @@ const formatCurrency = (value: number) =>
     currency: 'BRL',
   }).format(value)
 
+// Com quantos dias de antecedência o painel do contrato avisa que o prazo de
+// assinatura da Clicksign está acabando.
+const SIGNATURE_DEADLINE_WARNING_DAYS = 7
+
 const formatDateOnly = (value: string | Date) =>
   new Date(value).toLocaleDateString('pt-BR', {
     day: '2-digit',
@@ -136,6 +140,10 @@ export default function EventPage() {
   const [loadingProgress, setLoadingProgress] = useState(false)
   const [progressError, setProgressError] = useState(false)
   const [resendingContract, setResendingContract] = useState(false)
+  // Incrementado para forçar nova consulta do progresso (ex.: após prorrogar o prazo,
+  // que não muda o status local mas muda o prazo exibido).
+  const [progressReloadKey, setProgressReloadKey] = useState(0)
+  const [copiedSignerIndex, setCopiedSignerIndex] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
@@ -242,7 +250,17 @@ export default function EventPage() {
     return () => {
       cancelled = true
     }
-  }, [eventId, contractIdForProgress, contractStatusForProgress])
+  }, [eventId, contractIdForProgress, contractStatusForProgress, progressReloadKey])
+
+  const copySigningLink = async (url: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedSignerIndex(index)
+      setTimeout(() => setCopiedSignerIndex((current) => (current === index ? null : current)), 2000)
+    } catch {
+      prompt('Copie o link de assinatura:', url)
+    }
+  }
 
   const handleRefreshAfterTransaction = useCallback(async () => {
     await fetchTransactions()
@@ -877,9 +895,12 @@ export default function EventPage() {
                 <Badge variant="outline">N. {contractSignature.contractNumber}</Badge>
               )}
             </div>
-            {contractSignature?.signingUrl && (
+            {/* O link salvo é só o do cliente (1º signatário). Quando o progresso
+                carrega, cada signatário pendente ganha o próprio link na lista
+                abaixo; este fica só como alternativa se a Clicksign não responder. */}
+            {contractSignature?.signingUrl && !signatureProgress && (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Link de assinatura:</span>
+                <span className="text-sm text-muted-foreground">Link de assinatura do cliente:</span>
                 <a
                   href={contractSignature.signingUrl}
                   target="_blank"
@@ -916,7 +937,7 @@ export default function EventPage() {
                 </div>
                 <div className="space-y-1.5">
                   {signatureProgress.signers.map((s: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
+                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                       {s.signed ? (
                         <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-600" />
                       ) : (
@@ -928,9 +949,69 @@ export default function EventPage() {
                       >
                         {s.signed ? 'Assinou' : 'Pendente'}
                       </span>
+                      {!s.signed && s.signingUrl && signatureProgress.docStatus === 'running' && (
+                        <span className="flex items-center gap-2">
+                          <a
+                            href={s.signingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Abrir link
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => copySigningLink(s.signingUrl, i)}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                          >
+                            <Link2 className="h-3 w-3" />
+                            {copiedSignerIndex === i ? 'Copiado!' : 'Copiar link'}
+                          </button>
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
+                {signatureProgress.deadlineAt &&
+                  signatureProgress.docStatus === 'running' &&
+                  !signatureProgress.allSigned &&
+                  (() => {
+                    const deadline = new Date(signatureProgress.deadlineAt)
+                    const deadlineLabel = format(deadline, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                    const daysLeft = Math.ceil((deadline.getTime() - Date.now()) / 86_400_000)
+                    if (daysLeft <= 0) {
+                      return (
+                        <div className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-2">
+                          <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-600" />
+                          <p className="text-xs leading-relaxed text-red-800">
+                            <strong>O prazo de assinatura na Clicksign venceu</strong> em {deadlineLabel}.
+                            Use &ldquo;Prorrogar prazo e reenviar link&rdquo; para reabrir por mais 30
+                            dias. Quem já assinou não precisa assinar de novo.
+                          </p>
+                        </div>
+                      )
+                    }
+                    if (daysLeft <= SIGNATURE_DEADLINE_WARNING_DAYS) {
+                      return (
+                        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                          <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                          <p className="text-xs leading-relaxed text-amber-800">
+                            <strong>
+                              O prazo de assinatura vence em {daysLeft} {daysLeft === 1 ? 'dia' : 'dias'}
+                            </strong>{' '}
+                            ({deadlineLabel}). Use &ldquo;Prorrogar prazo e reenviar link&rdquo; para
+                            estender por mais 30 dias. Quem já assinou não precisa assinar de novo.
+                          </p>
+                        </div>
+                      )
+                    }
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        Prazo para assinar: até {deadlineLabel} (faltam {daysLeft} dias).
+                      </p>
+                    )
+                  })()}
                 {signatureProgress.allSigned ? (
                   <p className="text-xs text-emerald-700">
                     Todas as partes assinaram o contrato.
@@ -945,6 +1026,8 @@ export default function EventPage() {
                         .map((s: any) => s.name)
                         .join(', ')}
                       .
+                      {signatureProgress.docStatus === 'closed' &&
+                        ' A Clicksign encerrou o documento sem todas as assinaturas; para concluir, gere e envie um novo contrato.'}
                     </p>
                   </div>
                 )}
@@ -976,6 +1059,16 @@ export default function EventPage() {
                     disabled={resendingContract}
                     className="gap-1 text-orange-600 border-orange-300 hover:bg-orange-50 w-fit"
                     onClick={async () => {
+                      const pendingNames = (signatureProgress?.signers || [])
+                        .filter((s: any) => !s.signed)
+                        .map((s: any) => s.name)
+                        .join(', ')
+                      if (
+                        !confirm(
+                          `Prorrogar o prazo da Clicksign por mais 30 dias e reenviar o link por WhatsApp${pendingNames ? ` para: ${pendingNames}` : ' para quem ainda não assinou'}?\n\nÉ o mesmo contrato: quem já assinou não precisa assinar de novo.`,
+                        )
+                      )
+                        return
                       setResendingContract(true)
                       try {
                         const result = await resendSignatureLink(eventId)
@@ -984,7 +1077,13 @@ export default function EventPage() {
                           await fetchEvent()
                           const contractRes = await getContractSignature(eventId)
                           if (contractRes.success && contractRes.data) setContractSignature(contractRes.data)
-                          alert(`Link reenviado por WhatsApp${names ? ` para: ${names}` : ''}.`)
+                          setProgressReloadKey((k) => k + 1)
+                          const newDeadline = result.data?.newDeadline
+                            ? format(new Date(result.data.newDeadline), 'dd/MM/yyyy', { locale: ptBR })
+                            : null
+                          alert(
+                            `Link reenviado por WhatsApp${names ? ` para: ${names}` : ''}.${newDeadline ? `\nNovo prazo para assinar: ${newDeadline}.` : ''}`,
+                          )
                         } else {
                           alert(result.error || 'Erro ao reenviar link')
                         }
@@ -994,7 +1093,7 @@ export default function EventPage() {
                     }}
                   >
                     <RefreshCw className={`h-3 w-3${resendingContract ? ' animate-spin' : ''}`} />
-                    {resendingContract ? 'Reenviando...' : 'Reenviar link de assinatura'}
+                    {resendingContract ? 'Reenviando...' : 'Prorrogar prazo e reenviar link'}
                   </Button>
                 )}
                 <Button

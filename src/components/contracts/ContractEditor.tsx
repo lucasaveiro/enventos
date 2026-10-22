@@ -1210,7 +1210,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                   rel="noopener noreferrer"
                   className="text-xs text-blue-600 hover:underline"
                 >
-                  Ver link de assinatura
+                  Ver link do cliente
                 </a>
               )}
             </div>

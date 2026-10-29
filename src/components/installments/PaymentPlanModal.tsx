@@ -22,11 +22,14 @@ import { parseLocalDate, toDateInputValue } from '@/lib/utils'
 import { PAYMENT_METHODS } from '@/lib/paymentMethods'
 import {
   ENTRADA_MIN_PERCENT,
+  entradaMinima,
   entradaPorPercentual,
+  mensagemDiferencaPlano,
   parsePercent,
-  percentualDaEntrada,
+  percentualAproximado,
   validarPercentualEntrada,
   validarPlanoParcelado,
+  validarValorEntrada,
 } from '@/lib/paymentRules'
 
 const formatCurrency = (value: number) =>
@@ -41,7 +44,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-// Parcelado: sinal de no minimo 20% do total (percentual digitado) e saldo nas parcelas.
+// Parcelado: sinal de no minimo 20% do total (digitado em % ou em R$) e saldo nas parcelas.
 // A vista: um unico pagamento do valor total, na data do sinal.
 type PlanMode = 'parcelado' | 'a_vista'
 
@@ -121,14 +124,27 @@ export function PaymentPlanModal({
   const [manuallyEdited, setManuallyEdited] = useState(false)
   const [mode, setMode] = useState<PlanMode>('parcelado')
   const [percentInput, setPercentInput] = useState(String(ENTRADA_MIN_PERCENT))
+  const [entradaInput, setEntradaInput] = useState('')
   const isAVista = mode === 'a_vista'
-  // O valor da entrada sai do percentual digitado (minimo 20%); a vista e o total.
-  // Percentual invalido fica sinalizado e segura o envio; o preview usa o minimo.
-  const percent = parsePercent(percentInput)
-  const percentError = isAVista ? null : validarPercentualEntrada(percent)
-  const entrada = isAVista
-    ? totalValue
-    : entradaPorPercentual(totalValue, percentError ? ENTRADA_MIN_PERCENT : percent)
+  // Entrada editavel em % ou em R$: o que o usuario mexe por ultimo manda e o
+  // outro campo e recalculado. Minimo de 20%; fora dele o erro aparece e o
+  // envio fica bloqueado. A vista, a entrada e o total.
+  const entradaDigitada = parseFloat(entradaInput)
+  const entrada = isAVista ? totalValue : Number.isFinite(entradaDigitada) ? entradaDigitada : 0
+  const percentError = isAVista ? null : validarPercentualEntrada(parsePercent(percentInput))
+  const entradaError = isAVista ? null : validarValorEntrada(totalValue, entradaDigitada)
+
+  const changePercent = (value: string) => {
+    setPercentInput(value)
+    const p = parsePercent(value)
+    if (Number.isFinite(p)) setEntradaInput(entradaPorPercentual(totalValue, p).toFixed(2))
+  }
+
+  const changeEntrada = (value: string) => {
+    setEntradaInput(value)
+    const e = parseFloat(value)
+    if (Number.isFinite(e)) setPercentInput(String(percentualAproximado(totalValue, e)))
+  }
 
   const {
     register,
@@ -161,9 +177,10 @@ export function PaymentPlanModal({
       })
       setManuallyEdited(false)
       setMode(totalValue > 0 && deposit >= totalValue ? 'a_vista' : 'parcelado')
-      // Parte do percentual da entrada atual do evento, se ele for aceito.
-      const atual = percentualDaEntrada(totalValue, deposit)
-      setPercentInput(String(atual !== null && !validarPercentualEntrada(atual) ? atual : ENTRADA_MIN_PERCENT))
+      // Parte da entrada atual do evento, se ela for aceita; senao do minimo.
+      const inicial = validarValorEntrada(totalValue, deposit) ? entradaMinima(totalValue) : deposit
+      setEntradaInput(inicial.toFixed(2))
+      setPercentInput(String(percentualAproximado(totalValue, inicial)))
     }
   }, [isOpen, deposit, totalValue, reset])
 
@@ -188,6 +205,13 @@ export function PaymentPlanModal({
     totalValue,
     manuallyEdited,
   ])
+
+  // Com parcelas editadas a mao, mudar a entrada so troca o valor do sinal:
+  // datas e valores das parcelas ficam como o usuario deixou.
+  useEffect(() => {
+    if (!manuallyEdited) return
+    setItems((prev) => prev.map((item) => (item.isSinal ? { ...item, amount: entrada } : item)))
+  }, [entrada, manuallyEdited])
 
   const updateItem = (id: string, patch: Partial<PreviewItem>) => {
     setManuallyEdited(true)
@@ -227,15 +251,15 @@ export function PaymentPlanModal({
   }
 
   const itemsSum = items.reduce((s, it) => s + (Number.isFinite(it.amount) ? it.amount : 0), 0)
-  const sumMatches = Math.abs(itemsSum - totalValue) < 0.01
+  const diferencaMessage = items.length > 0 ? mensagemDiferencaPlano(totalValue, itemsSum) : null
 
   const onSubmit = async (data: FormValues) => {
     if (items.length === 0) {
       alert('Adicione pelo menos uma parcela.')
       return
     }
-    if (percentError) {
-      alert(percentError)
+    if (entradaError) {
+      alert(entradaError)
       return
     }
     const planError = validarPlanoParcelado(totalValue, items)
@@ -243,10 +267,8 @@ export function PaymentPlanModal({
       alert(planError)
       return
     }
-    if (!sumMatches) {
-      const confirmed = confirm(
-        `A soma das parcelas (${formatCurrency(itemsSum)}) e diferente do valor total do evento (${formatCurrency(totalValue)}). Deseja continuar mesmo assim?`,
-      )
+    if (diferencaMessage) {
+      const confirmed = confirm(`${diferencaMessage}\n\nDeseja salvar mesmo assim?`)
       if (!confirmed) return
     }
 
@@ -354,10 +376,7 @@ export function PaymentPlanModal({
                     min={ENTRADA_MIN_PERCENT}
                     max="99.99"
                     value={percentInput}
-                    onChange={(e) => {
-                      setPercentInput(e.target.value)
-                      setManuallyEdited(false)
-                    }}
+                    onChange={(e) => changePercent(e.target.value)}
                   />
                   {percentError ? (
                     <p className="text-xs text-destructive mt-1">{percentError}</p>
@@ -368,9 +387,24 @@ export function PaymentPlanModal({
               )}
               <div>
                 <Label>{isAVista ? 'Valor (R$)' : 'Valor do Sinal (R$)'}</Label>
-                <div className="flex h-10 items-center rounded-md border border-input bg-secondary/40 px-3 text-sm font-medium">
-                  {formatCurrency(entrada)}
-                </div>
+                {isAVista ? (
+                  <div className="flex h-10 items-center rounded-md border border-input bg-secondary/40 px-3 text-sm font-medium">
+                    {formatCurrency(entrada)}
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={entradaInput}
+                      onChange={(e) => changeEntrada(e.target.value)}
+                    />
+                    {entradaError && !percentError && (
+                      <p className="text-xs text-destructive mt-1">{entradaError}</p>
+                    )}
+                  </>
+                )}
               </div>
               <div>
                 <Label>{isAVista ? 'Data do Pagamento' : 'Data do Sinal'}</Label>
@@ -494,11 +528,12 @@ export function PaymentPlanModal({
                       min="0"
                       value={item.amount}
                       onChange={(e) =>
-                        updateItem(item.id, { amount: Number(e.target.value) })
+                        item.isSinal && !isAVista
+                          ? changeEntrada(e.target.value)
+                          : updateItem(item.id, { amount: Number(e.target.value) })
                       }
-                      readOnly={item.isSinal}
-                      title={item.isSinal ? 'Valor da entrada: altere pelo percentual acima' : undefined}
-                      className={`h-8 text-xs${item.isSinal ? ' bg-secondary/40 cursor-default' : ''}`}
+                      readOnly={item.isSinal && isAVista}
+                      className="h-8 text-xs"
                     />
                     {item.isSinal ? (
                       <span />
@@ -527,20 +562,17 @@ export function PaymentPlanModal({
                 Total: <span className="font-semibold text-foreground">{formatCurrency(totalValue)}</span>
               </span>
             </div>
-            {!sumMatches && items.length > 0 && (
+            {diferencaMessage && (
               <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>
-                  A soma das parcelas e diferente do valor total do evento (diferenca:{' '}
-                  {formatCurrency(Math.abs(itemsSum - totalValue))}).
-                </span>
+                <span>{diferencaMessage}</span>
               </div>
             )}
 
             {items.some((it) => it.isSinal && it.amount > 0) && (
               <p className="text-[11px] text-muted-foreground">
-                Dica: edite datas e valores das parcelas; a entrada sai do percentual (minimo {ENTRADA_MIN_PERCENT}%).
-                Use &quot;Recalcular&quot; para voltar ao calculo automatico.
+                Dica: a entrada pode ser digitada em % ou em R$ (minimo {ENTRADA_MIN_PERCENT}%); datas e
+                valores das parcelas sao livres. Use &quot;Recalcular&quot; para voltar ao calculo automatico.
               </p>
             )}
           </div>

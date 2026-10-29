@@ -8,13 +8,21 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
-import { ENTRADA_MIN_PERCENT, entradaPorPercentual, parsePercent, validarPercentualEntrada } from '@/lib/paymentRules'
+import {
+  ENTRADA_MIN_PERCENT,
+  entradaPorPercentual,
+  mensagemDiferencaPlano,
+  parsePercent,
+  percentualAproximado,
+  validarPercentualEntrada,
+  validarValorEntrada,
+} from '@/lib/paymentRules'
 
 export type PaymentType = 'parcelado' | 'a_vista'
 
 export interface PaymentData {
-  // Parcelado: entrada de no mínimo 20% do total (percentual digitado em
-  // depositPercent) e saldo nas parcelas.
+  // Parcelado: entrada de no mínimo 20% do total, digitada em % (depositPercent)
+  // ou em R$ (depositAmount) — um recalcula o outro — e saldo nas parcelas.
   // À vista: a "entrada" é o valor total, sem parcelas.
   paymentType: PaymentType
   totalValue: string
@@ -30,6 +38,9 @@ export interface PaymentData {
   // vazia segue o padrão mensal a partir da 1ª parcela; a 1ª é
   // firstInstallmentDate.
   installmentDates: string[]
+  // Valores editados à mão, por índice da parcela (R$). Posição vazia divide
+  // por igual o que sobra do saldo depois das editadas.
+  installmentAmounts: string[]
   paymentMethod: string
   cautionValue: string
 }
@@ -50,12 +61,14 @@ export interface ScheduledInstallment {
   number: number
   date: string // yyyy-MM-dd
   amount: number
-  edited: boolean
+  edited: boolean // data editada
+  amountEdited: boolean
 }
 
 /**
- * Parcelas do saldo: valores divididos por igual (centavos na última) e
- * vencimentos mensais a partir da 1ª parcela, salvo os editados à mão.
+ * Parcelas do saldo: vencimentos mensais a partir da 1ª parcela e valores
+ * divididos por igual (centavos na última), salvo os editados à mão — as
+ * parcelas não editadas dividem o que sobra do saldo depois das editadas.
  * Usado no passo de pagamento, na revisão, na prévia do contrato e no envio.
  */
 export function buildInstallmentSchedule(data: PaymentData): ScheduledInstallment[] {
@@ -65,28 +78,54 @@ export function buildInstallmentSchedule(data: PaymentData): ScheduledInstallmen
   const n = parseInt(data.numberOfInstallments || '1') || 1
   if (data.paymentType === 'a_vista' || remaining <= 0 || n <= 0 || !data.firstInstallmentDate) return []
 
-  const installmentAmount = Math.floor((remaining / n) * 100) / 100
-  const lastAmount = remaining - installmentAmount * (n - 1)
+  const amountOverrides = Array.from({ length: n }, (_, i) => {
+    const v = parseFloat((data.installmentAmounts?.[i] ?? '').replace(',', '.'))
+    return Number.isFinite(v) && v >= 0 ? v : null
+  })
+  const freeIndexes = amountOverrides.flatMap((v, i) => (v === null ? [i] : []))
+  const fixedSum = amountOverrides.reduce<number>((s, v) => s + (v ?? 0), 0)
+  const freeTotal = Math.max(0, Math.round((remaining - fixedSum) * 100) / 100)
+  const freeAmount = freeIndexes.length > 0 ? Math.floor((freeTotal / freeIndexes.length) * 100) / 100 : 0
+  const lastFree = freeIndexes[freeIndexes.length - 1]
   const first = new Date(data.firstInstallmentDate + 'T12:00:00')
 
   return Array.from({ length: n }, (_, i) => {
-    const override = i > 0 ? data.installmentDates?.[i] : undefined
+    const dateOverride = i > 0 ? data.installmentDates?.[i] : undefined
+    const amountOverride = amountOverrides[i]
+    const amount =
+      amountOverride !== null
+        ? amountOverride
+        : i === lastFree
+          ? Math.round((freeTotal - freeAmount * (freeIndexes.length - 1)) * 100) / 100
+          : freeAmount
     return {
       number: i + 1,
-      date: override || format(addMonths(first, i), 'yyyy-MM-dd'),
-      amount: i === n - 1 ? Math.round(lastAmount * 100) / 100 : installmentAmount,
-      edited: Boolean(override),
+      date: dateOverride || format(addMonths(first, i), 'yyyy-MM-dd'),
+      amount,
+      edited: Boolean(dateOverride),
+      amountEdited: amountOverride !== null,
     }
   })
 }
 
+/** Aviso de entrada + parcelas fora do valor do contrato (falta / passou). */
+export function paymentPlanDifference(data: PaymentData): string | null {
+  if (data.paymentType === 'a_vista') return null
+  const total = parseFloat((data.totalValue || '0').replace(',', '.')) || 0
+  const deposit = parseFloat((data.depositAmount || '0').replace(',', '.')) || 0
+  const schedule = buildInstallmentSchedule(data)
+  if (!(total > 0) || schedule.length === 0) return null
+  return mensagemDiferencaPlano(total, deposit + schedule.reduce((s, inst) => s + inst.amount, 0))
+}
+
+// Entrada a partir do percentual (ou o total, à vista). Percentual fora da
+// regra também gera o valor; o erro aparece no campo e segura o avanço.
 function depositFor(data: PaymentData): string {
   const total = parseFloat((data.totalValue || '').replace(',', '.'))
   if (isNaN(total) || total <= 0) return ''
   if (data.paymentType === 'a_vista') return total.toFixed(2)
-  // Percentual fora da regra não gera entrada; o erro aparece no campo.
   const percent = parsePercent(data.depositPercent)
-  if (validarPercentualEntrada(percent)) return ''
+  if (!Number.isFinite(percent)) return ''
   return entradaPorPercentual(total, percent).toFixed(2)
 }
 
@@ -103,9 +142,15 @@ export function PaymentStep({ data, onChange, errors }: Props) {
 
   const update = (field: keyof PaymentData, value: any) => {
     const next = { ...data, [field]: value }
-    // O valor da entrada não é digitado: sai do total, do percentual e do tipo.
+    // Entrada: quem o usuário edita manda. Mexeu no %, o valor sai dele; mexeu
+    // no valor, o % sai do valor. Total e tipo recalculam o valor pelo %.
     if (field === 'totalValue' || field === 'paymentType' || field === 'depositPercent') {
       next.depositAmount = depositFor(next)
+    }
+    if (field === 'depositAmount') {
+      const total = parseFloat((next.totalValue || '').replace(',', '.'))
+      const p = percentualAproximado(total, parseFloat(String(value).replace(',', '.')))
+      next.depositPercent = Number.isFinite(p) ? String(p) : ''
     }
     onChange(next)
   }
@@ -113,12 +158,24 @@ export function PaymentStep({ data, onChange, errors }: Props) {
   const isAVista = data.paymentType === 'a_vista'
   const percentError = isAVista ? null : validarPercentualEntrada(parsePercent(data.depositPercent))
   const totalValue = parseFloat((data.totalValue || '0').replace(',', '.')) || 0
+  const amountError =
+    isAVista || !(totalValue > 0) || percentError
+      ? null
+      : validarValorEntrada(totalValue, parseFloat((data.depositAmount || '').replace(',', '.')))
   const depositAmount = parseFloat((data.depositAmount || '0').replace(',', '.')) || 0
   const remainingValue = Math.max(0, totalValue - depositAmount)
   const numberOfInstallments = parseInt(data.numberOfInstallments || '1') || 1
 
   const installmentPreview = useMemo(() => buildInstallmentSchedule(data), [data])
   const hasEditedDates = installmentPreview.some((inst) => inst.edited)
+  const hasEditedAmounts = installmentPreview.some((inst) => inst.amountEdited)
+  const diferenca = paymentPlanDifference(data)
+
+  const setInstallmentAmount = (index: number, value: string) => {
+    const amounts = [...(data.installmentAmounts ?? [])]
+    amounts[index] = value
+    update('installmentAmounts', amounts)
+  }
 
   // A 1ª parcela é a própria "Data da 1ª Parcela"; as demais guardam a data
   // editada no índice delas.
@@ -196,10 +253,25 @@ export function PaymentStep({ data, onChange, errors }: Props) {
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">
                 {isAVista ? 'Valor à Vista' : 'Valor da Entrada'}
               </Label>
-              <div className="flex h-11 items-center px-4 rounded-lg border border-[var(--input-border)] bg-[var(--secondary)] text-sm font-medium">
-                {formatCurrency(depositAmount)}
-              </div>
-              {errors.depositAmount && <p className="text-xs text-red-500 mt-1">{errors.depositAmount}</p>}
+              {isAVista ? (
+                <div className="flex h-11 items-center px-4 rounded-lg border border-[var(--input-border)] bg-[var(--secondary)] text-sm font-medium">
+                  {formatCurrency(depositAmount)}
+                </div>
+              ) : (
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={data.depositAmount}
+                  onChange={(e) => update('depositAmount', e.target.value)}
+                  placeholder="0,00"
+                />
+              )}
+              {amountError ? (
+                <p className="text-xs text-red-500 mt-1">{amountError}</p>
+              ) : (
+                errors.depositAmount && <p className="text-xs text-red-500 mt-1">{errors.depositAmount}</p>
+              )}
             </div>
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Valor Restante</Label>
@@ -372,15 +444,26 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                 <h4 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase">
                   Plano de Pagamento
                 </h4>
-                {hasEditedDates && (
-                  <button
-                    type="button"
-                    className="text-xs text-[var(--primary)] hover:underline"
-                    onClick={() => update('installmentDates', [])}
-                  >
-                    Voltar às datas mensais
-                  </button>
-                )}
+                <div className="flex items-center gap-3">
+                  {hasEditedAmounts && (
+                    <button
+                      type="button"
+                      className="text-xs text-[var(--primary)] hover:underline"
+                      onClick={() => update('installmentAmounts', [])}
+                    >
+                      Dividir valores por igual
+                    </button>
+                  )}
+                  {hasEditedDates && (
+                    <button
+                      type="button"
+                      className="text-xs text-[var(--primary)] hover:underline"
+                      onClick={() => update('installmentDates', [])}
+                    >
+                      Voltar às datas mensais
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="divide-y divide-[var(--border)]">
                 {/* Deposit row */}
@@ -436,9 +519,17 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-[var(--foreground)]">{formatCurrency(inst.amount)}</p>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={data.installmentAmounts?.[inst.number - 1] ?? inst.amount.toFixed(2)}
+                        onChange={(e) => setInstallmentAmount(inst.number - 1, e.target.value)}
+                        className="h-8 w-32 text-right text-sm font-semibold"
+                        aria-label={`Valor da parcela ${inst.number}`}
+                      />
                       <span className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-                        <Clock className="h-3 w-3" /> Pendente
+                        <Clock className="h-3 w-3" /> {inst.amountEdited ? 'Valor editado' : 'Pendente'}
                       </span>
                     </div>
                   </div>
@@ -450,6 +541,13 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                 <span className="text-xs font-medium text-[var(--muted-foreground)]">Total</span>
                 <span className="text-sm font-bold text-[var(--foreground)]">{formatCurrency(totalValue)}</span>
               </div>
+            </div>
+          )}
+
+          {diferenca && (
+            <div className="flex items-start gap-2 text-sm text-amber-700 mt-2">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              {diferenca}
             </div>
           )}
 

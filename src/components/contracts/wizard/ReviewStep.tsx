@@ -15,7 +15,7 @@ import {
   CreditCard,
 } from 'lucide-react'
 import type { ClientEventData } from './ClientEventStep'
-import { buildInstallmentSchedule, type PaymentData } from './PaymentStep'
+import { buildInstallmentSchedule, paymentPlanDifference, type PaymentData } from './PaymentStep'
 import type { ContractData } from './ContractStep'
 import { paymentMethodLabel } from '@/lib/paymentMethods'
 import { ContractClause, SPACES } from '@/lib/contractTemplates'
@@ -180,6 +180,10 @@ export function ReviewStep({ clientEventData, paymentData, contractData, clauses
               ))}
             </div>
           </div>
+
+          {paymentPlanDifference(paymentData) && (
+            <p className="mt-3 text-sm text-amber-700">{paymentPlanDifference(paymentData)}</p>
+          )}
 
           <div className="flex items-center gap-2 mt-3 text-sm">
             <CreditCard className="h-4 w-4 text-[var(--muted-foreground)]" />

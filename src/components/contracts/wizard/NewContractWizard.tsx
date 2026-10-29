@@ -10,7 +10,7 @@ import { PaymentStep, buildInstallmentSchedule, type PaymentData } from './Payme
 import { ContractStep, type ContractData } from './ContractStep'
 import { ReviewStep } from './ReviewStep'
 import { createClosedContract } from '@/app/actions/contractWizard'
-import { ENTRADA_MIN_PERCENT, isEntradaValida, mensagemEntradaMinima, parsePercent, validarPercentualEntrada } from '@/lib/paymentRules'
+import { ENTRADA_MIN_PERCENT, validarValorEntrada } from '@/lib/paymentRules'
 import { ContractClause, SPACES, generateContractNumber, getInitialClauses, getContractSpaceSlug } from '@/lib/contractTemplates'
 
 const STEPS = [
@@ -63,6 +63,7 @@ export function NewContractWizard() {
     numberOfInstallments: '1',
     firstInstallmentDate: '',
     installmentDates: [],
+    installmentAmounts: [],
     paymentMethod: '',
     cautionValue: '',
   })
@@ -123,12 +124,8 @@ export function NewContractWizard() {
       buildInstallmentSchedule(paymentData).forEach((inst, i) => {
         if (!inst.date) errs[`installmentDate${i}`] = 'Informe o vencimento'
       })
-      const percentError = validarPercentualEntrada(parsePercent(paymentData.depositPercent))
-      if (percentError) {
-        errs.depositPercent = percentError
-      } else if (totalValue > 0 && !isEntradaValida(totalValue, depositAmount)) {
-        errs.depositAmount = mensagemEntradaMinima(totalValue)
-      }
+      const entradaError = totalValue > 0 ? validarValorEntrada(totalValue, depositAmount) : null
+      if (entradaError) errs.depositAmount = entradaError
     }
 
     setErrors(errs)
@@ -189,6 +186,7 @@ export function NewContractWizard() {
           ? new Date(paymentData.firstInstallmentDate + 'T12:00:00')
           : new Date(),
         installmentDates: schedule.map((inst) => new Date(inst.date + 'T12:00:00')),
+        installmentAmounts: schedule.map((inst) => inst.amount),
         paymentMethod: paymentData.paymentMethod,
       })
 

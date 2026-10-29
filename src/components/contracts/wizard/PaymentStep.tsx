@@ -8,15 +8,17 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
-import { ENTRADA_PERCENT, entradaPadrao } from '@/lib/paymentRules'
+import { ENTRADA_MIN_PERCENT, entradaPorPercentual, parsePercent, validarPercentualEntrada } from '@/lib/paymentRules'
 
 export type PaymentType = 'parcelado' | 'a_vista'
 
 export interface PaymentData {
-  // Parcelado: entrada travada em 20% do total e saldo nas parcelas.
+  // Parcelado: entrada de no mínimo 20% do total (percentual digitado em
+  // depositPercent) e saldo nas parcelas.
   // À vista: a "entrada" é o valor total, sem parcelas.
   paymentType: PaymentType
   totalValue: string
+  depositPercent: string
   depositAmount: string
   depositDueDate: string
   depositPaid: boolean
@@ -43,11 +45,15 @@ function formatCurrency(value: number): string {
 function depositFor(data: PaymentData): string {
   const total = parseFloat((data.totalValue || '').replace(',', '.'))
   if (isNaN(total) || total <= 0) return ''
-  return (data.paymentType === 'a_vista' ? total : entradaPadrao(total)).toFixed(2)
+  if (data.paymentType === 'a_vista') return total.toFixed(2)
+  // Percentual fora da regra não gera entrada; o erro aparece no campo.
+  const percent = parsePercent(data.depositPercent)
+  if (validarPercentualEntrada(percent)) return ''
+  return entradaPorPercentual(total, percent).toFixed(2)
 }
 
 const PAYMENT_TYPES: { value: PaymentType; label: string; description: string }[] = [
-  { value: 'parcelado', label: 'Parcelado', description: `Entrada de ${ENTRADA_PERCENT}% e saldo em parcelas` },
+  { value: 'parcelado', label: 'Parcelado', description: `Entrada a partir de ${ENTRADA_MIN_PERCENT}% e saldo em parcelas` },
   { value: 'a_vista', label: 'À vista', description: 'Valor total em um único pagamento' },
 ]
 
@@ -59,14 +65,15 @@ export function PaymentStep({ data, onChange, errors }: Props) {
 
   const update = (field: keyof PaymentData, value: any) => {
     const next = { ...data, [field]: value }
-    // A entrada não é digitada: sai do total e do tipo de pagamento.
-    if (field === 'totalValue' || field === 'paymentType') {
+    // O valor da entrada não é digitado: sai do total, do percentual e do tipo.
+    if (field === 'totalValue' || field === 'paymentType' || field === 'depositPercent') {
       next.depositAmount = depositFor(next)
     }
     onChange(next)
   }
 
   const isAVista = data.paymentType === 'a_vista'
+  const percentError = isAVista ? null : validarPercentualEntrada(parsePercent(data.depositPercent))
   const totalValue = parseFloat((data.totalValue || '0').replace(',', '.')) || 0
   const depositAmount = parseFloat((data.depositAmount || '0').replace(',', '.')) || 0
   const remainingValue = Math.max(0, totalValue - depositAmount)
@@ -118,7 +125,7 @@ export function PaymentStep({ data, onChange, errors }: Props) {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${isAVista ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Valor Total (R$) *</Label>
               <Input
@@ -130,9 +137,28 @@ export function PaymentStep({ data, onChange, errors }: Props) {
               />
               {errors.totalValue && <p className="text-xs text-red-500 mt-1">{errors.totalValue}</p>}
             </div>
+            {!isAVista && (
+              <div>
+                <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">Entrada (%) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={ENTRADA_MIN_PERCENT}
+                  max="99.99"
+                  value={data.depositPercent}
+                  onChange={(e) => update('depositPercent', e.target.value)}
+                  placeholder={String(ENTRADA_MIN_PERCENT)}
+                />
+                {percentError ? (
+                  <p className="text-xs text-red-500 mt-1">{percentError}</p>
+                ) : (
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">Mínimo {ENTRADA_MIN_PERCENT}%</p>
+                )}
+              </div>
+            )}
             <div>
               <Label className="text-xs font-medium text-[var(--muted-foreground)] mb-1 block">
-                {isAVista ? 'Valor à Vista' : `Entrada (${ENTRADA_PERCENT}%)`}
+                {isAVista ? 'Valor à Vista' : 'Valor da Entrada'}
               </Label>
               <div className="flex h-11 items-center px-4 rounded-lg border border-[var(--input-border)] bg-[var(--secondary)] text-sm font-medium">
                 {formatCurrency(depositAmount)}
@@ -320,7 +346,7 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[var(--foreground)]">
-                        {isAVista ? 'Pagamento à vista' : `Sinal (Entrada ${ENTRADA_PERCENT}%)`}
+                        {isAVista ? 'Pagamento à vista' : `Sinal (Entrada ${data.depositPercent}%)`}
                       </p>
                       <p className="text-xs text-[var(--muted-foreground)]">
                         {data.depositDueDate

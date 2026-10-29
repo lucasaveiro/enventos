@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { addMonths } from 'date-fns'
 import { resolveContractSpaceSlug } from '@/lib/contractTemplates'
-import { isEntradaPadrao, mensagemEntradaPadrao } from '@/lib/paymentRules'
+import { isEntradaValida, mensagemEntradaMinima } from '@/lib/paymentRules'
 
 export interface ClosedContractData {
   // Client
@@ -63,10 +63,10 @@ export async function createClosedContract(data: ClosedContractData) {
     if (!data.eventTitle?.trim()) return { success: false, error: 'Título do evento é obrigatório' }
     if (!data.spaceId) return { success: false, error: 'Espaço é obrigatório' }
     if (data.totalValue <= 0) return { success: false, error: 'Valor total deve ser maior que zero' }
-    // Com saldo a parcelar, a entrada tem que ser os 20% do padrão.
+    // Com saldo a parcelar, a entrada tem que ser de no mínimo 20% do total.
     const parcelado = data.totalValue - data.depositAmount > 0.005 && data.numberOfInstallments > 0
-    if (parcelado && !isEntradaPadrao(data.totalValue, data.depositAmount)) {
-      return { success: false, error: mensagemEntradaPadrao(data.totalValue) }
+    if (parcelado && !isEntradaValida(data.totalValue, data.depositAmount)) {
+      return { success: false, error: mensagemEntradaMinima(data.totalValue) }
     }
 
     const result = await prisma.$transaction(async (tx) => {

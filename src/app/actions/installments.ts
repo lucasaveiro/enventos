@@ -10,7 +10,7 @@ import { addMonths, startOfMonth, endOfMonth, addDays } from 'date-fns'
 // marcada como vencida três horas antes. Mesma conta usada pela v2.
 import { startOfToday } from '@/lib/today'
 import { createPaymentPlanSchema } from '@/lib/validations'
-import { isEntradaPadrao, mensagemEntradaPadrao, validarPlanoParcelado } from '@/lib/paymentRules'
+import { isEntradaValida, mensagemEntradaMinima, validarPlanoParcelado } from '@/lib/paymentRules'
 
 function toNumber(value: { toNumber: () => number }) {
   return value.toNumber()
@@ -135,7 +135,7 @@ export async function createPaymentPlan(data: {
       }
     }
 
-    // Parcelado so com entrada de 20% (validado antes de apagar o plano atual).
+    // Parcelado so com entrada de no minimo 20% (validado antes de apagar o plano atual).
     const planError = validarPlanoParcelado(data.totalValue, installments)
     if (planError) return { success: false, error: planError }
 
@@ -336,9 +336,9 @@ export async function updateInstallment(
 
     if (!installment) return { success: false, error: 'Parcela nao encontrada' }
 
-    // No parcelado o sinal e fixo em 20% do total: um sinal que esta nos 20%
-    // nao pode sair deles. Sinal fora do padrao vem de plano anterior a trava e
-    // segue editavel como foi negociado.
+    // No parcelado o sinal e de no minimo 20% do total: um sinal que respeita o
+    // minimo nao pode descer abaixo dele. Sinal abaixo do minimo vem de plano
+    // anterior a trava e segue editavel como foi negociado.
     if (
       installment.isSinal &&
       data.amount !== undefined &&
@@ -346,9 +346,9 @@ export async function updateInstallment(
       installment.event._count.installments > 1
     ) {
       const total = toNumber(installment.event.totalValue)
-      const planoNovo = isEntradaPadrao(total, toNumber(installment.amount))
-      if (planoNovo && !isEntradaPadrao(total, data.amount)) {
-        return { success: false, error: mensagemEntradaPadrao(total) }
+      const planoNovo = isEntradaValida(total, toNumber(installment.amount))
+      if (planoNovo && !isEntradaValida(total, data.amount)) {
+        return { success: false, error: mensagemEntradaMinima(total) }
       }
     }
 

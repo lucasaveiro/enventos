@@ -52,7 +52,16 @@ import { saveGeneratedContract, getGeneratedContractById, getEventDataForContrac
 import { ContractStatusBadge } from './ContractStatusBadge'
 import { toDateInputValue } from '@/lib/utils'
 import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
-import { ENTRADA_PERCENT, entradaPadrao, formatBRL, isEntradaPadrao, validarPlanoParcelado } from '@/lib/paymentRules'
+import {
+  ENTRADA_MIN_PERCENT,
+  entradaPorPercentual,
+  formatBRL,
+  formatPercent,
+  isEntradaValida,
+  parsePercent,
+  validarPercentualEntrada,
+  validarPlanoParcelado,
+} from '@/lib/paymentRules'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
 const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
@@ -172,7 +181,7 @@ const EVENT_TYPES = [
 
 const PAYMENT_CONDITIONS: { value: PaymentConditionType; label: string; description: string }[] = [
   { value: 'a_vista', label: 'À Vista', description: 'Pago via Pix/Depósito bancário na data da assinatura do contrato' },
-  { value: 'entrada_parcelas', label: 'Entrada + Parcelas', description: `Entrada de ${ENTRADA_PERCENT}% no ato do contrato e restante parcelado no Pix até 10 dias antes do evento` },
+  { value: 'entrada_parcelas', label: 'Entrada + Parcelas', description: `Entrada a partir de ${ENTRADA_MIN_PERCENT}% no ato do contrato e restante parcelado no Pix até 10 dias antes do evento` },
   { value: 'cartao_credito', label: 'Cartão de Crédito', description: 'Parcelado no cartão de crédito com juros adicionais da maquininha' },
 ]
 
@@ -246,12 +255,21 @@ interface PersistedClauseStructure {
   removedDefaultClauseIds: string[]
 }
 
-// Contrato salvo antes da trava dos 20%: parcelado com a entrada fora do padrão.
+// Contrato salvo antes da trava dos 20%: parcelado com a entrada abaixo do mínimo.
 function savedContractHasLegacyEntrada(formData: Record<string, unknown>): boolean {
   if (formData.paymentCondition !== 'entrada_parcelas') return false
   const total = parseFloat(String(formData.totalValue ?? '').replace(',', '.'))
   const deposit = parseFloat(String(formData.depositValue ?? '').replace(',', '.'))
-  return total > 0 && !isNaN(deposit) && !isEntradaPadrao(total, deposit)
+  return total > 0 && !isNaN(deposit) && !isEntradaValida(total, deposit)
+}
+
+// Percentual exibido para uma entrada carregada (contrato salvo ou plano do
+// evento), com as 2 casas do campo. Sem entrada, parte do mínimo.
+function percentFieldFor(total: unknown, deposit: unknown): string {
+  const t = parseFloat(String(total ?? '').replace(',', '.'))
+  const d = parseFloat(String(deposit ?? '').replace(',', '.'))
+  if (!(t > 0) || !(d > 0)) return String(ENTRADA_MIN_PERCENT)
+  return formatPercent(Math.round((d / t) * 10000) / 100)
 }
 
 const EMPTY_CLAUSE_STRUCTURE: PersistedClauseStructure = {
@@ -571,40 +589,59 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const paymentCondition = useWatch({ control, name: 'paymentCondition' }) as PaymentConditionType
 
   // Evento com plano/contrato anterior à trava dos 20% (entrada negociada
-  // fora do padrão). Só existe em dado antigo — o servidor não aceita mais
+  // abaixo do mínimo). Só existe em dado antigo — o servidor não aceita mais
   // plano parcelado assim —, então o contrato dele segue podendo ser gerado
   // com a entrada original. Definido ao carregar o contrato salvo ou o plano.
   const [legacyEntrada, setLegacyEntrada] = useState(false)
 
-  // Pagamento parcelado: entrada travada em 20% do total (regra dos dois
-  // espaços). Recalculada sempre que diverge — inclusive ao carregar um contrato
-  // salvo ou o plano de um evento criado com outra entrada.
+  // Percentual da entrada no parcelado, digitado pelo usuário (mínimo 20%).
+  // Ao carregar contrato salvo ou plano do evento, vem da entrada carregada.
+  const [depositPercent, setDepositPercent] = useState(String(ENTRADA_MIN_PERCENT))
+  const depositPercentError =
+    paymentCondition === 'entrada_parcelas' && !legacyEntrada
+      ? validarPercentualEntrada(parsePercent(depositPercent))
+      : null
+
+  // Pagamento parcelado: a entrada sai do percentual sobre o total. Só é
+  // recalculada quando diverge dele — uma entrada carregada que já corresponde
+  // ao percentual exibido (2 casas) fica com os centavos que tem.
   useEffect(() => {
     if (paymentCondition === 'entrada_parcelas' && !legacyEntrada) {
       const total = parseFloat((totalValue || '').replace(',', '.'))
-      const expected = !isNaN(total) && total > 0 ? entradaPadrao(total).toFixed(2).replace('.', ',') : ''
-      if ((depositValue || '') !== expected) setValue('depositValue', expected)
+      const percent = parsePercent(depositPercent)
+      if (!(total > 0)) {
+        if (depositValue) setValue('depositValue', '')
+      } else if (!validarPercentualEntrada(percent)) {
+        const deposit = parseFloat((depositValue || '').replace(',', '.'))
+        const implied = Math.round((deposit / total) * 10000) / 100
+        if (isNaN(deposit) || Math.abs(implied - percent) >= 0.005) {
+          setValue('depositValue', entradaPorPercentual(total, percent).toFixed(2).replace('.', ','))
+          setClausesApplied(false)
+        }
+      }
     }
     if (paymentCondition === 'a_vista' && (depositValue || '') !== (totalValue || '')) {
       setValue('depositValue', totalValue || '')
       setValue('remainingValue', '0,00')
     }
-  }, [paymentCondition, totalValue, depositValue, setValue, legacyEntrada])
+  }, [paymentCondition, totalValue, depositValue, depositPercent, setValue, legacyEntrada])
 
-  // Contrato parcelado só sai com as parcelas fechando o saldo de 80%.
-  // Eventos anteriores à trava ficam de fora (ver legacyEntrada).
+  // Contrato parcelado só sai com entrada de no mínimo 20% e as parcelas
+  // fechando o saldo. Eventos anteriores à trava ficam de fora (ver legacyEntrada).
   const paymentRuleError = useMemo(() => {
     if (paymentCondition !== 'entrada_parcelas' || legacyEntrada) return null
     const total = parseFloat((totalValue || '').replace(',', '.'))
     if (isNaN(total) || total <= 0) return null
+    if (depositPercentError) return depositPercentError
     if (installments.length === 0) return 'Adicione as parcelas do saldo restante.'
-    const saldo = total - entradaPadrao(total)
+    const deposit = parseFloat((depositValue || '').replace(',', '.')) || 0
+    const saldo = total - deposit
     const soma = installments.reduce((s, inst) => s + (parseFloat((inst.value || '').replace(',', '.')) || 0), 0)
     if (Math.abs(soma - saldo) >= 0.01) {
-      return `As parcelas somam ${formatBRL(soma)}, mas o saldo após a entrada de ${ENTRADA_PERCENT}% é ${formatBRL(saldo)}. Se o plano de pagamento do evento foi criado com outra entrada, refaça o plano na página do evento.`
+      return `As parcelas somam ${formatBRL(soma)}, mas o saldo após a entrada de ${depositPercent}% é ${formatBRL(saldo)}. Ajuste as parcelas ou, se o plano de pagamento do evento foi criado com outra entrada, refaça o plano na página do evento.`
     }
     return null
-  }, [paymentCondition, totalValue, installments, legacyEntrada])
+  }, [paymentCondition, totalValue, depositValue, depositPercent, depositPercentError, installments, legacyEntrada])
 
   useEffect(() => {
     const total = parseFloat((totalValue || '').replace(',', '.'))
@@ -645,6 +682,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       const savedClauses = saved.clauses as unknown as ContractClause[]
       const savedOverrides = saved.contractorOverrides as unknown as ContractorOverrides | null
       setLegacyEntrada(savedContractHasLegacyEntrada(savedFormData))
+      setDepositPercent(percentFieldFor(savedFormData.totalValue, savedFormData.depositValue))
 
       // Restore form fields
       const formKeys = [
@@ -707,6 +745,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         const savedClauses = saved.clauses as unknown as ContractClause[]
         const savedOverrides = saved.contractorOverrides as unknown as ContractorOverrides | null
         setLegacyEntrada(savedContractHasLegacyEntrada(savedFormData))
+        setDepositPercent(percentFieldFor(savedFormData.totalValue, savedFormData.depositValue))
 
         const formKeys = [
           'contractNumber', 'contractDate',
@@ -780,8 +819,8 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         // Payment data from the plan configured on the event page
         const sinal = installmentsList.find((i) => i.isSinal)
         const regularInstallments = installmentsList.filter((i) => !i.isSinal)
-        // Plano parcelado fora dos 20% só pode ser anterior à trava: mantém a
-        // entrada dele no contrato em vez de forçar o padrão.
+        // Plano parcelado abaixo dos 20% só pode ser anterior à trava: mantém a
+        // entrada dele no contrato em vez de forçar o mínimo.
         setLegacyEntrada(
           validarPlanoParcelado(
             Number(event.totalValue),
@@ -799,6 +838,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         if (configuredDeposit > 0) {
           setValue('depositValue', configuredDeposit.toFixed(2).replace('.', ','), { shouldValidate: true })
         }
+        setDepositPercent(percentFieldFor(totalVal, configuredDeposit))
 
         if (sinal) {
           const sinalDate = new Date(sinal.dueDate)
@@ -1528,7 +1568,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
 
         {paymentCondition === 'entrada_parcelas' && (
           <div className="mt-4 p-4 bg-[var(--secondary)] rounded-lg space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-1 gap-4 ${legacyEntrada ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4'}`}>
               {legacyEntrada ? (
                 <Field label="Entrada (R$)">
                   <Input
@@ -1537,19 +1577,34 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                     inputMode="decimal"
                   />
                   <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                    Plano anterior à regra dos {ENTRADA_PERCENT}%: entrada mantida como negociada.
+                    Plano anterior à regra dos {ENTRADA_MIN_PERCENT}%: entrada mantida como negociada.
                   </p>
                 </Field>
               ) : (
-                <Field label={`Entrada (${ENTRADA_PERCENT}%) (R$)`}>
-                  <Input
-                    {...register('depositValue')}
-                    placeholder="auto-calculado"
-                    readOnly
-                    title={`Fixa em ${ENTRADA_PERCENT}% do valor total no pagamento parcelado`}
-                    className="bg-[var(--input-bg)] text-[var(--muted-foreground)] cursor-default"
-                  />
-                </Field>
+                <>
+                  <Field label="Entrada (%)">
+                    <Input
+                      value={depositPercent}
+                      onChange={(e) => setDepositPercent(e.target.value)}
+                      placeholder={String(ENTRADA_MIN_PERCENT)}
+                      inputMode="decimal"
+                    />
+                    {depositPercentError ? (
+                      <p className="text-xs text-[var(--destructive)] mt-1">{depositPercentError}</p>
+                    ) : (
+                      <p className="text-xs text-[var(--muted-foreground)] mt-1">Mínimo {ENTRADA_MIN_PERCENT}%</p>
+                    )}
+                  </Field>
+                  <Field label="Entrada (R$)">
+                    <Input
+                      {...register('depositValue')}
+                      placeholder="auto-calculado"
+                      readOnly
+                      title="Calculada pelo percentual sobre o valor total"
+                      className="bg-[var(--input-bg)] text-[var(--muted-foreground)] cursor-default"
+                    />
+                  </Field>
+                </>
               )}
               <Field label="Data da Entrada">
                 <Input type="date" {...register('depositDueDate')} />

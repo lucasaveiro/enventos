@@ -20,7 +20,14 @@ import { Badge } from '@/components/ui/Badge'
 import { createPaymentPlan } from '@/app/actions/installments'
 import { parseLocalDate, toDateInputValue } from '@/lib/utils'
 import { PAYMENT_METHODS } from '@/lib/paymentMethods'
-import { ENTRADA_PERCENT, entradaPadrao, validarPlanoParcelado } from '@/lib/paymentRules'
+import {
+  ENTRADA_MIN_PERCENT,
+  entradaPorPercentual,
+  parsePercent,
+  percentualDaEntrada,
+  validarPercentualEntrada,
+  validarPlanoParcelado,
+} from '@/lib/paymentRules'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -34,12 +41,12 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-// Parcelado: sinal travado em 20% do total e saldo nas parcelas.
+// Parcelado: sinal de no minimo 20% do total (percentual digitado) e saldo nas parcelas.
 // A vista: um unico pagamento do valor total, na data do sinal.
 type PlanMode = 'parcelado' | 'a_vista'
 
 const PLAN_MODES: { value: PlanMode; label: string; description: string }[] = [
-  { value: 'parcelado', label: 'Parcelado', description: `Entrada de ${ENTRADA_PERCENT}% e saldo em parcelas` },
+  { value: 'parcelado', label: 'Parcelado', description: `Entrada a partir de ${ENTRADA_MIN_PERCENT}% e saldo em parcelas` },
   { value: 'a_vista', label: 'A vista', description: 'Valor total em um unico pagamento' },
 ]
 
@@ -113,9 +120,15 @@ export function PaymentPlanModal({
   const [items, setItems] = useState<PreviewItem[]>([])
   const [manuallyEdited, setManuallyEdited] = useState(false)
   const [mode, setMode] = useState<PlanMode>('parcelado')
+  const [percentInput, setPercentInput] = useState(String(ENTRADA_MIN_PERCENT))
   const isAVista = mode === 'a_vista'
-  // A entrada nao e digitada: sai do total e do modo.
-  const entrada = isAVista ? totalValue : entradaPadrao(totalValue)
+  // O valor da entrada sai do percentual digitado (minimo 20%); a vista e o total.
+  // Percentual invalido fica sinalizado e segura o envio; o preview usa o minimo.
+  const percent = parsePercent(percentInput)
+  const percentError = isAVista ? null : validarPercentualEntrada(percent)
+  const entrada = isAVista
+    ? totalValue
+    : entradaPorPercentual(totalValue, percentError ? ENTRADA_MIN_PERCENT : percent)
 
   const {
     register,
@@ -148,6 +161,9 @@ export function PaymentPlanModal({
       })
       setManuallyEdited(false)
       setMode(totalValue > 0 && deposit >= totalValue ? 'a_vista' : 'parcelado')
+      // Parte do percentual da entrada atual do evento, se ele for aceito.
+      const atual = percentualDaEntrada(totalValue, deposit)
+      setPercentInput(String(atual !== null && !validarPercentualEntrada(atual) ? atual : ENTRADA_MIN_PERCENT))
     }
   }, [isOpen, deposit, totalValue, reset])
 
@@ -216,6 +232,10 @@ export function PaymentPlanModal({
   const onSubmit = async (data: FormValues) => {
     if (items.length === 0) {
       alert('Adicione pelo menos uma parcela.')
+      return
+    }
+    if (percentError) {
+      alert(percentError)
       return
     }
     const planError = validarPlanoParcelado(totalValue, items)
@@ -322,9 +342,30 @@ export function PaymentPlanModal({
           {/* Deposit Section */}
           <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
             <h3 className="text-sm font-semibold text-foreground">
-              {isAVista ? 'Pagamento a vista' : `Sinal / Entrada (${ENTRADA_PERCENT}%)`}
+              {isAVista ? 'Pagamento a vista' : 'Sinal / Entrada'}
             </h3>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`grid gap-3 ${isAVista ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+              {!isAVista && (
+                <div>
+                  <Label>Percentual (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={ENTRADA_MIN_PERCENT}
+                    max="99.99"
+                    value={percentInput}
+                    onChange={(e) => {
+                      setPercentInput(e.target.value)
+                      setManuallyEdited(false)
+                    }}
+                  />
+                  {percentError ? (
+                    <p className="text-xs text-destructive mt-1">{percentError}</p>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground mt-1">Minimo {ENTRADA_MIN_PERCENT}%</p>
+                  )}
+                </div>
+              )}
               <div>
                 <Label>{isAVista ? 'Valor (R$)' : 'Valor do Sinal (R$)'}</Label>
                 <div className="flex h-10 items-center rounded-md border border-input bg-secondary/40 px-3 text-sm font-medium">
@@ -456,7 +497,7 @@ export function PaymentPlanModal({
                         updateItem(item.id, { amount: Number(e.target.value) })
                       }
                       readOnly={item.isSinal}
-                      title={item.isSinal ? `Entrada fixa em ${ENTRADA_PERCENT}% do valor total` : undefined}
+                      title={item.isSinal ? 'Valor da entrada: altere pelo percentual acima' : undefined}
                       className={`h-8 text-xs${item.isSinal ? ' bg-secondary/40 cursor-default' : ''}`}
                     />
                     {item.isSinal ? (
@@ -498,7 +539,7 @@ export function PaymentPlanModal({
 
             {items.some((it) => it.isSinal && it.amount > 0) && (
               <p className="text-[11px] text-muted-foreground">
-                Dica: edite datas e valores das parcelas; a entrada fica fixa em {ENTRADA_PERCENT}%.
+                Dica: edite datas e valores das parcelas; a entrada sai do percentual (minimo {ENTRADA_MIN_PERCENT}%).
                 Use &quot;Recalcular&quot; para voltar ao calculo automatico.
               </p>
             )}

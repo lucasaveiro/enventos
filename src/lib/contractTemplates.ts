@@ -1,5 +1,5 @@
 import { paymentMethodLabel } from '@/lib/paymentMethods'
-import { ENTRADA_PERCENT, isEntradaPadrao } from '@/lib/paymentRules'
+import { ENTRADA_MIN_PERCENT, formatPercent, percentPorExtenso, percentualDaEntrada } from '@/lib/paymentRules'
 
 export interface PaymentInstallment {
   date: string
@@ -267,12 +267,11 @@ export function buildPaymentConditionText(formData: Partial<ContractFormData>): 
     const depositFormatted = formatCurrency(formData.depositValue || '') || '[VALOR ENTRADA]'
     const installments = formData.installments || []
 
-    // Only mention the percentage when the entrada is exactly the standard 20%.
+    // Only mention the percentage when the entrada comes from one (up to 2 decimals).
     const totalNum = parseFloat((formData.totalValue || '').replace(',', '.'))
     const depositNum = parseFloat((formData.depositValue || '').replace(',', '.'))
-    const isStandard =
-      !isNaN(totalNum) && !isNaN(depositNum) && totalNum > 0 && isEntradaPadrao(totalNum, depositNum)
-    const percentLabel = isStandard ? ` (${ENTRADA_PERCENT}% do valor total)` : ''
+    const percent = percentualDaEntrada(totalNum, depositNum)
+    const percentLabel = percent !== null ? ` (${formatPercent(percent)}% do valor total)` : ''
 
     let text = `Entrada de ${depositFormatted}${percentLabel} no ato do contrato`
     if (installments.length > 0) {
@@ -313,19 +312,20 @@ export function substituteClause(
   const isCompletePackage = packageType === 'completo'
   const clientIsCNPJ = isCNPJ(formData.clientCPF || '')
 
-  // Cláusula de desistência: só afirma os 20% quando a entrada segue o padrão.
-  // Entrada parcelada fora dele vem de plano anterior à trava, mantido como
-  // negociado — o contrato não pode citar um percentual que não cumpre.
+  // Cláusula de desistência: no parcelado cita o percentual que a entrada
+  // representa (mínimo de 20%, digitado no plano). Entrada que não sai de um
+  // percentual (valor negociado em reais) fica sem ele — o contrato não pode
+  // citar um percentual que não cumpre. Fora do parcelado vale o mínimo.
   const totalNum = parseFloat((formData.totalValue || '').replace(',', '.'))
   const depositNum = parseFloat((formData.depositValue || '').replace(',', '.'))
-  const entradaForaDoPadrao =
-    formData.paymentCondition === 'entrada_parcelas' &&
-    totalNum > 0 &&
-    !isNaN(depositNum) &&
-    !isEntradaPadrao(totalNum, depositNum)
-  const entradaRetencao = entradaForaDoPadrao
-    ? ''
-    : ', correspondente a 20% (vinte por cento) do valor total da locação,'
+  const entradaPercent =
+    formData.paymentCondition === 'entrada_parcelas'
+      ? percentualDaEntrada(totalNum, depositNum)
+      : ENTRADA_MIN_PERCENT
+  const entradaRetencao =
+    entradaPercent === null
+      ? ''
+      : `, correspondente a ${percentPorExtenso(entradaPercent)} do valor total da locação,`
 
   // Build client qualification text (PF vs PJ)
   let clientQualification: string

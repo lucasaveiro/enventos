@@ -40,6 +40,9 @@ export interface ClosedContractData {
   depositPaymentMethod?: string | null
   numberOfInstallments: number
   firstInstallmentDate: Date
+  // Vencimento de cada parcela, na ordem, quando editados no assistente.
+  // Ausente (ou posição sem data): mensal a partir de firstInstallmentDate.
+  installmentDates?: Date[]
   paymentMethod: string
 }
 
@@ -158,7 +161,10 @@ export async function createClosedContract(data: ClosedContractData) {
         const lastInstallmentAmount = remaining - installmentAmount * (data.numberOfInstallments - 1)
 
         for (let i = 0; i < data.numberOfInstallments; i++) {
-          const dueDate = addMonths(new Date(data.firstInstallmentDate), i)
+          const custom = data.installmentDates?.[i]
+          const dueDate = custom && !isNaN(new Date(custom).getTime())
+            ? new Date(custom)
+            : addMonths(new Date(data.firstInstallmentDate), i)
           const isLast = i === data.numberOfInstallments - 1
           installments.push({
             installmentNumber: currentNumber + i,

@@ -3,7 +3,6 @@
 import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { addMonths } from 'date-fns'
 import {
   User,
   Calendar,
@@ -16,7 +15,7 @@ import {
   CreditCard,
 } from 'lucide-react'
 import type { ClientEventData } from './ClientEventStep'
-import type { PaymentData } from './PaymentStep'
+import { buildInstallmentSchedule, type PaymentData } from './PaymentStep'
 import type { ContractData } from './ContractStep'
 import { paymentMethodLabel } from '@/lib/paymentMethods'
 import { ContractClause, SPACES } from '@/lib/contractTemplates'
@@ -52,20 +51,7 @@ export function ReviewStep({ clientEventData, paymentData, contractData, clauses
 
   const spaceConfig = SPACES[contractData.spaceConfigId]
 
-  const installmentPreview = useMemo(() => {
-    if (remainingValue <= 0 || numberOfInstallments <= 0 || !paymentData.firstInstallmentDate) return []
-    const installmentAmount = Math.floor((remainingValue / numberOfInstallments) * 100) / 100
-    const lastAmount = remainingValue - installmentAmount * (numberOfInstallments - 1)
-    return Array.from({ length: numberOfInstallments }, (_, i) => {
-      const dueDate = addMonths(new Date(paymentData.firstInstallmentDate + 'T12:00:00'), i)
-      const isLast = i === numberOfInstallments - 1
-      return {
-        number: i + 1,
-        dueDate,
-        amount: isLast ? Math.round(lastAmount * 100) / 100 : installmentAmount,
-      }
-    })
-  }, [remainingValue, numberOfInstallments, paymentData.firstInstallmentDate])
+  const installmentPreview = useMemo(() => buildInstallmentSchedule(paymentData), [paymentData])
 
   return (
     <div className="space-y-6">
@@ -186,7 +172,7 @@ export function ReviewStep({ clientEventData, paymentData, contractData, clauses
                   <CreditCard className="h-4 w-4 text-blue-600 shrink-0" />
                   <span className="flex-1">Parcela {inst.number}/{numberOfInstallments}</span>
                   <span className="text-[var(--muted-foreground)]">
-                    {format(inst.dueDate, 'dd/MM/yyyy')}
+                    {format(new Date(inst.date + 'T12:00:00'), 'dd/MM/yyyy')}
                   </span>
                   <span className="font-semibold w-28 text-right">{formatCurrency(inst.amount)}</span>
                   <Clock className="h-4 w-4 text-[var(--muted-foreground)] shrink-0" />

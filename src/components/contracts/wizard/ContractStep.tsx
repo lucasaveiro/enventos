@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { addMonths } from 'date-fns'
 import { ChevronDown, ChevronUp, Edit3, RotateCcw, Plus, Trash2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -21,7 +20,7 @@ import {
 } from '@/lib/contractTemplates'
 import { paymentMethodLabel } from '@/lib/paymentMethods'
 import type { ClientEventData } from './ClientEventStep'
-import type { PaymentData } from './PaymentStep'
+import { buildInstallmentSchedule, type PaymentData } from './PaymentStep'
 
 export interface ContractData {
   contractNumber: string
@@ -74,13 +73,12 @@ export function ContractStep({ data, onChange, clientEventData, paymentData, cla
     const depositAmount = parseFloat((paymentData.depositAmount || '0').replace(',', '.')) || 0
     const remaining = Math.max(0, totalValue - depositAmount)
 
-    // Compute remaining due date from installment preview
-    const numberOfInstallments = parseInt(paymentData.numberOfInstallments || '1') || 1
-    let remainingDueDate = paymentData.firstInstallmentDate
-    if (numberOfInstallments > 1 && paymentData.firstInstallmentDate) {
-      const lastDate = addMonths(new Date(paymentData.firstInstallmentDate + 'T12:00:00'), numberOfInstallments - 1)
-      remainingDueDate = lastDate.toISOString().split('T')[0]
-    }
+    // Vencimento do saldo: o mais tarde entre as parcelas (datas podem ter
+    // sido editadas fora da ordem mensal).
+    const schedule = buildInstallmentSchedule(paymentData)
+    const remainingDueDate = schedule.length > 0
+      ? schedule.map((inst) => inst.date).sort().at(-1)!
+      : paymentData.firstInstallmentDate
 
     return {
       contractNumber: data.contractNumber,

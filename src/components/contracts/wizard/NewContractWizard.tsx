@@ -6,7 +6,7 @@ import { Check, ChevronLeft, ChevronRight, Loader2, User, DollarSign, FileText, 
 import { Button } from '@/components/ui/Button'
 import { toDateInputValue } from '@/lib/utils'
 import { ClientEventStep, type ClientEventData } from './ClientEventStep'
-import { PaymentStep, type PaymentData } from './PaymentStep'
+import { PaymentStep, buildInstallmentSchedule, type PaymentData } from './PaymentStep'
 import { ContractStep, type ContractData } from './ContractStep'
 import { ReviewStep } from './ReviewStep'
 import { createClosedContract } from '@/app/actions/contractWizard'
@@ -62,6 +62,7 @@ export function NewContractWizard() {
     depositPaymentMethod: '',
     numberOfInstallments: '1',
     firstInstallmentDate: '',
+    installmentDates: [],
     paymentMethod: '',
     cautionValue: '',
   })
@@ -119,6 +120,9 @@ export function NewContractWizard() {
       const n = parseInt(paymentData.numberOfInstallments || '0')
       if (!n || n < 1) errs.numberOfInstallments = 'Mínimo 1 parcela'
       if (!paymentData.firstInstallmentDate) errs.firstInstallmentDate = 'Data da 1ª parcela é obrigatória'
+      buildInstallmentSchedule(paymentData).forEach((inst, i) => {
+        if (!inst.date) errs[`installmentDate${i}`] = 'Informe o vencimento'
+      })
       const percentError = validarPercentualEntrada(parsePercent(paymentData.depositPercent))
       if (percentError) {
         errs.depositPercent = percentError
@@ -153,6 +157,7 @@ export function NewContractWizard() {
       const totalValue = parseFloat((paymentData.totalValue || '0').replace(',', '.'))
       const depositAmount = parseFloat((paymentData.depositAmount || '0').replace(',', '.'))
       const remaining = totalValue - depositAmount
+      const schedule = buildInstallmentSchedule(paymentData)
 
       const result = await createClosedContract({
         clientId: clientEventData.clientId,
@@ -183,6 +188,7 @@ export function NewContractWizard() {
         firstInstallmentDate: paymentData.firstInstallmentDate
           ? new Date(paymentData.firstInstallmentDate + 'T12:00:00')
           : new Date(),
+        installmentDates: schedule.map((inst) => new Date(inst.date + 'T12:00:00')),
         paymentMethod: paymentData.paymentMethod,
       })
 

@@ -26,6 +26,10 @@ export interface PaymentData {
   depositPaymentMethod: string
   numberOfInstallments: string
   firstInstallmentDate: string
+  // Vencimentos editados à mão, por índice da parcela (yyyy-MM-dd). Posição
+  // vazia segue o padrão mensal a partir da 1ª parcela; a 1ª é
+  // firstInstallmentDate.
+  installmentDates: string[]
   paymentMethod: string
   cautionValue: string
 }
@@ -40,6 +44,40 @@ const selectClass = "flex h-11 w-full rounded-lg border border-[var(--input-bord
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+export interface ScheduledInstallment {
+  number: number
+  date: string // yyyy-MM-dd
+  amount: number
+  edited: boolean
+}
+
+/**
+ * Parcelas do saldo: valores divididos por igual (centavos na última) e
+ * vencimentos mensais a partir da 1ª parcela, salvo os editados à mão.
+ * Usado no passo de pagamento, na revisão, na prévia do contrato e no envio.
+ */
+export function buildInstallmentSchedule(data: PaymentData): ScheduledInstallment[] {
+  const total = parseFloat((data.totalValue || '0').replace(',', '.')) || 0
+  const deposit = parseFloat((data.depositAmount || '0').replace(',', '.')) || 0
+  const remaining = Math.max(0, total - deposit)
+  const n = parseInt(data.numberOfInstallments || '1') || 1
+  if (data.paymentType === 'a_vista' || remaining <= 0 || n <= 0 || !data.firstInstallmentDate) return []
+
+  const installmentAmount = Math.floor((remaining / n) * 100) / 100
+  const lastAmount = remaining - installmentAmount * (n - 1)
+  const first = new Date(data.firstInstallmentDate + 'T12:00:00')
+
+  return Array.from({ length: n }, (_, i) => {
+    const override = i > 0 ? data.installmentDates?.[i] : undefined
+    return {
+      number: i + 1,
+      date: override || format(addMonths(first, i), 'yyyy-MM-dd'),
+      amount: i === n - 1 ? Math.round(lastAmount * 100) / 100 : installmentAmount,
+      edited: Boolean(override),
+    }
+  })
 }
 
 function depositFor(data: PaymentData): string {
@@ -79,22 +117,20 @@ export function PaymentStep({ data, onChange, errors }: Props) {
   const remainingValue = Math.max(0, totalValue - depositAmount)
   const numberOfInstallments = parseInt(data.numberOfInstallments || '1') || 1
 
-  const installmentPreview = useMemo(() => {
-    if (remainingValue <= 0 || numberOfInstallments <= 0 || !data.firstInstallmentDate) return []
+  const installmentPreview = useMemo(() => buildInstallmentSchedule(data), [data])
+  const hasEditedDates = installmentPreview.some((inst) => inst.edited)
 
-    const installmentAmount = Math.floor((remainingValue / numberOfInstallments) * 100) / 100
-    const lastAmount = remainingValue - installmentAmount * (numberOfInstallments - 1)
-
-    return Array.from({ length: numberOfInstallments }, (_, i) => {
-      const dueDate = addMonths(new Date(data.firstInstallmentDate + 'T12:00:00'), i)
-      const isLast = i === numberOfInstallments - 1
-      return {
-        number: i + 1,
-        dueDate,
-        amount: isLast ? Math.round(lastAmount * 100) / 100 : installmentAmount,
-      }
-    })
-  }, [remainingValue, numberOfInstallments, data.firstInstallmentDate])
+  // A 1ª parcela é a própria "Data da 1ª Parcela"; as demais guardam a data
+  // editada no índice delas.
+  const setInstallmentDate = (index: number, value: string) => {
+    if (index === 0) {
+      update('firstInstallmentDate', value)
+      return
+    }
+    const dates = [...(data.installmentDates ?? [])]
+    dates[index] = value
+    update('installmentDates', dates)
+  }
 
   return (
     <div className="space-y-6">
@@ -332,10 +368,19 @@ export function PaymentStep({ data, onChange, errors }: Props) {
           {/* Preview */}
           {(depositAmount > 0 || installmentPreview.length > 0) && (
             <div className="mt-4 rounded-lg border border-[var(--border)] overflow-hidden">
-              <div className="px-4 py-2.5 bg-[var(--secondary)] border-b border-[var(--border)]">
+              <div className="px-4 py-2.5 bg-[var(--secondary)] border-b border-[var(--border)] flex items-center justify-between gap-3">
                 <h4 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase">
                   Plano de Pagamento
                 </h4>
+                {hasEditedDates && (
+                  <button
+                    type="button"
+                    className="text-xs text-[var(--primary)] hover:underline"
+                    onClick={() => update('installmentDates', [])}
+                  >
+                    Voltar às datas mensais
+                  </button>
+                )}
               </div>
               <div className="divide-y divide-[var(--border)]">
                 {/* Deposit row */}
@@ -379,9 +424,16 @@ export function PaymentStep({ data, onChange, errors }: Props) {
                       <p className="text-sm font-medium text-[var(--foreground)]">
                         Parcela {inst.number}/{numberOfInstallments}
                       </p>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {format(inst.dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                      </p>
+                      <Input
+                        type="date"
+                        value={inst.date}
+                        onChange={(e) => setInstallmentDate(inst.number - 1, e.target.value)}
+                        className="mt-1 h-8 w-44 text-xs"
+                        aria-label={`Vencimento da parcela ${inst.number}`}
+                      />
+                      {errors[`installmentDate${inst.number - 1}`] && (
+                        <p className="text-xs text-red-500 mt-1">{errors[`installmentDate${inst.number - 1}`]}</p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-[var(--foreground)]">{formatCurrency(inst.amount)}</p>

@@ -43,6 +43,9 @@ export interface ClosedContractData {
   // Vencimento de cada parcela, na ordem, quando editados no assistente.
   // Ausente (ou posição sem data): mensal a partir de firstInstallmentDate.
   installmentDates?: Date[]
+  // Valor de cada parcela, na ordem, quando editados no assistente. Sem eles
+  // (ou com tamanho diferente do nº de parcelas), o saldo é dividido por igual.
+  installmentAmounts?: number[]
   paymentMethod: string
 }
 
@@ -159,6 +162,11 @@ export async function createClosedContract(data: ClosedContractData) {
       if (remaining > 0 && data.numberOfInstallments > 0) {
         const installmentAmount = Math.floor((remaining / data.numberOfInstallments) * 100) / 100
         const lastInstallmentAmount = remaining - installmentAmount * (data.numberOfInstallments - 1)
+        const customAmounts =
+          data.installmentAmounts?.length === data.numberOfInstallments &&
+          data.installmentAmounts.every((v) => Number.isFinite(v) && v >= 0)
+            ? data.installmentAmounts
+            : null
 
         for (let i = 0; i < data.numberOfInstallments; i++) {
           const custom = data.installmentDates?.[i]
@@ -169,7 +177,9 @@ export async function createClosedContract(data: ClosedContractData) {
           installments.push({
             installmentNumber: currentNumber + i,
             dueDate,
-            amount: isLast ? Math.round(lastInstallmentAmount * 100) / 100 : installmentAmount,
+            amount: customAmounts
+              ? Math.round(customAmounts[i] * 100) / 100
+              : isLast ? Math.round(lastInstallmentAmount * 100) / 100 : installmentAmount,
             isSinal: false,
             paymentMethod: data.paymentMethod || null,
             eventId: event.id,

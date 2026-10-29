@@ -36,6 +36,35 @@ export function validarPercentualEntrada(percent: number): string | null {
   return null
 }
 
+/** Erro do valor (R$) digitado para a entrada no parcelado, ou null se é aceito. */
+export function validarValorEntrada(total: number, entrada: number): string | null {
+  if (isNaN(entrada) || entrada <= 0) return 'Informe o valor da entrada.'
+  if (!isEntradaValida(total, entrada)) {
+    return `A entrada não pode ser menor que ${ENTRADA_MIN_PERCENT}% do valor total (${formatBRL(entradaMinima(total))}).`
+  }
+  if (entrada >= total - 0.005) return 'No parcelado a entrada tem que ser menor que o valor total. Para pagamento único, use à vista.'
+  return null
+}
+
+/** Percentual que um valor de entrada representa do total, com 2 casas. */
+export function percentualAproximado(total: number, entrada: number): number {
+  if (!(total > 0) || isNaN(entrada)) return NaN
+  return Math.round((entrada / total) * 10000) / 100
+}
+
+/**
+ * Aviso quando entrada + parcelas não fecham o valor do contrato, dizendo
+ * quanto falta ou quanto passou. Null quando fecham (diferença < 1 centavo).
+ */
+export function mensagemDiferencaPlano(total: number, somaPlano: number): string | null {
+  const diferenca = Math.round((total - somaPlano) * 100) / 100
+  if (Math.abs(diferenca) < 0.01) return null
+  const base = `O valor do contrato (${formatBRL(total)}) não bate com o somatório da entrada + parcelas (${formatBRL(somaPlano)})`
+  return diferenca > 0
+    ? `${base}: falta ${formatBRL(diferenca)}.`
+    : `${base}: passou ${formatBRL(-diferenca)}.`
+}
+
 /**
  * Percentual (até 2 casas) que a entrada representa do total, ou null quando a
  * entrada não sai de nenhum percentual assim (valor negociado em reais).

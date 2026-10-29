@@ -55,12 +55,14 @@ import { PAYMENT_METHODS, paymentMethodLabel } from '@/lib/paymentMethods'
 import {
   ENTRADA_MIN_PERCENT,
   entradaPorPercentual,
-  formatBRL,
   formatPercent,
   isEntradaValida,
+  mensagemDiferencaPlano,
   parsePercent,
+  percentualAproximado,
   validarPercentualEntrada,
   validarPlanoParcelado,
+  validarValorEntrada,
 } from '@/lib/paymentRules'
 
 // Dynamic imports to avoid SSR issues with @react-pdf/renderer
@@ -594,8 +596,10 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   // com a entrada original. Definido ao carregar o contrato salvo ou o plano.
   const [legacyEntrada, setLegacyEntrada] = useState(false)
 
-  // Percentual da entrada no parcelado, digitado pelo usuário (mínimo 20%).
-  // Ao carregar contrato salvo ou plano do evento, vem da entrada carregada.
+  // Percentual da entrada no parcelado (mínimo 20%). A entrada é editável em %
+  // ou em R$: mexeu no %, o valor sai dele (efeito abaixo); mexeu no valor, o %
+  // sai do valor (onChange do campo). Ao carregar contrato salvo ou plano do
+  // evento, vem da entrada carregada.
   const [depositPercent, setDepositPercent] = useState(String(ENTRADA_MIN_PERCENT))
   const depositPercentError =
     paymentCondition === 'entrada_parcelas' && !legacyEntrada
@@ -603,8 +607,8 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       : null
 
   // Pagamento parcelado: a entrada sai do percentual sobre o total. Só é
-  // recalculada quando diverge dele — uma entrada carregada que já corresponde
-  // ao percentual exibido (2 casas) fica com os centavos que tem.
+  // recalculada quando diverge dele — uma entrada carregada ou digitada em R$
+  // que já corresponde ao percentual exibido (2 casas) fica com os centavos que tem.
   useEffect(() => {
     if (paymentCondition === 'entrada_parcelas' && !legacyEntrada) {
       const total = parseFloat((totalValue || '').replace(',', '.'))
@@ -626,22 +630,26 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     }
   }, [paymentCondition, totalValue, depositValue, depositPercent, setValue, legacyEntrada])
 
-  // Contrato parcelado só sai com entrada de no mínimo 20% e as parcelas
-  // fechando o saldo. Eventos anteriores à trava ficam de fora (ver legacyEntrada).
+  // Contrato parcelado só sai com entrada de no mínimo 20%. Eventos anteriores
+  // à trava ficam de fora (ver legacyEntrada).
   const paymentRuleError = useMemo(() => {
     if (paymentCondition !== 'entrada_parcelas' || legacyEntrada) return null
     const total = parseFloat((totalValue || '').replace(',', '.'))
     if (isNaN(total) || total <= 0) return null
     if (depositPercentError) return depositPercentError
-    if (installments.length === 0) return 'Adicione as parcelas do saldo restante.'
+    return validarValorEntrada(total, parseFloat((depositValue || '').replace(',', '.')))
+  }, [paymentCondition, totalValue, depositValue, depositPercentError, legacyEntrada])
+
+  // Parcelas são livres: quando entrada + parcelas não fecham o valor do
+  // contrato, só avisa quanto falta ou passou (não bloqueia a geração).
+  const paymentDifference = useMemo(() => {
+    if (paymentCondition !== 'entrada_parcelas') return null
+    const total = parseFloat((totalValue || '').replace(',', '.'))
+    if (isNaN(total) || total <= 0) return null
     const deposit = parseFloat((depositValue || '').replace(',', '.')) || 0
-    const saldo = total - deposit
     const soma = installments.reduce((s, inst) => s + (parseFloat((inst.value || '').replace(',', '.')) || 0), 0)
-    if (Math.abs(soma - saldo) >= 0.01) {
-      return `As parcelas somam ${formatBRL(soma)}, mas o saldo após a entrada de ${depositPercent}% é ${formatBRL(saldo)}. Ajuste as parcelas ou, se o plano de pagamento do evento foi criado com outra entrada, refaça o plano na página do evento.`
-    }
-    return null
-  }, [paymentCondition, totalValue, depositValue, depositPercent, depositPercentError, installments, legacyEntrada])
+    return mensagemDiferencaPlano(total, deposit + soma)
+  }, [paymentCondition, totalValue, depositValue, installments])
 
   useEffect(() => {
     const total = parseFloat((totalValue || '').replace(',', '.'))
@@ -1597,12 +1605,20 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                   </Field>
                   <Field label="Entrada (R$)">
                     <Input
-                      {...register('depositValue')}
-                      placeholder="auto-calculado"
-                      readOnly
-                      title="Calculada pelo percentual sobre o valor total"
-                      className="bg-[var(--input-bg)] text-[var(--muted-foreground)] cursor-default"
+                      {...register('depositValue', {
+                        onChange: (e) => {
+                          const total = parseFloat((totalValue || '').replace(',', '.'))
+                          const p = percentualAproximado(total, parseFloat(String(e.target.value).replace(',', '.')))
+                          if (Number.isFinite(p)) setDepositPercent(formatPercent(p))
+                          setClausesApplied(false)
+                        },
+                      })}
+                      placeholder="0,00"
+                      inputMode="decimal"
                     />
+                    {paymentRuleError && !depositPercentError && (
+                      <p className="text-xs text-[var(--destructive)] mt-1">{paymentRuleError}</p>
+                    )}
                   </Field>
                 </>
               )}
@@ -1696,10 +1712,10 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                 </div>
               ))}
 
-              {paymentRuleError && (
-                <p className="text-xs text-[var(--destructive)] mt-1 flex items-start gap-1">
+              {paymentDifference && (
+                <p className="text-xs text-amber-700 mt-1 flex items-start gap-1">
                   <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                  {paymentRuleError}
+                  {paymentDifference}
                 </p>
               )}
             </div>
@@ -2041,6 +2057,12 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             <p className="text-xs text-[var(--destructive)] mt-1 flex items-start gap-1 font-medium">
               <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
               {paymentRuleError}
+            </p>
+          )}
+          {paymentDifference && (
+            <p className="text-xs text-amber-700 mt-1 flex items-start gap-1 font-medium">
+              <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              {paymentDifference}
             </p>
           )}
         </div>

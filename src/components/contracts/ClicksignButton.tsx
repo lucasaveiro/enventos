@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { pdf } from '@react-pdf/renderer'
 import { Send, Loader2, CheckCircle2, ExternalLink, AlertCircle, XCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/Dialog'
 import {
   ContractClause,
   ContractFormData,
@@ -26,11 +27,24 @@ interface Props {
   isValid?: boolean
   eventId: number | null
   existingSignature?: ExistingSignature | null
+  /**
+   * Chamado quando o contrato anterior é cancelado no Clicksign. O editor atualiza
+   * o status sem recarregar a página — recarregar descartava as edições feitas nas
+   * cláusulas e o contrato era reenviado com o texto da versão anterior.
+   */
+  onSignatureCancelled?: () => void
   onBeforeGenerate?: () => void | Promise<void>
   onAfterGenerate?: (pdfBlob: Blob, formData: ContractFormData, finalClauses: ContractClause[]) => void
 }
 
-type SendState = 'idle' | 'generating' | 'sending' | 'success' | 'error'
+type SendState = 'idle' | 'generating' | 'preview' | 'sending' | 'success' | 'error'
+
+interface PreparedContract {
+  blob: Blob
+  url: string
+  formData: ContractFormData
+  finalClauses: ContractClause[]
+}
 
 // Estados parciais: o envio começou mas não chegou a notificar o WhatsApp.
 // Pode indicar falha silenciosa (telefone inválido, indisponibilidade do Clicksign,
@@ -45,10 +59,18 @@ export default function ClicksignButton({
   isValid,
   eventId,
   existingSignature,
+  onSignatureCancelled,
   onBeforeGenerate,
   onAfterGenerate,
 }: Props) {
   const [state, setState] = useState<SendState>('idle')
+  // PDF gerado e exibido para conferência ANTES de ir para o cliente.
+  const [prepared, setPrepared] = useState<PreparedContract | null>(null)
+
+  useEffect(() => {
+    if (!prepared) return
+    return () => URL.revokeObjectURL(prepared.url)
+  }, [prepared])
   const [error, setError] = useState<string | null>(null)
   const [signingUrl, setSigningUrl] = useState<string | null>(null)
 
@@ -113,25 +135,16 @@ export default function ClicksignButton({
       setState('idle')
       setError(null)
       setSigningUrl(null)
-      window.location.reload()
+      // Sem recarregar a página: as edições feitas nas cláusulas continuam na tela
+      // e o novo envio sai com elas.
+      if (onSignatureCancelled) onSignatureCancelled()
+      else window.location.reload()
     }
   }
 
   const handleSend = async () => {
     if (!eventId) return
     setError(null)
-
-    // Se já há um signature ativo (parcial ou completo), pede confirmação para
-    // cancelar antes de gerar o novo. Evita que o usuário crie registros conflitantes
-    // ou envie duas vezes sem perceber.
-    if (existingSignature && existingSignature.status !== 'cancelled') {
-      const confirmMsg = isPartial
-        ? 'Já existe um envio anterior incompleto para este evento (o cliente pode não ter recebido).\n\nDeseja cancelar o envio anterior e enviar este novo contrato?'
-        : 'Já existe um contrato ativo para este evento no Clicksign.\n\nDeseja cancelar o contrato anterior e enviar este novo contrato?'
-      if (!confirm(confirmMsg)) return
-      const ok = await cancelExistingSignature()
-      if (!ok) return
-    }
 
     try {
       // Step 1: Generate PDF
@@ -149,7 +162,42 @@ export default function ClicksignButton({
       const doc = <ContractPDFDocument formData={formData} clauses={finalClauses} space={space} />
       const blob = await pdf(doc).toBlob()
 
-      // Step 2: Convert to base64
+      // Step 2: mostra o contrato para conferência antes de enviar ao cliente.
+      setPrepared({ blob, url: URL.createObjectURL(blob), formData, finalClauses })
+      setState('preview')
+    } catch (err) {
+      console.error('Erro ao gerar PDF para Clicksign:', err)
+      setState('error')
+      setError(err instanceof Error ? err.message : 'Erro ao gerar o PDF')
+    }
+  }
+
+  const cancelPreview = () => {
+    setPrepared(null)
+    setState('idle')
+  }
+
+  const confirmSend = async () => {
+    if (!eventId || !prepared) return
+    const { blob, formData, finalClauses } = prepared
+    // Se já há um signature ativo (parcial ou completo), pede confirmação para
+    // cancelar antes de gerar o novo. Evita que o usuário crie registros conflitantes
+    // ou envie duas vezes sem perceber.
+    if (existingSignature && existingSignature.status !== 'cancelled') {
+      const confirmMsg = isPartial
+        ? 'Já existe um envio anterior incompleto para este evento (o cliente pode não ter recebido).\n\nDeseja cancelar o envio anterior e enviar este novo contrato?'
+        : 'Já existe um contrato ativo para este evento no Clicksign.\n\nDeseja cancelar o contrato anterior e enviar este novo contrato?'
+      if (!confirm(confirmMsg)) return
+      const ok = await cancelExistingSignature()
+      if (!ok) {
+        setPrepared(null)
+        return
+      }
+      onSignatureCancelled?.()
+    }
+
+    try {
+      // Step 3: Convert to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve(reader.result as string)
@@ -157,7 +205,7 @@ export default function ClicksignButton({
         reader.readAsDataURL(blob)
       })
 
-      // Step 3: Send to Clicksign via server action
+      // Step 4: Send to Clicksign via server action
       setState('sending')
       const result = await sendContractToClicksign({
         eventId,
@@ -175,6 +223,7 @@ export default function ClicksignButton({
         contractorCPF: space.ownerCPF.replace(/\D/g, ''),
       })
 
+      setPrepared(null)
       if (result.success) {
         setState('success')
         setSigningUrl(result.data?.signingUrl || null)
@@ -185,6 +234,7 @@ export default function ClicksignButton({
       }
     } catch (err) {
       console.error('Erro ao enviar para Clicksign:', err)
+      setPrepared(null)
       setState('error')
       setError(err instanceof Error ? err.message : 'Erro inesperado')
     }
@@ -323,10 +373,65 @@ export default function ClicksignButton({
   }
 
   const isDisabled =
-    !eventId || isValid === false || state === 'generating' || state === 'sending'
+    !eventId || isValid === false || state === 'generating' || state === 'preview' || state === 'sending'
   const isLoading = state === 'generating' || state === 'sending'
 
   return (
+    <>
+    <Dialog open={!!prepared && (state === 'preview' || state === 'sending')} onOpenChange={(open) => { if (!open && state !== 'sending') cancelPreview() }}>
+      <DialogContent className="sm:max-w-[900px]">
+        <DialogHeader>
+          <DialogTitle>Confira o contrato antes de enviar ao cliente</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          Este é exatamente o PDF que será enviado para assinatura via WhatsApp para{' '}
+          <strong>{prepared?.formData.clientName}</strong>
+          {prepared?.formData.clientPhone ? <> ({prepared.formData.clientPhone})</> : null}. Revise as
+          cláusulas — se algo estiver errado, clique em &ldquo;Voltar e corrigir&rdquo;: nada é enviado.
+        </p>
+        {prepared && (
+          <iframe
+            src={prepared.url}
+            title="Pré-visualização do contrato"
+            className="w-full h-[65vh] rounded-md border border-[var(--border)] bg-white"
+          />
+        )}
+        {prepared && (
+          <a
+            href={prepared.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1 w-fit"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Abrir o PDF em outra aba
+          </a>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={cancelPreview} disabled={state === 'sending'}>
+            Voltar e corrigir
+          </Button>
+          <Button
+            type="button"
+            onClick={confirmSend}
+            disabled={state === 'sending'}
+            className="gap-2 bg-orange-500 hover:bg-orange-600 text-white"
+          >
+            {state === 'sending' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Está correto, enviar ao cliente
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Button
       type="button"
       onClick={handleSend}
@@ -346,5 +451,6 @@ export default function ClicksignButton({
         </>
       )}
     </Button>
+    </>
   )
 }

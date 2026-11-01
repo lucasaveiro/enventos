@@ -46,6 +46,9 @@ import {
   isCNPJ,
   isValidCPFOrCNPJ,
   resolveContractSpaceSlug,
+  renumberOrdinalClauses,
+  readWizardContractHandoff,
+  clearWizardContractHandoff,
 } from '@/lib/contractTemplates'
 import { getEventsForContractLinking, getContractSignature } from '@/app/actions/clicksign'
 import { saveGeneratedContract, getGeneratedContractById, getEventDataForContract, getLatestGeneratedContractForEvent } from '@/app/actions/generatedContracts'
@@ -72,6 +75,16 @@ const PDFGeneratorButton = dynamic(() => import('./PDFGeneratorButton'), {
     <Button disabled className="gap-2 min-w-48">
       <Loader2 className="h-4 w-4 animate-spin" />
       Preparando PDF...
+    </Button>
+  ),
+})
+
+const PDFPreviewButton = dynamic(() => import('./PDFPreviewButton'), {
+  ssr: false,
+  loading: () => (
+    <Button disabled variant="outline" className="gap-2">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Pré-visualizar
     </Button>
   ),
 })
@@ -453,6 +466,11 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const [newClauseTitle, setNewClauseTitle] = useState('')
   const [newClauseContent, setNewClauseContent] = useState('')
   const [newClauseError, setNewClauseError] = useState('')
+  // Por padrão a nova cláusula vale só para ESTE contrato. Marcando, ela também
+  // passa a fazer parte da estrutura padrão dos próximos contratos deste espaço.
+  const [newClauseForAllContracts, setNewClauseForAllContracts] = useState(false)
+  // Aviso exibido após remover uma cláusula só deste contrato.
+  const [clauseNotice, setClauseNotice] = useState<string | null>(null)
   const [pendingRemovalClauseId, setPendingRemovalClauseId] = useState<string | null>(null)
   // Quando o usuário edita uma cláusula e tenta sair (recolher/abrir outra) sem
   // salvar, guardamos a navegação pretendida aqui e abrimos o aviso Salvar/Descartar.
@@ -790,6 +808,26 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       // No previous contract — fall back to pre-filling from event data
       getEventDataForContract(initialEventId).then((result) => {
         if (cancelled || !result.success || !result.data) return
+
+        // Contrato recém-criado pelo assistente "Novo Contrato": aplica as cláusulas
+        // como ficaram lá (editadas/removidas/incluídas) e os dados do contrato.
+        const handoff = readWizardContractHandoff(initialEventId)
+        if (handoff && handoff.spaceId === space.id) {
+          if (handoff.clauses.length > 0) {
+            setClauses(handoff.clauses)
+            setClausesApplied(true)
+          }
+          const handoffFields: [keyof FormValues, string | undefined][] = [
+            ['contractNumber', handoff.contractNumber],
+            ['contractDate', handoff.contractDate],
+            ['dailyCount', handoff.dailyCount],
+            ['packageType', handoff.packageType],
+            ['eventCheckoutDate', handoff.eventCheckoutDate],
+          ]
+          for (const [key, value] of handoffFields) {
+            if (value) setValue(key, value, { shouldValidate: true })
+          }
+        }
         const event = result.data
         const client = event.client
         const installmentsList = event.installments || []
@@ -821,8 +859,12 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
         if (event.eventType) setValue('eventType', event.eventType, { shouldValidate: true })
         if (event.guestCount) setValue('guestCount', String(event.guestCount), { shouldValidate: true })
 
-        // Notes → observations
-        if (event.notes) setValue('observations', event.notes, { shouldValidate: true })
+        // Notes → observations (as observações digitadas no assistente têm prioridade)
+        if (handoff?.spaceId === space.id && handoff.observations) {
+          setValue('observations', handoff.observations, { shouldValidate: true })
+        } else if (event.notes) {
+          setValue('observations', event.notes, { shouldValidate: true })
+        }
 
         // Payment data from the plan configured on the event page
         const sinal = installmentsList.find((i) => i.isSinal)
@@ -909,6 +951,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       })
 
       if (result.success) {
+        clearWizardContractHandoff(selectedEventId)
         setSaveMessage(`Contrato v${result.data?.version} salvo no evento`)
         setTimeout(() => setSaveMessage(null), 5000)
       }
@@ -1038,7 +1081,32 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     performToggle(id)
   }
 
+  // Remove a cláusula SOMENTE deste contrato: a estrutura padrão do espaço (usada
+  // pelos próximos contratos) não muda. As cláusulas ordinais seguintes são
+  // renumeradas para o PDF não sair com "buraco" na numeração.
+  const removeClauseFromThisContract = (id: string) => {
+    const removed = clauses.find((c) => c.id === id)
+    setClauses((prev) => renumberOrdinalClauses(prev.filter((c) => c.id !== id)))
+    setPendingRemovalClauseId(null)
+    if (expandedId === id) {
+      setExpandedId(null)
+      setEditingContent('')
+    }
+    if (removed) {
+      setClauseNotice(
+        `Cláusula ${removed.number} (${removed.title}) removida somente deste contrato. ` +
+        'Os próximos contratos continuam com ela. Para trazê-la de volta aqui, use "Restaurar".'
+      )
+    }
+  }
+
   const saveClause = (id: string) => {
+    // Cláusula salva sem texto: em vez de gerar um título vazio no PDF (ou, pior,
+    // parecer que nada mudou), ela é removida deste contrato.
+    if (!editingContent.trim()) {
+      removeClauseFromThisContract(id)
+      return
+    }
     setClauses((prev) =>
       prev.map((c) => (c.id === id ? { ...c, content: editingContent, edited: true } : c))
     )
@@ -1085,6 +1153,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     setClausesApplied(false)
     setExpandedId(null)
     setPendingRemovalClauseId(null)
+    setClauseNotice(null)
   }
 
   const toggleAllClauses = () => {
@@ -1103,6 +1172,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     setNewClauseTitle('')
     setNewClauseContent('')
     setNewClauseError('')
+    setNewClauseForAllContracts(false)
     setPendingRemovalClauseId(null)
   }
 
@@ -1131,13 +1201,16 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
       content,
     }
 
-    const nextStructure: PersistedClauseStructure = {
-      ...clauseStructure,
-      customClauses: [...clauseStructure.customClauses, newClauseTemplate],
+    if (newClauseForAllContracts) {
+      persistClauseStructure({
+        ...clauseStructure,
+        customClauses: [...clauseStructure.customClauses, newClauseTemplate],
+      })
     }
-
-    persistClauseStructure(nextStructure)
-    setClauses((prev) => [...prev, { ...newClauseTemplate, edited: false }])
+    // Cláusula só deste contrato fica marcada como editada: assim ela nunca é
+    // reconstruída a partir de um modelo (não existe modelo para ela).
+    const onlyThisContract = !newClauseForAllContracts
+    setClauses((prev) => [...prev, { ...newClauseTemplate, edited: onlyThisContract }])
     setClausesApplied(false)
     closeAddClauseForm()
   }
@@ -1150,7 +1223,9 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     setPendingRemovalClauseId(null)
   }
 
-  const confirmClauseRemoval = (id: string) => {
+  // Remove a cláusula deste contrato E da estrutura padrão do espaço — os
+  // próximos contratos gerados neste navegador também sairão sem ela.
+  const confirmClauseRemovalFromAllContracts = (id: string) => {
     const clauseExists = clauses.some((clause) => clause.id === id)
     if (!clauseExists) {
       setPendingRemovalClauseId(null)
@@ -1173,9 +1248,10 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
     }
 
     persistClauseStructure(nextStructure)
-    setClauses((prev) => prev.filter((clause) => clause.id !== id))
+    setClauses((prev) => renumberOrdinalClauses(prev.filter((clause) => clause.id !== id)))
     setClausesApplied(false)
     setPendingRemovalClauseId(null)
+    setClauseNotice(null)
 
     if (expandedId === id) {
       setExpandedId(null)
@@ -1862,6 +1938,18 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                 {newClauseError}
               </p>
             )}
+            <label className="flex items-start gap-2 mt-3 text-xs text-[var(--muted-foreground)] cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={newClauseForAllContracts}
+                onChange={(e) => setNewClauseForAllContracts(e.target.checked)}
+              />
+              <span>
+                Incluir esta cláusula também nos <strong>próximos contratos</strong> deste espaço.
+                Sem marcar, ela vale <strong>só para este contrato</strong>.
+              </span>
+            </label>
             <div className="flex items-center gap-2 mt-3">
               <Button type="button" size="sm" onClick={addCustomClause} className="gap-1.5">
                 <Plus className="h-3.5 w-3.5" />
@@ -1871,6 +1959,20 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                 Cancelar
               </Button>
             </div>
+          </div>
+        )}
+
+        {clauseNotice && (
+          <div className="px-5 py-2.5 bg-blue-50 border-b border-blue-200 flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-800 leading-relaxed flex-1">{clauseNotice}</p>
+            <button
+              type="button"
+              onClick={() => setClauseNotice(null)}
+              className="text-xs text-blue-700 hover:underline"
+            >
+              Fechar
+            </button>
           </div>
         )}
 
@@ -1981,25 +2083,44 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
                         </div>
                         {pendingRemovalClauseId === clause.id && (
                           <div className="mt-3 border border-red-300 bg-red-50 rounded-lg p-3">
-                            <p className="text-xs text-red-700">
-                              Esta ação irá remover a cláusula definitivamente da estrutura do contrato.
+                            <p className="text-xs text-red-700 font-medium">
+                              Como deseja remover esta cláusula?
                             </p>
-                            <div className="flex items-center gap-2 mt-3">
+                            <ul className="text-xs text-red-700 mt-1 space-y-0.5 list-disc pl-4">
+                              <li>
+                                <strong>Só deste contrato:</strong> a cláusula sai apenas deste contrato. Os
+                                próximos contratos continuam com ela normalmente.
+                              </li>
+                              <li>
+                                <strong>De todos os próximos contratos:</strong> a cláusula sai da estrutura
+                                padrão deste espaço e não aparecerá nos contratos gerados depois.
+                              </li>
+                            </ul>
+                            <div className="flex flex-wrap items-center gap-2 mt-3">
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="outline"
                                 onClick={cancelClauseRemoval}
                               >
-                                Cancelar Remoção
+                                Cancelar
                               </Button>
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => confirmClauseRemoval(clause.id)}
+                                onClick={() => removeClauseFromThisContract(clause.id)}
                               >
-                                Remover Cláusula
+                                Remover só deste contrato
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-300 hover:bg-red-100"
+                                onClick={() => confirmClauseRemovalFromAllContracts(clause.id)}
+                              >
+                                Remover de todos os próximos contratos
                               </Button>
                             </div>
                           </div>
@@ -2074,6 +2195,13 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit}
             />
           )}
+          <PDFPreviewButton
+            space={effectiveSpace}
+            getClauses={computeClausesWithFormData}
+            getFormData={getFormDataForPDF}
+            isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit && !paymentRuleError}
+            onBeforeGenerate={applyFormDataToClauses}
+          />
           <PDFGeneratorButton
             space={effectiveSpace}
             getClauses={computeClausesWithFormData}
@@ -2089,6 +2217,7 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
             isValid={isValid && !eventSpaceMismatch && !hasUnsavedEdit && !paymentRuleError}
             eventId={selectedEventId}
             existingSignature={existingSignature}
+            onSignatureCancelled={() => setExistingSignature({ status: 'cancelled' })}
             onBeforeGenerate={applyFormDataToClauses}
             onAfterGenerate={handleAfterClicksign}
           />

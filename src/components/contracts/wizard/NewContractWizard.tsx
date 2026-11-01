@@ -11,7 +11,7 @@ import { ContractStep, type ContractData } from './ContractStep'
 import { ReviewStep } from './ReviewStep'
 import { createClosedContract } from '@/app/actions/contractWizard'
 import { ENTRADA_MIN_PERCENT, validarValorEntrada } from '@/lib/paymentRules'
-import { ContractClause, SPACES, generateContractNumber, getInitialClauses, getContractSpaceSlug } from '@/lib/contractTemplates'
+import { ContractClause, SPACES, generateContractNumber, getInitialClauses, getContractSpaceSlug, saveWizardContractHandoff } from '@/lib/contractTemplates'
 
 const STEPS = [
   { id: 1, title: 'Cliente & Evento', icon: User },
@@ -199,6 +199,18 @@ export function NewContractWizard() {
       // O slug vem resolvido pelo servidor a partir do próprio espaço; o helper
       // por ID fica só como fallback de compatibilidade.
       const spaceSlug = result.data!.spaceSlug || getContractSpaceSlug(clientEventData.spaceId!)
+      // Leva para o editor as cláusulas como ficaram no assistente (editadas,
+      // removidas ou incluídas). Sem isso o editor abria com o modelo completo.
+      saveWizardContractHandoff(result.data!.eventId, {
+        spaceId: contractData.spaceConfigId,
+        clauses,
+        contractNumber: contractData.contractNumber,
+        contractDate: contractData.contractDate,
+        observations: contractData.observations,
+        dailyCount: contractData.dailyCount,
+        packageType: contractData.packageType,
+        eventCheckoutDate: contractData.eventCheckoutDate,
+      })
       router.push(`/contracts/${spaceSlug}?eventId=${result.data!.eventId}`)
     } catch (error) {
       console.error(error)

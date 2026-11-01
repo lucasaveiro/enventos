@@ -15,6 +15,7 @@ import {
   getDefaultClauseTemplates,
   getInitialClauses,
   substituteClause,
+  renumberOrdinalClauses,
   formatCurrency,
   formatDate,
 } from '@/lib/contractTemplates'
@@ -143,6 +144,11 @@ export function ContractStep({ data, onChange, clientEventData, paymentData, cla
   }
 
   const saveClause = (id: string) => {
+    // Cláusula salva sem texto é removida deste contrato (não sai título vazio no PDF).
+    if (!editingContent.trim()) {
+      removeClause(id)
+      return
+    }
     onClausesChange(
       clauses.map((c) => (c.id === id ? { ...c, content: editingContent, edited: true } : c))
     )
@@ -162,7 +168,8 @@ export function ContractStep({ data, onChange, clientEventData, paymentData, cla
   }
 
   const removeClause = (id: string) => {
-    onClausesChange(clauses.filter((c) => c.id !== id))
+    // Remove só deste contrato e renumera as cláusulas ordinais seguintes.
+    onClausesChange(renumberOrdinalClauses(clauses.filter((c) => c.id !== id)))
     if (expandedId === id) setExpandedId(null)
   }
 

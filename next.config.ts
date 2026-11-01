@@ -23,6 +23,8 @@ const securityHeaders = [
       "img-src 'self' blob: data: https://*.blob.vercel-storage.com",
       "font-src 'self'",
       "connect-src 'self' https://*.clicksign.com https://*.blob.vercel-storage.com",
+      // Pré-visualização do PDF do contrato (gerado no navegador como blob:)
+      "frame-src 'self' blob:",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

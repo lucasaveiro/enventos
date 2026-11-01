@@ -805,3 +805,88 @@ const CLIENT_DATA_PLACEHOLDERS = [
 export function clauseTemplateHasClientData(template: string): boolean {
   return CLIENT_DATA_PLACEHOLDERS.some((placeholder) => template.includes(placeholder))
 }
+
+// ─── Remoção de cláusula em um contrato específico ──────────────────────────
+
+const CLAUSE_ORDINALS = [
+  'PRIMEIRA', 'SEGUNDA', 'TERCEIRA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÉTIMA', 'OITAVA', 'NONA', 'DÉCIMA',
+  'DÉCIMA PRIMEIRA', 'DÉCIMA SEGUNDA', 'DÉCIMA TERCEIRA', 'DÉCIMA QUARTA', 'DÉCIMA QUINTA',
+  'DÉCIMA SEXTA', 'DÉCIMA SÉTIMA', 'DÉCIMA OITAVA', 'DÉCIMA NONA', 'VIGÉSIMA',
+  'VIGÉSIMA PRIMEIRA', 'VIGÉSIMA SEGUNDA', 'VIGÉSIMA TERCEIRA', 'VIGÉSIMA QUARTA', 'VIGÉSIMA QUINTA',
+  'VIGÉSIMA SEXTA', 'VIGÉSIMA SÉTIMA', 'VIGÉSIMA OITAVA', 'VIGÉSIMA NONA', 'TRIGÉSIMA',
+]
+
+/**
+ * Renumera, em sequência, as cláusulas numeradas por ordinal (PRIMEIRA, SEGUNDA...).
+ * Usada depois de remover uma cláusula de um contrato, para o PDF não sair com um
+ * "buraco" na numeração (ex.: DÉCIMA TERCEIRA seguida de DÉCIMA QUINTA).
+ * Cláusulas com numeração livre (PREÂMBULO, DO FORO, ADICIONAL 1...) ficam como estão.
+ * Só renumera se as cláusulas ordinais já estavam em ordem crescente — numeração
+ * personalizada pelo usuário não é tocada.
+ */
+export function renumberOrdinalClauses<T extends { number: string }>(clauses: T[]): T[] {
+  const ordinalIndexes = clauses.map((clause) => CLAUSE_ORDINALS.indexOf(clause.number.trim().toUpperCase()))
+  const ordinals = ordinalIndexes.filter((index) => index >= 0)
+  const isIncreasing = ordinals.every((value, i) => i === 0 || value > ordinals[i - 1])
+  if (!isIncreasing || ordinals.length > CLAUSE_ORDINALS.length) return clauses
+
+  let next = 0
+  return clauses.map((clause, i) => {
+    if (ordinalIndexes[i] < 0) return clause
+    const number = CLAUSE_ORDINALS[next++]
+    return number === clause.number ? clause : { ...clause, number }
+  })
+}
+
+// ─── Passagem das cláusulas do assistente "Novo Contrato" para o editor ─────
+// O assistente cria o evento e redireciona para o editor do contrato. Sem esta
+// passagem, as cláusulas editadas/removidas no assistente eram descartadas e o
+// editor abria com o modelo padrão completo.
+
+export interface WizardContractHandoff {
+  spaceId: string
+  clauses: ContractClause[]
+  contractNumber?: string
+  contractDate?: string
+  observations?: string
+  dailyCount?: string
+  packageType?: string
+  eventCheckoutDate?: string
+}
+
+function wizardHandoffKey(eventId: number): string {
+  return `contract-wizard-handoff:${eventId}`
+}
+
+export function saveWizardContractHandoff(eventId: number, handoff: WizardContractHandoff): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(wizardHandoffKey(eventId), JSON.stringify(handoff))
+  } catch {
+    // sessionStorage indisponível: o editor cai no modelo padrão.
+  }
+}
+
+/** Lê a passagem do assistente para o evento (sem apagar). */
+export function readWizardContractHandoff(eventId: number): WizardContractHandoff | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(wizardHandoffKey(eventId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as WizardContractHandoff
+    if (!parsed || typeof parsed.spaceId !== 'string' || !Array.isArray(parsed.clauses)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+/** Apaga a passagem do assistente depois que o editor já a aplicou. */
+export function clearWizardContractHandoff(eventId: number): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(wizardHandoffKey(eventId))
+  } catch {
+    // ignora
+  }
+}

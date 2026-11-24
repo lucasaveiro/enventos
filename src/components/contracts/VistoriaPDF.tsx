@@ -246,11 +246,10 @@ export function VistoriaPDFDocument({ formData, space, items }: Props) {
           momentos — entrada e saída —, com registro fotográfico datado, devendo este termo ser assinado por ambas
           as partes em cada momento, em sinal de ciência das condições do imóvel e de seus pertences. O(A)
           LOCATÁRIO(A) pode apontar ressalvas (avarias ou faltas pré-existentes não anotadas) em até 2 (duas) horas
-          do início da ocupação, por escrito, WhatsApp ou e-mail, com fotos. Se qualquer das partes não comparecer
-          à vistoria ou se recusar a assinar, prevalece a vistoria realizada pela parte presente, documentada com
-          registro fotográfico datado, presumindo-se aceita pela parte ausente, que poderá contestá-la, por escrito
-          e com evidências, em até 48 (quarenta e oito) horas do recebimento deste termo; sem contestação nesse
-          prazo, a vistoria considera-se definitivamente aceita. As divergências entre a vistoria de entrada e a de
+          do início da ocupação, por escrito, WhatsApp ou e-mail, com fotos. Se o(a) LOCATÁRIO(A) não comparecer
+          à vistoria, se recusar a participar dela, a assinar este termo ou a reconhecer o que nela for constatado,
+          o LOCADOR poderá realizá-la unilateralmente, com registro fotográfico ou audiovisual datado, encaminhando
+          este termo ao(à) LOCATÁRIO(A) para ciência e prevalecendo, nesse caso, o registro realizado pelo LOCADOR. As divergências entre a vistoria de entrada e a de
           saída constituem prova das avarias e faltas ocorridas na locação, cobradas na forma da Cláusula Quinta do
           contrato.
         </Text>

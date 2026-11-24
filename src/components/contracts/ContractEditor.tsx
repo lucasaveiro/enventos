@@ -168,9 +168,6 @@ function createSchema(requiresExtendedEventData: boolean, requiresCheckoutDate: 
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['packageType'], message: 'Pacote inválido' })
     }
 
-    if (!data.cautionValue?.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cautionValue'], message: 'Obrigatório' })
-    }
   })
 }
 
@@ -461,6 +458,9 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
   const [editingContent, setEditingContent] = useState('')
   const [allExpanded, setAllExpanded] = useState(false)
   const [clausesApplied, setClausesApplied] = useState(false)
+  // Os modelos atuais não têm caução; o campo só aparece em contratos antigos
+  // cujas cláusulas salvas ainda citam {cautionValue}.
+  const usesCaution = clauses.some((clause) => clause.content.includes('{cautionValue}'))
   const [showAddClauseForm, setShowAddClauseForm] = useState(false)
   const [newClauseNumber, setNewClauseNumber] = useState('')
   const [newClauseTitle, setNewClauseTitle] = useState('')
@@ -1575,8 +1575,8 @@ export function ContractEditor({ space, eventId: initialEventId, loadContractId 
               }}
             />
           </Field>
-          {requiresExtendedEventData && (
-            <Field label="Valor da Caução (R$) *" error={errors.cautionValue?.message}>
+          {usesCaution && (
+            <Field label="Valor da Caução (R$)" error={errors.cautionValue?.message}>
               <Input
                 {...register('cautionValue')}
                 placeholder="1000,00"

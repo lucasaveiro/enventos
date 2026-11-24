@@ -241,7 +241,7 @@ export function QuitacaoPDFDocument({ data }: Props) {
         <Text style={styles.scope}>
           Esta quitação refere-se exclusivamente ao preço ajustado no instrumento acima identificado, nos valores
           aqui discriminados. Não estão abrangidos por ela, por serem apuráveis apenas após a realização do evento
-          ou por serem contratados à parte: (i) a caução e eventuais valores relativos a avarias, faltas ou danos
+          ou por serem contratados à parte: (i) eventual caução e os valores relativos a avarias, faltas ou danos
           apurados na vistoria de saída, que seguem o regime próprio do contrato; (ii) serviços, itens, diárias ou
           horas adicionais contratados posteriormente e não incluídos no preço; e (iii) as demais obrigações
           previstas no contrato, que permanecem em vigor. Esta declaração não altera, renova nem extingue

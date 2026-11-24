@@ -252,7 +252,7 @@ export function VistoriaPDFDocument({ formData, space, items }: Props) {
           e com evidências, em até 48 (quarenta e oito) horas do recebimento deste termo; sem contestação nesse
           prazo, a vistoria considera-se definitivamente aceita. As divergências entre a vistoria de entrada e a de
           saída constituem prova das avarias e faltas ocorridas na locação, cobradas na forma da Cláusula Quinta do
-          contrato (caução).
+          contrato.
         </Text>
 
         {/* Inventário */}
